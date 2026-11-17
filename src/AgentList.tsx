@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
-import { Plus, Square } from 'lucide-react';
-import type { Agent } from './transport';
+import { AlertTriangle, Plus, RefreshCw, Square } from 'lucide-react';
+import type { Agent, TransportError } from './transport';
+import { useLabels } from './labels';
 import { isRunning, stateGlyph } from './state';
 
 export interface AgentListProps {
@@ -10,9 +11,14 @@ export interface AgentListProps {
   /** Agent of the active pane */
   activeId: string | null;
   loaded: boolean;
+  /** The list failed to load (subscribe's onError); cleared by the next list */
+  error?: TransportError | null;
+  onRetry?: () => void;
   title: string;
   onOpen: (id: string) => void;
   onStop: (id: string) => void;
+  /** Hides the stop button where it returns false (protected sessions) */
+  canStop?: (agent: Agent) => boolean;
   onNew: () => void;
 }
 
@@ -24,11 +30,22 @@ export const AgentList: React.FC<AgentListProps> = ({
   openIds,
   activeId,
   loaded,
+  error = null,
+  onRetry,
   title,
   onOpen,
   onStop,
+  canStop,
   onNew,
 }) => {
+  const t = useLabels();
+  const errorText = error
+    ? error.status === 401 || error.status === 403
+      ? t.forbidden
+      : error.status !== undefined && error.status >= 500
+        ? t.unavailable
+        : t.loadFailed
+    : '';
   const listRef = useRef<HTMLUListElement>(null);
   const move = (from: HTMLElement, delta: 1 | -1) => {
     const rows = [...(listRef.current?.querySelectorAll<HTMLElement>('[data-agent-row]') ?? [])];
@@ -45,20 +62,44 @@ export const AgentList: React.FC<AgentListProps> = ({
         <button
           onClick={onNew}
           className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-ag-accent text-ag-on-accent hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ag-accent"
-          title="Start a new agent"
+          title={t.newAgentTitle}
         >
-          <Plus size={12} aria-hidden="true" /> New
+          <Plus size={12} aria-hidden="true" /> {t.newAgent}
         </button>
       </div>
-      {!loaded ? (
-        <div className="p-4 text-xs text-ag-muted" role="status">
-          Loading agents…
+      {error && (
+        <div
+          role="alert"
+          className={`flex gap-2 text-xs ${loaded ? 'px-3 py-2 border-b border-ag-border bg-ag-danger/10' : 'p-4'}`}
+        >
+          <AlertTriangle size={14} className="text-ag-danger shrink-0 mt-px" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <div className="text-ag-text">{errorText}</div>
+            {error.message && (
+              <div className="text-ag-faint font-mono break-words mt-0.5">{error.message}</div>
+            )}
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="mt-2 flex items-center gap-1 px-2 py-1 rounded border border-ag-border text-ag-text hover:bg-ag-raised"
+              >
+                <RefreshCw size={11} aria-hidden="true" /> {t.retry}
+              </button>
+            )}
+          </div>
         </div>
+      )}
+      {!loaded ? (
+        error ? null : (
+          <div className="p-4 text-xs text-ag-muted" role="status">
+            {t.loading}
+          </div>
+        )
       ) : agents.length === 0 ? (
         <div className="p-4 text-xs text-ag-muted">
-          No agents yet.{' '}
+          {t.noAgents}{' '}
           <button onClick={onNew} className="underline text-ag-accent">
-            Start one
+            {t.startOne}
           </button>
           .
         </div>
@@ -89,7 +130,7 @@ export const AgentList: React.FC<AgentListProps> = ({
                 >
                   <span
                     className={`${glyph.className} leading-5 shrink-0 ${glyph.animate ? 'animate-pulse motion-reduce:animate-none' : ''}`}
-                    aria-label={glyph.label}
+                    aria-label={t.states[agent.displayState]}
                     role="img"
                   >
                     {glyph.glyph}
@@ -100,7 +141,7 @@ export const AgentList: React.FC<AgentListProps> = ({
                       {open && (
                         <span
                           className="w-1.5 h-1.5 rounded-full bg-ag-accent shrink-0"
-                          title="Open in a tab"
+                          title={t.openInTab}
                         />
                       )}
                     </span>
@@ -112,12 +153,12 @@ export const AgentList: React.FC<AgentListProps> = ({
                     </span>
                   </span>
                 </button>
-                {isRunning(agent.displayState) && (
+                {isRunning(agent.displayState) && (canStop?.(agent) ?? true) && (
                   <button
                     onClick={() => onStop(agent.id)}
                     className="absolute right-2 top-2 p-1.5 rounded text-ag-faint opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-ag-danger hover:bg-ag-border"
-                    title="Stop agent"
-                    aria-label={`Stop ${agent.name}`}
+                    title={t.stopTitle}
+                    aria-label={t.stopAgent(agent.name)}
                   >
                     <Square size={11} />
                   </button>

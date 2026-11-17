@@ -13,6 +13,10 @@ tabs with split/tiling, and a message box. The backend sits behind a small, swap
 | --- | --- | --- |
 | ![](docs/390-loading.png) | ![](docs/desktop-start-error.png) | ![](docs/desktop-stopped-detached.png) |
 
+| German (`locale="de"`) | List fails (503), German | 390px: 403 | Stop asks first |
+| --- | --- | --- | --- |
+| ![](docs/desktop-de.png) | ![](docs/desktop-error-503-de.png) | ![](docs/390-error-403.png) | ![](docs/desktop-confirm-stop-de.png) |
+
 ## Install
 
 ```sh
@@ -46,9 +50,21 @@ const transport = createHttpTransport({ baseUrl: '/api' });
 | `transport` | — | the backend, see below |
 | `defaultCwd` | — | folder the start dialog proposes |
 | `storageKey` | `'agents-ui:workspace'` | localStorage key for tabs and splits; `null` keeps nothing |
-| `title` | `'Agents'` | list heading |
+| `title` | locale's `'Agents'` | list heading |
 | `narrowBelowPx` | `720` | below this container width the panel shows list or panes, not both |
 | `className` | — | on the root element |
+| `locale` | `'en'` | built-in texts, `'en'` or `'de'` |
+| `labels` | — | `Partial<Labels>`: overrides single texts (see `src/labels.ts`; some are functions, e.g. `stopAgent(name)`) |
+| `selectedId` | — | opens this agent (its tab, or a new one) whenever the value changes and the agent is listed |
+| `onSelectedIdChange` | — | `(id \| null)`: the agent of the active pane changed; with `selectedId` this keeps a URL or route in sync |
+| `canStop` | all | `(agent) => boolean`; `false` hides the stop button and ignores stop requests (e.g. protect the main orchestrator) |
+| `confirmStop` | `true` | ask in a small in-panel dialog before stopping |
+| `terminalFont` | Nerd Font chain | terminal `font-family`; same as setting `--agents-mono` |
+
+When `subscribe` reports an error, the list shows it instead of loading forever: 401/403 as
+missing access, 5xx as service down, anything else as a load failure, each with the message and a
+"Try again" button that subscribes anew. With a list already shown, it is a slim banner above it;
+the next list clears it.
 
 The parts (`AgentList`, `AgentWorkspace`, `AgentTerminal`, `StartAgentDialog`, `ChatInput`) and the
 pure tab/split model (`workspace.*`) are exported too, for hosts that want their own layout.
@@ -59,7 +75,8 @@ The whole interface, in `src/transport.ts`:
 
 ```ts
 interface AgentsTransport {
-  subscribe(onAgents: (agents: Agent[]) => void): () => void; // full list on every change
+  // full list on every change; onError when the list cannot be loaded (status: HTTP code, if any)
+  subscribe(onAgents: (agents: Agent[]) => void, onError?: (e: Error & { status?: number }) => void): () => void;
   start(req: { cwd: string; prompt?: string; name?: string }): Promise<{ id: string }>;
   stop(id: string): Promise<void>;
   attach(id: string, size: { cols: number; rows: number }, h: PtyHandlers): PtyChannel;
@@ -83,13 +100,27 @@ Electron main process adds an `X-Orkumo-Renderer` auth header that a browser hos
 
 | Call | Wire |
 | --- | --- |
-| `subscribe` | SSE `GET {baseUrl}/agents/stream`, event `sessions` with `Agent[]` as JSON (reconnects with backoff) |
+| `subscribe` | SSE `GET {baseUrl}/agents/stream`, event `sessions` with `Agent[]` as JSON. Read with `fetch`, so headers apply and the status is known: a non-2xx reaches `onError` with `status`; 401/403 stop, everything else reconnects with backoff (10 tries) |
 | `start` | `POST {baseUrl}/agents/dispatch` `{cwd, prompt?, name?, idle}` → `{id}`; errors as `{error}` |
 | `stop` | `POST {baseUrl}/agents/:id/stop` |
 | `attach` | WS `{wsUrl}/pty?sessionId&cwd&cols&rows&command=claude&args=["attach",id]`; sends `{type:'input',data}` and `{type:'resize',cols,rows}`, receives `{type:'output',data}`, `{type:'exit',exitCode}`, `{type:'error',message}`, `{type:'connected'}` |
 
 Options: `baseUrl` (`'/api'`), `wsUrl` (derived from `baseUrl` and the page origin), `command`
-(`'claude'`), `attachArgs(id)`, and `fetch`, `EventSource`, `WebSocket` to inject (tests, auth headers).
+(`'claude'`), `attachArgs(id)`, `fetch` and `WebSocket` to inject (tests), and for auth:
+
+| Option | |
+| --- | --- |
+| `headers` | object, or a (async) function called per request (fresh token), e.g. a bearer token as below; on every HTTP call, the stream included |
+| `credentials` | fetch `credentials`, e.g. `'include'` for cookies across origins |
+| `wsParams` | object or function: extra query parameters on the PTY WebSocket URL. Browsers cannot set WebSocket headers; same-site cookies go along by themselves, a token has to travel here |
+
+```ts
+createHttpTransport({
+  baseUrl: '/api',
+  headers: () => ({ Authorization: `Bearer ${session.token}` }),
+  wsParams: () => ({ token: session.token }),
+});
+```
 
 ### `createIpcTransport(bridge)` — Electron IPC
 
@@ -126,7 +157,11 @@ server today, so it uses `createHttpTransport`.
 ### `createMockTransport(agents?, latencyMs?)`
 
 In-memory, for demos and tests. Its terminals echo input and answer each line. Extra helpers:
-`setAgents`, `update(id, patch)`, and `attachCount` (how often each agent was attached).
+`setAgents`, `update(id, patch)`, `fail({status, message} | null)` (list error for current and new
+subscribers; `null` recovers), and `attachCount` (how often each agent was attached).
+
+`createIpcTransport` reports a rejected `agents:list` through `onError` (a numeric `status` on the
+rejection is passed along).
 
 ## Theming
 
@@ -143,11 +178,20 @@ or on any ancestor:
 | `--agents-text` / `--agents-muted` / `--agents-faint` | `#e5e7eb` / `#9ca3af` / `#6b7280` | |
 | `--agents-accent` / `--agents-on-accent` | `#3b82f6` / `#fff` | buttons, focus, active pane |
 | `--agents-working` / `--agents-warn` / `--agents-ok` / `--agents-danger` | orange / yellow / green / red | state glyphs |
-| `--agents-term-bg` / `--agents-term-fg` / `--agents-term-cursor` / `--agents-term-selection` | | terminal |
-| `--agents-font` / `--agents-mono` | system UI / system mono | |
+| `--agents-term-bg` / `--agents-term-fg` / `--agents-term-cursor` | `--agents-bg` / `--agents-text` / `--agents-accent` | terminal |
+| `--agents-term-selection` | translucent blue | |
+| `--agents-term-<ansi>` | xterm's | the 16 ANSI colours: `black`, `red`, … `white`, `bright-black` … `bright-white` |
+| `--agents-font` / `--agents-mono` | system UI / Nerd Font chain | |
 
-The terminal reads its `--agents-term-*` colours when it is created; a live theme switch reaches
-new terminals only.
+So a light host theme gives a light terminal without any `--agents-term-*`. Terminals pick up a
+theme switch live when it happens on `<html>` or `<body>` (class, style or `data-theme`) or through
+the OS colour scheme; a host that switches the variables on another element calls
+`refreshTerminalTheme()` afterwards.
+
+The terminal font defaults to `DEFAULT_TERMINAL_FONT`: JetBrainsMono / Meslo / Hack / FiraCode Nerd
+Font and Symbols Nerd Font Mono first, so prompt and TUI glyphs render where one is installed, then
+plain `JetBrains Mono, Menlo, Monaco, Consolas, monospace`. Override with `terminalFont` or
+`--agents-mono`.
 
 ## Tabs and tiling
 
@@ -166,7 +210,7 @@ panes, Ghostty, file links, peek, settings, harness picker and multi-instance ta
 
 ```sh
 bun install
-bun run demo        # Vite demo with the mock transport, http://localhost:5173
+bun run demo        # Vite demo with the mock transport, http://localhost:5173 (?lang=de, ?fail=503)
 bun run test        # vitest: transport contract, tab/split model, panel
 bun run typecheck
 bun run build       # dist/ (ESM + .d.ts + styles.css)

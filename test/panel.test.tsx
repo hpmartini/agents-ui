@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { AgentsPanel } from '../src/AgentsPanel';
 import { createMockTransport } from '../src/transports/mock';
@@ -76,5 +76,76 @@ describe('AgentsPanel', () => {
     act(() => transport.setAgents([]));
     expect(screen.queryAllByRole('tab')).toHaveLength(0);
     unmount();
+  });
+
+  it('speaks German with locale="de" and takes single label overrides', () => {
+    const transport = createMockTransport([agent('a')]);
+    render(<AgentsPanel transport={transport} defaultCwd="/w" locale="de" labels={{ newAgent: 'Los' }} />);
+    expect(screen.getByText('Agenten')).toBeTruthy();
+    expect(screen.getByTitle('Neuen Agenten starten').textContent).toContain('Los');
+    expect(screen.getByLabelText('Bereit')).toBeTruthy();
+  });
+
+  it('shows an error instead of loading forever, and retries', async () => {
+    const transport = createMockTransport([agent('a')]);
+    transport.fail({ status: 503, message: 'upstream down' });
+    render(<AgentsPanel transport={transport} defaultCwd="/w" locale="de" />);
+    expect(screen.getByRole('alert').textContent).toContain('nicht erreichbar');
+    expect(screen.getByRole('alert').textContent).toContain('upstream down');
+    expect(screen.queryByRole('status')).toBeNull();
+    transport.fail(null);
+    act(() => fireEvent.click(screen.getByText('Erneut versuchen')));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByTitle('a · /w/a')).toBeTruthy();
+  });
+
+  it('names a 403 as missing access', () => {
+    const transport = createMockTransport();
+    transport.fail({ status: 403 });
+    render(<AgentsPanel transport={transport} defaultCwd="/w" />);
+    expect(screen.getByRole('alert').textContent).toContain('No access');
+  });
+
+  it('opens the agent given as selectedId and reports the active one', () => {
+    const transport = createMockTransport([agent('a'), agent('b')]);
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <AgentsPanel transport={transport} defaultCwd="/w" selectedId="b" onSelectedIdChange={onChange} />
+    );
+    expect(screen.getByRole('tab').getAttribute('aria-label')).toContain('b');
+    expect(onChange).toHaveBeenLastCalledWith('b');
+    rerender(<AgentsPanel transport={transport} defaultCwd="/w" selectedId="a" onSelectedIdChange={onChange} />);
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
+    expect(onChange).toHaveBeenLastCalledWith('a');
+  });
+
+  it('asks before stopping and lets the host protect agents with canStop', async () => {
+    const transport = createMockTransport([
+      { ...agent('main'), displayState: 'working' },
+      { ...agent('w'), displayState: 'working' },
+    ]);
+    const stop = vi.spyOn(transport, 'stop');
+    render(<AgentsPanel transport={transport} defaultCwd="/w" canStop={(a) => a.id !== 'main'} />);
+    expect(screen.queryByLabelText('Stop main')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Stop w'));
+    expect(screen.getByRole('alertdialog').textContent).toContain('Stop agent?');
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(stop).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('Stop w'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop' })));
+    expect(stop).toHaveBeenCalledWith('w');
+  });
+
+  it('stops without asking when confirmStop is false, and sets the terminal font', () => {
+    const transport = createMockTransport([{ ...agent('w'), displayState: 'working' }]);
+    const stop = vi.spyOn(transport, 'stop');
+    const { container } = render(
+      <AgentsPanel transport={transport} defaultCwd="/w" confirmStop={false} terminalFont="Iosevka, monospace" />
+    );
+    fireEvent.click(screen.getByLabelText('Stop w'));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(stop).toHaveBeenCalledWith('w');
+    const root = container.querySelector('.agents-ui') as HTMLElement;
+    expect(root.style.getPropertyValue('--agents-mono')).toBe('Iosevka, monospace');
   });
 });

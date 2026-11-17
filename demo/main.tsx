@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AgentsPanel, createMockTransport, workspace as ws, type Agent } from '../src';
+import { AgentsPanel, createMockTransport, workspace as ws, type Agent, type Locale } from '../src';
 import '../src/styles.css';
 import './demo.css';
 
@@ -29,18 +29,45 @@ const mockStart = transport.start.bind(transport);
 transport.start = (req) =>
   req.cwd.startsWith('~/MAPLE') ? mockStart(req) : Promise.reject(new Error(`Folder outside ~/MAPLE: ${req.cwd}`));
 
+// ?lang=de and ?fail=503 open the demo straight in German or in the error state (screenshots)
+const params = new URLSearchParams(location.search);
+const initialFail = Number(params.get('fail')) || null;
+if (initialFail) transport.fail({ status: initialFail, message: `HTTP ${initialFail} from /api/agents/stream` });
+
 function Demo() {
+  const [locale, setLocale] = useState<Locale>(params.get('lang') === 'de' ? 'de' : 'en');
+  const [failing, setFailing] = useState(!!initialFail);
   const [light, setLight] = useState(false);
+  // on <html>, where the panel's terminals notice a theme switch by themselves
+  useEffect(() => void document.documentElement.classList.toggle('demo-light', light), [light]);
   return (
-    <div className={`demo ${light ? 'demo-light' : ''}`}>
+    <div className="demo">
       <header className="demo-bar">
         <strong>agents-ui</strong>
         <span>mock transport</span>
         <button onClick={() => setLight((l) => !l)}>{light ? 'Dark theme' : 'Light theme (CSS variables)'}</button>
+        <button onClick={() => setLocale((l) => (l === 'en' ? 'de' : 'en'))}>
+          {locale === 'en' ? 'Deutsch' : 'English'}
+        </button>
+        <button
+          onClick={() => {
+            transport.fail(failing ? null : { status: 503, message: 'HTTP 503 from /api/agents/stream' });
+            setFailing(!failing);
+          }}
+        >
+          {failing ? 'Recover backend' : 'Simulate 503'}
+        </button>
         <button onClick={() => (localStorage.removeItem(KEY), location.reload())}>Reset layout</button>
       </header>
       <main className="demo-main">
-        <AgentsPanel transport={transport} defaultCwd="~/MAPLE" storageKey={KEY} />
+        <AgentsPanel
+          transport={transport}
+          defaultCwd="~/MAPLE"
+          storageKey={KEY}
+          locale={locale}
+          // the host protects its own orchestrator session
+          canStop={(agent) => agent.id !== 'inbox'}
+        />
       </main>
     </div>
   );

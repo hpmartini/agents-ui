@@ -22,7 +22,7 @@
   --color-ag-warn: var(--agents-warn, #facc15);
   --color-ag-ok: var(--agents-ok, #34d399);
   --color-ag-danger: var(--agents-danger, #f87171);
-  --color-ag-term: var(--agents-term-bg, #0d1424);
+  --color-ag-term: var(--agents-term-bg, var(--agents-bg, #0b1220));
 }
 
 /* resets in a layer below utilities, so the utility classes win */

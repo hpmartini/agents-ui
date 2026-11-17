@@ -39,9 +39,16 @@ export interface PtyChannel {
     /** Detach only: the agent keeps running */
     close: () => void;
 }
+/** Why the agent list could not be loaded; `status` is the HTTP status where there is one */
+export interface TransportError extends Error {
+    status?: number;
+}
 export interface AgentsTransport {
-    /** Pushes the full agent list now (as soon as known) and on every change; returns unsubscribe */
-    subscribe: (onAgents: (agents: Agent[]) => void) => () => void;
+    /**
+     * Pushes the full agent list now (as soon as known) and on every change; returns unsubscribe.
+     * `onError` reports a failed load (e.g. 403, 503, unreachable); a later list clears it.
+     */
+    subscribe: (onAgents: (agents: Agent[]) => void, onError?: (error: TransportError) => void) => () => void;
     /** Starts an agent; resolves with its id */
     start: (request: StartAgentRequest) => Promise<{
         id: string;

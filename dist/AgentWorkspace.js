@@ -1,14 +1,15 @@
 import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
 import React, { useEffect, useRef, useState } from 'react';
+import { useLabels } from './labels';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { X, Columns2, Rows2, LayoutGrid, Bot } from 'lucide-react';
 import { stateGlyph } from './state';
 import { AGENT_TAB_MIME, dropZone, prunedRoot, insertPosition, stepIndices, tabTitle, } from './workspace';
 import { AgentTerminal } from './AgentTerminal';
 const LAYOUTS = [
-    { id: 'columns', icon: _jsx(Columns2, { size: 14 }), label: 'Panes side by side' },
-    { id: 'rows', icon: _jsx(Rows2, { size: 14 }), label: 'Panes stacked' },
-    { id: 'grid', icon: _jsx(LayoutGrid, { size: 14 }), label: 'Panes in a grid' },
+    { id: 'columns', icon: _jsx(Columns2, { size: 14 }), label: 'layoutColumns' },
+    { id: 'rows', icon: _jsx(Rows2, { size: 14 }), label: 'layoutRows' },
+    { id: 'grid', icon: _jsx(LayoutGrid, { size: 14 }), label: 'layoutGrid' },
 ];
 const ZONE_HIGHLIGHT = {
     left: 'inset-y-0 left-0 w-1/2',
@@ -44,6 +45,7 @@ const SplitOverlay = ({ onDropZone }) => {
  * its own tab again.
  */
 export const AgentWorkspace = ({ agents, workspace, onActivateTab, onFocusPane, onClosePane, onCloseTab, onMoveTab, onSplit, onDetach, onSetLayout, emptyState, }) => {
+    const t = useLabels();
     const [drag, setDrag] = useState(null);
     const [dropTarget, setDropTarget] = useState(null);
     const [endHot, setEndHot] = useState(false);
@@ -131,7 +133,7 @@ export const AgentWorkspace = ({ agents, workspace, onActivateTab, onFocusPane, 
     if (tabs.length === 0) {
         if (emptyState)
             return _jsx(_Fragment, { children: emptyState });
-        return (_jsxs("div", { className: "h-full flex flex-col items-center justify-center text-ag-muted gap-3 p-8 text-center", children: [_jsx(Bot, { size: 40, className: "text-ag-faint" }), _jsx("div", { className: "text-sm", children: "No agent open. Pick one in the list to open it in a tab." }), _jsx("div", { className: "text-xs text-ag-faint", children: "Drag one tab onto another pane to work with several agents side by side." })] }));
+        return (_jsxs("div", { className: "h-full flex flex-col items-center justify-center text-ag-muted gap-3 p-8 text-center", children: [_jsx(Bot, { size: 40, className: "text-ag-faint" }), _jsx("div", { className: "text-sm", children: t.emptyTitle }), _jsx("div", { className: "text-xs text-ag-faint", children: t.emptyHint })] }));
     }
     const renderPane = ({ tab, agents: panes }, agent, visible) => {
         const multi = panes.length > 1;
@@ -139,7 +141,7 @@ export const AgentWorkspace = ({ agents, workspace, onActivateTab, onFocusPane, 
             ? {
                 ...dragProps({ kind: 'pane', id: agent.id, agentId: agent.id }),
                 className: drag?.id === agent.id ? 'opacity-50' : '',
-                title: 'Drag onto a pane edge to rearrange, or onto the tab strip for its own tab',
+                title: t.dragHint,
             }
             : undefined;
         return (_jsxs("div", { className: "relative h-full min-h-0", children: [_jsx(AgentTerminal, { agent: agent, visible: visible, active: agent.id === tab.activeSessionId, onFocus: () => onFocusPane(agent.id), onClose: () => onClosePane(agent.id), onMaximize: multi ? () => onDetach(agent.id) : undefined, solo: !multi, headerProps: dragHeader }), drag && drag.agentId !== agent.id && visible && (_jsx(SplitOverlay, { onDropZone: (zone) => (onSplit(drag.agentId, agent.id, zone), finishDrag()) }))] }));
@@ -161,7 +163,7 @@ export const AgentWorkspace = ({ agents, workspace, onActivateTab, onFocusPane, 
         finishDrag();
     };
     const activeTab = tabs.find((t) => t.tab.id === activeTabId);
-    return (_jsxs("div", { className: "h-full flex flex-col min-h-0", children: [_jsxs("div", { className: "flex items-center bg-ag-surface border-b border-ag-border shrink-0 h-9", children: [_jsxs("div", { ref: stripRef, role: "tablist", "aria-label": "Open agents", className: "flex-1 flex items-center overflow-x-auto ag-no-scrollbar h-full", children: [tabs.map(({ tab, agents: panes }) => {
+    return (_jsxs("div", { className: "h-full flex flex-col min-h-0", children: [_jsxs("div", { className: "flex items-center bg-ag-surface border-b border-ag-border shrink-0 h-9", children: [_jsxs("div", { ref: stripRef, role: "tablist", "aria-label": t.openAgents, className: "flex-1 flex items-center overflow-x-auto ag-no-scrollbar h-full", children: [tabs.map(({ tab, agents: panes }) => {
                                 const isActive = tab.id === activeTabId;
                                 const lead = panes.find((a) => a.id === tab.activeSessionId) ?? panes[0];
                                 const needsInput = panes.some((a) => a.displayState === 'needs-input');
@@ -188,7 +190,7 @@ export const AgentWorkspace = ({ agents, workspace, onActivateTab, onFocusPane, 
                                         }
                                     }, className: `group relative flex items-center pl-2.5 pr-1 h-full min-w-[120px] max-w-[220px] border-r border-ag-border shrink-0 text-xs transition-colors ${isActive
                                         ? 'bg-ag-raised text-ag-text'
-                                        : 'text-ag-muted hover:bg-ag-raised/60 hover:text-ag-text'} ${drag?.kind === 'tab' && drag.id === tab.id ? 'opacity-40' : ''}`, title: panes.map((a) => `${a.name} · ${a.cwd}`).join('\n'), children: [isActive && _jsx("div", { className: "absolute top-0 left-0 right-0 h-0.5 bg-ag-accent" }), indicator && (_jsx("div", { className: `absolute inset-y-1 w-0.5 rounded bg-ag-accent pointer-events-none ${indicator === 'before' ? 'left-0' : 'right-0'}` })), _jsxs("button", { type: "button", role: "tab", id: `agent-tab-${tab.id}`, "data-tab-id": tab.id, "aria-selected": isActive, "aria-controls": `agent-tabpanel-${tab.id}`, "aria-keyshortcuts": "Alt+Shift+ArrowLeft Alt+Shift+ArrowRight", "aria-label": `${title}, ${glyph.label}${panes.length > 1 ? `, ${panes.length} panes` : ''}${needsInput ? ', needs input' : ''}`, tabIndex: isActive ? 0 : -1, onClick: () => onActivateTab(tab.id), onKeyDown: (e) => {
+                                        : 'text-ag-muted hover:bg-ag-raised/60 hover:text-ag-text'} ${drag?.kind === 'tab' && drag.id === tab.id ? 'opacity-40' : ''}`, title: panes.map((a) => `${a.name} · ${a.cwd}`).join('\n'), children: [isActive && _jsx("div", { className: "absolute top-0 left-0 right-0 h-0.5 bg-ag-accent" }), indicator && (_jsx("div", { className: `absolute inset-y-1 w-0.5 rounded bg-ag-accent pointer-events-none ${indicator === 'before' ? 'left-0' : 'right-0'}` })), _jsxs("button", { type: "button", role: "tab", id: `agent-tab-${tab.id}`, "data-tab-id": tab.id, "aria-selected": isActive, "aria-controls": `agent-tabpanel-${tab.id}`, "aria-keyshortcuts": "Alt+Shift+ArrowLeft Alt+Shift+ArrowRight", "aria-label": `${title}, ${t.states[needsInput ? 'needs-input' : lead.displayState]}${panes.length > 1 ? `, ${t.panes(panes.length)}` : ''}${needsInput ? `, ${t.needsInput}` : ''}`, tabIndex: isActive ? 0 : -1, onClick: () => onActivateTab(tab.id), onKeyDown: (e) => {
                                                 if (e.altKey && e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
                                                     e.preventDefault();
                                                     const delta = e.key === 'ArrowLeft' ? -1 : 1;
@@ -196,7 +198,7 @@ export const AgentWorkspace = ({ agents, workspace, onActivateTab, onFocusPane, 
                                                     if (step) {
                                                         refocusId.current = tab.id;
                                                         onMoveTab(tab.id, order[step.to], delta < 0 ? 'before' : 'after');
-                                                        setAnnouncement(`${title} moved to position ${step.to + 1} of ${order.length}`);
+                                                        setAnnouncement(t.movedTo(title, step.to + 1, order.length));
                                                     }
                                                     return;
                                                 }
@@ -218,13 +220,13 @@ export const AgentWorkspace = ({ agents, workspace, onActivateTab, onFocusPane, 
                                             }, className: `flex items-center gap-1.5 flex-1 min-w-0 h-full text-left ${focusRing}`, children: [_jsx("span", { className: `${glyph.className} ${glyph.animate ? 'animate-pulse motion-reduce:animate-none' : ''}`, "aria-hidden": "true", children: glyph.glyph }), _jsx("span", { className: "truncate flex-1", children: title }), panes.length > 1 && (_jsx("span", { className: "px-1 rounded bg-ag-border text-[10px] leading-4 text-ag-text shrink-0", "aria-hidden": "true", children: panes.length })), needsInput && (_jsx("span", { className: "w-2 h-2 rounded-full bg-ag-warn shrink-0", "aria-hidden": "true" }))] }), _jsxs("span", { className: `flex items-center shrink-0 ${isActive ? '' : 'opacity-0'} group-hover:opacity-100 group-focus-within:opacity-100`, children: [isActive && panes.length === 1 && tabs.length > 1 && (_jsxs("span", { className: "hidden group-hover:flex group-focus-within:flex items-center", children: [_jsx("button", { onClick: (e) => {
                                                                 e.stopPropagation();
                                                                 splitOut(tab.id, 'right');
-                                                            }, className: `p-1.5 rounded text-ag-muted hover:text-ag-text hover:bg-ag-border ${focusRing}`, title: "Split right (into the neighbouring tab)", "aria-label": `Split ${title} right`, children: _jsx(Columns2, { size: 12 }) }), _jsx("button", { onClick: (e) => {
+                                                            }, className: `p-1.5 rounded text-ag-muted hover:text-ag-text hover:bg-ag-border ${focusRing}`, title: t.splitRightTitle, "aria-label": t.splitRight(title), children: _jsx(Columns2, { size: 12 }) }), _jsx("button", { onClick: (e) => {
                                                                 e.stopPropagation();
                                                                 splitOut(tab.id, 'bottom');
-                                                            }, className: `p-1.5 rounded text-ag-muted hover:text-ag-text hover:bg-ag-border ${focusRing}`, title: "Split down (into the neighbouring tab)", "aria-label": `Split ${title} down`, children: _jsx(Rows2, { size: 12 }) })] })), _jsx("button", { onClick: (e) => {
+                                                            }, className: `p-1.5 rounded text-ag-muted hover:text-ag-text hover:bg-ag-border ${focusRing}`, title: t.splitDownTitle, "aria-label": t.splitDown(title), children: _jsx(Rows2, { size: 12 }) })] })), _jsx("button", { onClick: (e) => {
                                                         e.stopPropagation();
                                                         onCloseTab(tab.id);
-                                                    }, className: `p-1.5 rounded hover:bg-ag-border text-ag-muted hover:text-ag-text ${focusRing}`, "aria-label": `Close ${title}`, title: "Close", children: _jsx(X, { size: 12 }) })] })] }, tab.id));
+                                                    }, className: `p-1.5 rounded hover:bg-ag-border text-ag-muted hover:text-ag-text ${focusRing}`, "aria-label": t.closePane(title), title: t.close, children: _jsx(X, { size: 12 }) })] })] }, tab.id));
                             }), _jsx("div", { className: `flex-1 min-w-8 h-full ${endHot ? 'bg-ag-accent/20' : ''}`, onDragOver: (e) => {
                                     if (!isAgentDrag(e) || !drag)
                                         return;
@@ -243,9 +245,9 @@ export const AgentWorkspace = ({ agents, workspace, onActivateTab, onFocusPane, 
                                     if (drag.kind === 'pane')
                                         onDetach(drag.agentId);
                                     dropOnTab(order[order.length - 1], 'after');
-                                } })] }), activeTab && activeTab.agents.length > 1 && (_jsx("div", { className: "flex items-center gap-0.5 px-1 shrink-0", role: "group", "aria-label": "Pane layout", children: LAYOUTS.map((item) => (_jsx("button", { onClick: () => onSetLayout(activeTab.tab.id, item.id), className: `p-1.5 rounded transition-colors ${focusRing} ${activeTab.tab.layout === item.id
+                                } })] }), activeTab && activeTab.agents.length > 1 && (_jsx("div", { className: "flex items-center gap-0.5 px-1 shrink-0", role: "group", "aria-label": t.paneLayout, children: LAYOUTS.map((item) => (_jsx("button", { onClick: () => onSetLayout(activeTab.tab.id, item.id), className: `p-1.5 rounded transition-colors ${focusRing} ${activeTab.tab.layout === item.id
                                 ? 'bg-ag-border text-ag-text'
-                                : 'text-ag-muted hover:text-ag-text hover:bg-ag-raised'}`, title: item.label, "aria-label": item.label, "aria-pressed": activeTab.tab.layout === item.id, children: item.icon }, item.id))) })), _jsx("div", { className: "sr-only", "aria-live": "polite", children: announcement })] }), _jsx("div", { ref: bodyRef, className: "relative flex-1 min-h-0", children: tabs.map((resolved) => {
+                                : 'text-ag-muted hover:text-ag-text hover:bg-ag-raised'}`, title: t[item.label], "aria-label": t[item.label], "aria-pressed": activeTab.tab.layout === item.id, children: item.icon }, item.id))) })), _jsx("div", { className: "sr-only", "aria-live": "polite", children: announcement })] }), _jsx("div", { ref: bodyRef, className: "relative flex-1 min-h-0", children: tabs.map((resolved) => {
                     const { tab } = resolved;
                     const visible = tab.id === activeTabId;
                     return (_jsx("div", { role: "tabpanel", id: `agent-tabpanel-${tab.id}`, "aria-labelledby": `agent-tab-${tab.id}`, className: `absolute inset-0 flex-col min-h-0 ${visible ? 'flex' : 'hidden'}`, children: _jsx("div", { className: "flex-1 min-h-0", children: renderPanes(resolved, visible) }) }, tab.id));

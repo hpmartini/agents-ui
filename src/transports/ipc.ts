@@ -48,7 +48,7 @@ export function createIpcTransport(bridge: IpcBridge): AgentsTransport {
     handlers.onError?.(err instanceof Error ? err.message : String(err));
 
   return {
-    subscribe(onAgents) {
+    subscribe(onAgents, onError) {
       let closed = false;
       let pushed = false;
       const off = bridge.on(IPC_CHANNELS.changed, (agents) => {
@@ -56,9 +56,20 @@ export function createIpcTransport(bridge: IpcBridge): AgentsTransport {
         onAgents(agents as Agent[]);
       });
       // a push that arrived meanwhile is newer than this snapshot
-      void bridge.invoke(IPC_CHANNELS.list).then((agents) => {
-        if (!closed && !pushed) onAgents(agents as Agent[]);
-      });
+      bridge.invoke(IPC_CHANNELS.list).then(
+        (agents) => {
+          if (!closed && !pushed) onAgents(agents as Agent[]);
+        },
+        (err: unknown) => {
+          if (closed || pushed) return;
+          const status = (err as { status?: unknown })?.status;
+          onError?.(
+            Object.assign(new Error(err instanceof Error ? err.message : String(err)), {
+              ...(typeof status === 'number' ? { status } : {}),
+            })
+          );
+        }
+      );
       return () => {
         closed = true;
         off();

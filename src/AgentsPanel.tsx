@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import type { Agent, AgentsTransport, StartAgentRequest } from './transport';
+import type { Agent, AgentsTransport, StartAgentRequest, TransportError } from './transport';
 import { TransportContext } from './state';
 import * as ws from './workspace';
 import { AgentList } from './AgentList';
 import { AgentWorkspace } from './AgentWorkspace';
 import { StartAgentDialog } from './StartAgentDialog';
 import { ChatInput } from './ChatInput';
+import { ConfirmDialog } from './ConfirmDialog';
+import { refreshTerminalTheme } from './AgentTerminal';
+import { LabelsContext, locales, type Labels, type Locale } from './labels';
 
 export interface AgentsPanelProps {
   transport: AgentsTransport;
@@ -14,11 +17,28 @@ export interface AgentsPanelProps {
   defaultCwd: string;
   /** localStorage key of the open tabs and splits; null keeps them in memory only */
   storageKey?: string | null;
-  /** List heading */
+  /** List heading (default: the locale's "Agents") */
   title?: string;
   /** Below this own width the panel shows list or panes, not both (it reacts to its container) */
   narrowBelowPx?: number;
   className?: string;
+  /** Built-in texts: 'en' (default) or 'de' */
+  locale?: Locale;
+  /** Overrides single texts of the locale */
+  labels?: Partial<Labels>;
+  /**
+   * Opens this agent (in its tab, or a new one) whenever the value changes and the agent is
+   * listed; pass it once as an initial selection or keep it in sync with onSelectedIdChange.
+   */
+  selectedId?: string | null;
+  /** The agent of the active pane changed (null: nothing open) */
+  onSelectedIdChange?: (id: string | null) => void;
+  /** false protects an agent: no stop button, and stop requests are ignored (default: all stoppable) */
+  canStop?: (agent: Agent) => boolean;
+  /** Ask before stopping (default true) */
+  confirmStop?: boolean;
+  /** Terminal font-family chain; default a Nerd Font chain with plain monospace fallbacks */
+  terminalFont?: string;
 }
 
 function readStored(key: string | null): ws.Workspace {
@@ -48,26 +68,41 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
   transport,
   defaultCwd,
   storageKey = 'agents-ui:workspace',
-  title = 'Agents',
+  title,
   narrowBelowPx = 720,
   className = '',
+  locale = 'en',
+  labels,
+  selectedId,
+  onSelectedIdChange,
+  canStop,
+  confirmStop = true,
+  terminalFont,
 }) => {
+  const t = useMemo(() => ({ ...locales[locale], ...labels }), [locale, labels]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [workspace, setWorkspace] = useState(() => readStored(storageKey));
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [listError, setListError] = useState<TransportError | null>(null);
+  const [retries, setRetries] = useState(0);
+  const [confirming, setConfirming] = useState<Agent | null>(null);
   const [mobileView, setMobileView] = useState<'list' | 'panes'>('list');
   const rootRef = useRef<HTMLDivElement>(null);
   const narrow = useWidth(rootRef) < narrowBelowPx;
 
   useEffect(
     () =>
-      transport.subscribe((list) => {
-        setAgents(list);
-        setLoaded(true);
-      }),
-    [transport]
+      transport.subscribe(
+        (list) => {
+          setAgents(list);
+          setLoaded(true);
+          setListError(null);
+        },
+        (err) => setListError(err)
+      ),
+    [transport, retries]
   );
 
   // Panes of agents that are gone close once the list is known
@@ -96,9 +131,16 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
     setMobileView('panes');
   };
 
-  const stop = (id: string) => {
+  const stoppable = (agent: Agent) => canStop?.(agent) ?? true;
+  const doStop = (id: string) => {
     setError(null);
-    transport.stop(id).catch((err) => setError(`Stop failed: ${err?.message ?? err}`));
+    transport.stop(id).catch((err) => setError(t.stopFailed(String(err?.message ?? err))));
+  };
+  const stop = (id: string) => {
+    const agent = agents.find((a) => a.id === id);
+    if (!agent || !stoppable(agent)) return;
+    if (confirmStop) setConfirming(agent);
+    else doStop(id);
   };
 
   const start = async (request: StartAgentRequest) => {
@@ -115,13 +157,47 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
     [workspace.tabs]
   );
 
+  // selectedId: open the agent once per new value, as soon as it is listed
+  const appliedSelection = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!selectedId) {
+      appliedSelection.current = selectedId;
+      return;
+    }
+    if (selectedId === appliedSelection.current || !agents.some((a) => a.id === selectedId)) return;
+    appliedSelection.current = selectedId;
+    if (selectedId !== activeId) open(selectedId);
+    // open is stable in effect (state setters only)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, agents]);
+
+  const reportSelection = useRef(onSelectedIdChange);
+  reportSelection.current = onSelectedIdChange;
+  const lastReported = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (lastReported.current === undefined && activeId === null) {
+      lastReported.current = null;
+      return;
+    }
+    if (activeId === lastReported.current) return;
+    lastReported.current = activeId;
+    reportSelection.current?.(activeId);
+  }, [activeId]);
+
+  // the font sits on our own root, which the theme watcher does not observe
+  useEffect(() => {
+    if (terminalFont) refreshTerminalTheme();
+  }, [terminalFont]);
+
   const showList = !narrow || mobileView === 'list';
   const showPanes = !narrow || mobileView === 'panes';
 
   return (
+    <LabelsContext.Provider value={t}>
     <TransportContext.Provider value={transport}>
       <div
         ref={rootRef}
+        style={terminalFont ? ({ '--agents-mono': terminalFont } as React.CSSProperties) : undefined}
         className={`agents-ui relative flex h-full min-h-0 w-full overflow-hidden bg-ag-bg text-ag-text ${className}`}
       >
         {showList && (
@@ -133,9 +209,12 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
               openIds={openIds}
               activeId={activeId}
               loaded={loaded}
-              title={title}
+              error={listError}
+              onRetry={() => setRetries((n) => n + 1)}
+              title={title ?? t.title}
               onOpen={open}
               onStop={stop}
+              canStop={canStop}
               onNew={() => setStarting(true)}
             />
           </aside>
@@ -143,14 +222,14 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
         {/* stays mounted while the narrow list shows, so terminals keep their channels */}
         <section
           className={`${showPanes ? 'flex' : 'hidden'} flex-1 min-w-0 min-h-0 flex-col`}
-          aria-label="Open agents"
+          aria-label={t.openAgents}
         >
           {narrow && (
             <button
               onClick={() => setMobileView('list')}
               className="flex items-center gap-1 px-3 h-9 text-sm text-ag-accent border-b border-ag-border shrink-0 text-left"
             >
-              <ChevronLeft size={14} aria-hidden="true" /> All agents
+              <ChevronLeft size={14} aria-hidden="true" /> {t.allAgents}
             </button>
           )}
           <div className="flex-1 min-h-0">
@@ -178,6 +257,18 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
             {error}
           </div>
         )}
+        {confirming && (
+          <ConfirmDialog
+            title={t.confirmStopTitle}
+            body={t.confirmStopBody(confirming.name)}
+            confirm={t.confirmStop}
+            onCancel={() => setConfirming(null)}
+            onConfirm={() => {
+              doStop(confirming.id);
+              setConfirming(null);
+            }}
+          />
+        )}
         {starting && (
           <StartAgentDialog
             defaultCwd={defaultCwd}
@@ -187,5 +278,6 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
         )}
       </div>
     </TransportContext.Provider>
+    </LabelsContext.Provider>
   );
 };

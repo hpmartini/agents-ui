@@ -1,4 +1,4 @@
-import type { Agent, AgentsTransport, PtyHandlers } from '../transport';
+import type { Agent, AgentsTransport, PtyHandlers, TransportError } from '../transport';
 
 export interface MockTransport extends AgentsTransport {
   /** Terminals attached so far, per agent id (tests: a remount must not open a second one) */
@@ -7,6 +7,8 @@ export interface MockTransport extends AgentsTransport {
   update: (id: string, patch: Partial<Agent>) => void;
   /** Replaces the whole list and pushes it */
   setAgents: (agents: Agent[]) => void;
+  /** Makes the list fail (e.g. `{status: 403}`) for current and new subscribers; null recovers */
+  fail: (error: { message?: string; status?: number } | null) => void;
 }
 
 const ESC = '\x1b[';
@@ -25,7 +27,12 @@ export function createMockTransport(initial: Agent[] = [], latencyMs = 0): MockT
   const ptys = new Map<string, Set<PtyHandlers>>();
   const attachCount = new Map<string, number>();
   let counter = agents.length;
-  const push = () => listeners.forEach((fn) => fn(agents));
+  const errorListeners = new Set<(error: TransportError) => void>();
+  let failure: TransportError | null = null;
+  const push = () => {
+    if (failure) errorListeners.forEach((fn) => fn(failure!));
+    else listeners.forEach((fn) => fn(agents));
+  };
   const later = <T>(value: T) =>
     latencyMs > 0
       ? new Promise<T>((resolve) => setTimeout(() => resolve(value), latencyMs))
@@ -42,14 +49,23 @@ export function createMockTransport(initial: Agent[] = [], latencyMs = 0): MockT
       agents = [...next];
       push();
     },
-    subscribe(onAgents) {
+    fail(error) {
+      failure = error
+        ? Object.assign(new Error(error.message ?? `HTTP ${error.status}`), { status: error.status })
+        : null;
+      push();
+    },
+    subscribe(onAgents, onError) {
       listeners.add(onAgents);
+      if (onError) errorListeners.add(onError);
+      const first = () => (failure ? onError?.(failure) : onAgents(agents));
       // with latency the first list arrives late, like a real server (shows the loading state)
-      if (!latencyMs) onAgents(agents);
-      const t = latencyMs ? setTimeout(() => onAgents(agents), latencyMs) : undefined;
+      if (!latencyMs) first();
+      const t = latencyMs ? setTimeout(first, latencyMs) : undefined;
       return () => {
         clearTimeout(t);
         listeners.delete(onAgents);
+        if (onError) errorListeners.delete(onError);
       };
     },
     async start({ cwd, prompt, name }) {
