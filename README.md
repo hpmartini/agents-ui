@@ -12,11 +12,13 @@ tabs with split/tiling, and a message box. The backend sits behind a small, swap
 ## Install
 
 ```sh
-bun add github:hpmartini/agents-ui      # git dependency (private repo, needs GitHub access)
-bun add file:../agents-ui               # local checkout
+bun add git+ssh://git@github.com/hpmartini/agents-ui.git   # git dependency (private repo: ssh access)
+bun add file:../agents-ui                                  # local checkout
 ```
 
-`dist/` is committed, so the git dependency works without a build step on install. After changing
+`github:hpmartini/agents-ui` and `git+https://` do not work with bun for this private repo (bun
+fetches them as an unauthenticated tarball, 404). `dist/` is committed, so the git dependency works
+without a build step on install. After changing
 `src/`, run `bun run build` and commit `dist/` with it.
 
 Peer dependencies: `react` and `react-dom` 19.
