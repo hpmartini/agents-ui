@@ -1,0 +1,68 @@
+/*
+ * agents-ui styles. Built with Tailwind v4 into dist/styles.css, without preflight (the host's
+ * base styles stay untouched). Every colour is a CSS variable: set the --agents-* ones on
+ * .agents-ui (or any ancestor) to theme the panel.
+ */
+@layer theme, base, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@source './';
+
+@theme inline {
+  --color-ag-bg: var(--agents-bg, #0b1220);
+  --color-ag-surface: var(--agents-surface, #111827);
+  --color-ag-raised: var(--agents-raised, #1c2536);
+  --color-ag-border: var(--agents-border, #273244);
+  --color-ag-text: var(--agents-text, #e5e7eb);
+  --color-ag-muted: var(--agents-muted, #9ca3af);
+  --color-ag-faint: var(--agents-faint, #6b7280);
+  --color-ag-accent: var(--agents-accent, #3b82f6);
+  --color-ag-on-accent: var(--agents-on-accent, #ffffff);
+  --color-ag-working: var(--agents-working, #fb923c);
+  --color-ag-warn: var(--agents-warn, #facc15);
+  --color-ag-ok: var(--agents-ok, #34d399);
+  --color-ag-danger: var(--agents-danger, #f87171);
+  --color-ag-term: var(--agents-term-bg, #0d1424);
+}
+
+/* resets in a layer below utilities, so the utility classes win */
+@layer base {
+  .agents-ui {
+    font-family: var(--agents-font, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif);
+    box-sizing: border-box;
+  }
+  .agents-ui *,
+  .agents-ui *::before,
+  .agents-ui *::after {
+    box-sizing: inherit;
+  }
+  .agents-ui button,
+  .agents-ui input,
+  .agents-ui textarea {
+    font: inherit;
+    color: inherit;
+  }
+  .agents-ui button {
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+  .agents-ui button:disabled {
+    cursor: default;
+  }
+  .agents-ui ul {
+    list-style: none;
+    margin: 0;
+    padding-left: 0;
+  }
+  .agents-ui h2,
+  .agents-ui p {
+    margin: 0;
+  }
+}
+.ag-no-scrollbar {
+  scrollbar-width: none;
+}
+.ag-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

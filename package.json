@@ -1,0 +1,54 @@
+{
+  "name": "@hpmartini/agents-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agents panel (list, xterm terminal, start dialog, tabs and tiling, chat input) with a swappable backend transport",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && tailwindcss -i src/styles.css -o dist/styles.css --minify",
+    "typecheck": "tsc --noEmit",
+    "test": "NODE_ENV=test vitest run",
+    "demo": "vite demo",
+    "demo:build": "vite build demo"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "lucide-react": "^0.562.0",
+    "react-resizable-panels": "^4.3.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.2",
+    "jsdom": "^26.1.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "tailwindcss": "^4.1.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.4.1",
+    "vitest": "^4.0.16"
+  }
+}
