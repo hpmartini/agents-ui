@@ -9,6 +9,10 @@ tabs with split/tiling, and a message box. The backend sits behind a small, swap
 | --- | --- | --- | --- |
 | ![](docs/390-list.png) | ![](docs/390-panes.png) | ![](docs/390-start-dialog.png) | ![](docs/desktop-light.png) |
 
+| Loading | Start fails | Agent stopped, pane detached |
+| --- | --- | --- |
+| ![](docs/390-loading.png) | ![](docs/desktop-start-error.png) | ![](docs/desktop-stopped-detached.png) |
+
 ## Install
 
 ```sh
@@ -21,7 +25,8 @@ fetches them as an unauthenticated tarball, 404). `dist/` is committed, so the g
 without a build step on install. After changing
 `src/`, run `bun run build` and commit `dist/` with it.
 
-Peer dependencies: `react` and `react-dom` 19.
+Peer dependencies: `react` and `react-dom` 19. Needs a bundler (Vite, webpack, bun): `dist/` uses
+extensionless imports and imports xterm's CSS.
 
 ## Use
 
@@ -73,7 +78,8 @@ against all three.
 
 ### `createHttpTransport(options)` — HTTP + SSE + WebSocket
 
-This is Orkumo's wire protocol, so a server that speaks it (Orkumo's, or one MAPLE builds) works as is:
+This is Orkumo's wire protocol (tested against fakes only, not yet against a live Orkumo server; Orkumo's
+Electron main process adds an `X-Orkumo-Renderer` auth header that a browser host would have to supply):
 
 | Call | Wire |
 | --- | --- |

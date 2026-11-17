@@ -24,6 +24,10 @@ if (!localStorage.getItem(KEY)) {
 }
 
 const transport = createMockTransport(agents, 300);
+// Demo of the error path: the mock refuses folders outside ~/MAPLE
+const mockStart = transport.start.bind(transport);
+transport.start = (req) =>
+  req.cwd.startsWith('~/MAPLE') ? mockStart(req) : Promise.reject(new Error(`Folder outside ~/MAPLE: ${req.cwd}`));
 
 function Demo() {
   const [light, setLight] = useState(false);

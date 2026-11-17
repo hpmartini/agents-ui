@@ -15,6 +15,9 @@ export const ChatInput = ({ target }) => {
         const el = ref.current;
         if (!el)
             return;
+        // empty: one row; measuring here would size the box to a placeholder wrapped in a hidden, narrow pane
+        if (!text)
+            return void (el.style.height = '');
         el.style.height = 'auto';
         // border-box: scrollHeight leaves out the borders
         el.style.height = `${Math.min(el.scrollHeight + el.offsetHeight - el.clientHeight, 160)}px`;
