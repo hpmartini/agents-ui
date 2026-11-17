@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useLabels } from './labels';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { X, Columns2, Rows2, LayoutGrid, Bot } from 'lucide-react';
 import type { Agent } from './transport';
@@ -49,10 +50,10 @@ interface ResolvedTab {
   root: SplitNode;
 }
 
-const LAYOUTS: { id: PaneLayout; icon: React.ReactNode; label: string }[] = [
-  { id: 'columns', icon: <Columns2 size={14} />, label: 'Panes side by side' },
-  { id: 'rows', icon: <Rows2 size={14} />, label: 'Panes stacked' },
-  { id: 'grid', icon: <LayoutGrid size={14} />, label: 'Panes in a grid' },
+const LAYOUTS: { id: PaneLayout; icon: React.ReactNode; label: 'layoutColumns' | 'layoutRows' | 'layoutGrid' }[] = [
+  { id: 'columns', icon: <Columns2 size={14} />, label: 'layoutColumns' },
+  { id: 'rows', icon: <Rows2 size={14} />, label: 'layoutRows' },
+  { id: 'grid', icon: <LayoutGrid size={14} />, label: 'layoutGrid' },
 ];
 
 const ZONE_HIGHLIGHT: Record<DropZone, string> = {
@@ -119,6 +120,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   onSetLayout,
   emptyState,
 }) => {
+  const t = useLabels();
   const [drag, setDrag] = useState<DragState | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; position: InsertPosition } | null>(
     null
@@ -215,10 +217,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     return (
       <div className="h-full flex flex-col items-center justify-center text-ag-muted gap-3 p-8 text-center">
         <Bot size={40} className="text-ag-faint" />
-        <div className="text-sm">No agent open. Pick one in the list to open it in a tab.</div>
-        <div className="text-xs text-ag-faint">
-          Drag one tab onto another pane to work with several agents side by side.
-        </div>
+        <div className="text-sm">{t.emptyTitle}</div>
+        <div className="text-xs text-ag-faint">{t.emptyHint}</div>
       </div>
     );
   }
@@ -229,7 +229,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
       ? {
           ...dragProps({ kind: 'pane', id: agent.id, agentId: agent.id }),
           className: drag?.id === agent.id ? 'opacity-50' : '',
-          title: 'Drag onto a pane edge to rearrange, or onto the tab strip for its own tab',
+          title: t.dragHint,
         }
       : undefined;
     return (
@@ -309,7 +309,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
         <div
           ref={stripRef}
           role="tablist"
-          aria-label="Open agents"
+          aria-label={t.openAgents}
           className="flex-1 flex items-center overflow-x-auto ag-no-scrollbar h-full"
         >
           {tabs.map(({ tab, agents: panes }) => {
@@ -366,7 +366,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                   aria-selected={isActive}
                   aria-controls={`agent-tabpanel-${tab.id}`}
                   aria-keyshortcuts="Alt+Shift+ArrowLeft Alt+Shift+ArrowRight"
-                  aria-label={`${title}, ${glyph.label}${panes.length > 1 ? `, ${panes.length} panes` : ''}${needsInput ? ', needs input' : ''}`}
+                  aria-label={`${title}, ${t.states[needsInput ? 'needs-input' : lead.displayState]}${panes.length > 1 ? `, ${t.panes(panes.length)}` : ''}${needsInput ? `, ${t.needsInput}` : ''}`}
                   tabIndex={isActive ? 0 : -1}
                   onClick={() => onActivateTab(tab.id)}
                   onKeyDown={(e) => {
@@ -377,7 +377,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                       if (step) {
                         refocusId.current = tab.id;
                         onMoveTab(tab.id, order[step.to], delta < 0 ? 'before' : 'after');
-                        setAnnouncement(`${title} moved to position ${step.to + 1} of ${order.length}`);
+                        setAnnouncement(t.movedTo(title, step.to + 1, order.length));
                       }
                       return;
                     }
@@ -432,8 +432,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                           splitOut(tab.id, 'right');
                         }}
                         className={`p-1.5 rounded text-ag-muted hover:text-ag-text hover:bg-ag-border ${focusRing}`}
-                        title="Split right (into the neighbouring tab)"
-                        aria-label={`Split ${title} right`}
+                        title={t.splitRightTitle}
+                        aria-label={t.splitRight(title)}
                       >
                         <Columns2 size={12} />
                       </button>
@@ -443,8 +443,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                           splitOut(tab.id, 'bottom');
                         }}
                         className={`p-1.5 rounded text-ag-muted hover:text-ag-text hover:bg-ag-border ${focusRing}`}
-                        title="Split down (into the neighbouring tab)"
-                        aria-label={`Split ${title} down`}
+                        title={t.splitDownTitle}
+                        aria-label={t.splitDown(title)}
                       >
                         <Rows2 size={12} />
                       </button>
@@ -456,8 +456,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                       onCloseTab(tab.id);
                     }}
                     className={`p-1.5 rounded hover:bg-ag-border text-ag-muted hover:text-ag-text ${focusRing}`}
-                    aria-label={`Close ${title}`}
-                    title="Close"
+                    aria-label={t.closePane(title)}
+                    title={t.close}
                   >
                     <X size={12} />
                   </button>
@@ -487,7 +487,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
           />
         </div>
         {activeTab && activeTab.agents.length > 1 && (
-          <div className="flex items-center gap-0.5 px-1 shrink-0" role="group" aria-label="Pane layout">
+          <div className="flex items-center gap-0.5 px-1 shrink-0" role="group" aria-label={t.paneLayout}>
             {LAYOUTS.map((item) => (
               <button
                 key={item.id}
@@ -497,8 +497,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                     ? 'bg-ag-border text-ag-text'
                     : 'text-ag-muted hover:text-ag-text hover:bg-ag-raised'
                 }`}
-                title={item.label}
-                aria-label={item.label}
+                title={t[item.label]}
+                aria-label={t[item.label]}
                 aria-pressed={activeTab.tab.layout === item.id}
               >
                 {item.icon}

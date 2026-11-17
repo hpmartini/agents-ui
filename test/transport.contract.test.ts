@@ -81,27 +81,12 @@ function contract(name: string, make: () => Harness) {
 function httpHarness(): Harness {
   const started: Harness['started'] extends () => infer T ? T : never = [];
   const stopped: string[] = [];
-  const sources = new Set<FakeEventSource>();
+  const streams = new Set<ReadableStreamDefaultController<Uint8Array>>();
+  const sse = (list: Agent[]) =>
+    new TextEncoder().encode(`event: sessions\ndata: ${JSON.stringify(list)}\n\n`);
   let socket: FakeWebSocket | null = null;
   let agents: Agent[] = [];
 
-  class FakeEventSource {
-    listeners = new Map<string, (e: MessageEvent) => void>();
-    onerror: (() => void) | null = null;
-    constructor(public url: string) {
-      sources.add(this);
-      queueMicrotask(() => this.emit(agents));
-    }
-    addEventListener(type: string, fn: (e: MessageEvent) => void) {
-      this.listeners.set(type, fn);
-    }
-    emit(list: Agent[]) {
-      this.listeners.get('sessions')?.({ data: JSON.stringify(list) } as MessageEvent);
-    }
-    close() {
-      sources.delete(this);
-    }
-  }
   class FakeWebSocket {
     static OPEN = 1;
     readyState = 0;
@@ -126,6 +111,28 @@ function httpHarness(): Harness {
     }
   }
   const fakeFetch = (async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/agents/stream')) {
+      let ctrl!: ReadableStreamDefaultController<Uint8Array>;
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          ctrl = c;
+          streams.add(c);
+          c.enqueue(sse(agents));
+        },
+        cancel() {
+          streams.delete(ctrl);
+        },
+      });
+      init?.signal?.addEventListener('abort', () => {
+        streams.delete(ctrl);
+        try {
+          ctrl.error(new DOMException('aborted', 'AbortError'));
+        } catch {
+          // already closed
+        }
+      });
+      return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } });
+    }
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     if (url.endsWith('/agents/dispatch')) {
       started.push(body);
@@ -143,12 +150,11 @@ function httpHarness(): Harness {
     transport: createHttpTransport({
       baseUrl: 'http://h/api',
       fetch: fakeFetch,
-      EventSource: FakeEventSource as unknown as typeof EventSource,
       WebSocket: FakeWebSocket as unknown as typeof WebSocket,
     }),
     setAgents: (list) => {
       agents = list;
-      sources.forEach((s) => s.emit(list));
+      streams.forEach((c) => c.enqueue(sse(list)));
     },
     output: (data) => socket?.onmessage?.({ data: JSON.stringify({ type: 'output', data }) }),
     exit: (exitCode) => socket?.onmessage?.({ data: JSON.stringify({ type: 'exit', exitCode }) }),
@@ -287,10 +293,7 @@ describe('http transport wire details', () => {
     const t = createHttpTransport({
       baseUrl: 'http://h/api',
       WebSocket: Spy as unknown as typeof WebSocket,
-      EventSource: class {
-        addEventListener() {}
-        close() {}
-      } as unknown as typeof EventSource,
+      wsParams: () => ({ token: 't0k' }),
     });
     t.attach('a', { cols: 1, rows: 2 }, { onData() {}, onExit() {} });
     const q = new URL(url).searchParams;
@@ -298,6 +301,7 @@ describe('http transport wire details', () => {
     expect(JSON.parse(q.get('args')!)).toEqual(['attach', 'a']);
     expect(q.get('command')).toBe('claude');
     expect([q.get('cols'), q.get('rows')]).toEqual(['1', '2']);
+    expect(q.get('token')).toBe('t0k');
     await h.transport.start({ cwd: '/w' });
     expect(h.started().at(-1)).toMatchObject({ cwd: '/w', idle: true });
   });
@@ -311,6 +315,112 @@ describe('http transport wire details', () => {
         })) as unknown as typeof fetch,
     });
     await expect(t.start({ cwd: '/etc' })).rejects.toThrow('cwd not allowed');
+  });
+
+  it('sends the auth headers and credentials on every call, the stream included', async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    let token = 'a';
+    const t = createHttpTransport({
+      baseUrl: 'http://h/api',
+      headers: () => ({ Authorization: `Bearer ${token}` }),
+      credentials: 'include',
+      fetch: (async (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        return new Response(JSON.stringify({ id: 'x' }));
+      }) as unknown as typeof fetch,
+    });
+    await t.start({ cwd: '/w', prompt: 'p' });
+    token = 'b';
+    const off = t.subscribe(() => {});
+    await flush();
+    off();
+    const headers = calls.map((c) => (c.init?.headers as Record<string, string>).Authorization);
+    expect(headers).toEqual(['Bearer a', 'Bearer b']);
+    expect(calls.every((c) => c.init?.credentials === 'include')).toBe(true);
+    expect(calls[1].url).toBe('http://h/api/agents/stream');
+  });
+
+  it('reports a failed stream with its status and does not retry a 403', async () => {
+    let calls = 0;
+    const t = createHttpTransport({
+      baseUrl: 'http://h/api',
+      fetch: (async () => {
+        calls++;
+        return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 });
+      }) as unknown as typeof fetch,
+    });
+    const errors: { message: string; status?: number }[] = [];
+    const off = t.subscribe(() => {}, (e) => errors.push(e));
+    await new Promise((r) => setTimeout(r, 20));
+    off();
+    expect(errors).toEqual([expect.objectContaining({ message: 'forbidden', status: 403 })]);
+    expect(calls).toBe(1);
+  });
+
+  it('reports a 503 and retries', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const t = createHttpTransport({
+      baseUrl: 'http://h/api',
+      fetch: (async () => {
+        calls++;
+        return new Response('', { status: 503, statusText: 'Service Unavailable' });
+      }) as unknown as typeof fetch,
+    });
+    const errors: number[] = [];
+    const off = t.subscribe(() => {}, (e) => errors.push(e.status ?? 0));
+    await vi.advanceTimersByTimeAsync(1100);
+    off();
+    vi.useRealTimers();
+    expect(errors).toEqual([503, 503]);
+    expect(calls).toBe(2);
+  });
+
+  it('parses events split across chunks and ignores other event types', async () => {
+    const enc = new TextEncoder();
+    const chunks = ['event: connected\ndata: {}\n\nevent: sess', 'ions\ndata: [{"id":"a","name":"a","cwd":"/","displayState":"idle","startedAt":0}]\n', '\n'];
+    const t = createHttpTransport({
+      baseUrl: 'http://h/api',
+      fetch: (async () =>
+        new Response(
+          new ReadableStream({
+            start(c) {
+              chunks.forEach((x) => c.enqueue(enc.encode(x)));
+            },
+          })
+        )) as unknown as typeof fetch,
+    });
+    const lists: Agent[][] = [];
+    const off = t.subscribe((a) => lists.push(a));
+    await flush();
+    off();
+    expect(lists).toEqual([[expect.objectContaining({ id: 'a' })]]);
+  });
+});
+
+describe('subscribe error channel', () => {
+  it('ipc: a failing list call reports through onError', async () => {
+    const t = createIpcTransport({
+      invoke: async () => {
+        throw Object.assign(new Error('denied'), { status: 403 });
+      },
+      on: () => () => {},
+    });
+    const errors: { message: string; status?: number }[] = [];
+    t.subscribe(() => {}, (e) => errors.push(e));
+    await flush();
+    expect(errors[0]).toMatchObject({ message: 'denied', status: 403 });
+  });
+
+  it('mock: fail() reports to subscribers, recovery pushes the list again', () => {
+    const t = createMockTransport([agent('a')]);
+    const lists: Agent[][] = [];
+    const errors: (number | undefined)[] = [];
+    t.subscribe((a) => lists.push(a), (e) => errors.push(e.status));
+    t.fail({ status: 503 });
+    t.fail(null);
+    expect(errors).toEqual([503]);
+    expect(lists).toHaveLength(2);
   });
 });
 

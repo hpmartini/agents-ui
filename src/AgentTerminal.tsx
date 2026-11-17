@@ -6,6 +6,7 @@ import { Keyboard, LogOut, Maximize2, RefreshCw, X } from 'lucide-react';
 import type { Agent, AgentsTransport, PtyChannel } from './transport';
 import { attachTerminalKeys } from './terminalKeys';
 import { stateGlyph, useTransport } from './state';
+import { en, useLabels, type Labels } from './labels';
 
 const paneBtn =
   'p-1.5 rounded text-ag-muted hover:text-ag-text hover:bg-ag-raised shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ag-accent';
@@ -40,6 +41,10 @@ interface PaneTerminal {
   rerender: (() => void) | null;
   release?: number;
   onClose: () => void;
+  /** Refreshed on every render, like onClose: texts the terminal writes itself */
+  labels: Labels;
+  /** Last theme/font we applied (xterm normalizes options, so they cannot be compared) */
+  style: string;
 }
 const paneTerminals = new Map<string, PaneTerminal>();
 const RELEASE_MS = 2000;
@@ -71,26 +76,99 @@ export function typeIntoPane(id: string, text: string): boolean {
   return true;
 }
 
-/** Terminal colours from the panel's CSS variables, so the host theme reaches xterm too */
+/** Nerd Font first (prompt and TUI glyphs), plain monospace when none is installed */
+export const DEFAULT_TERMINAL_FONT =
+  '"JetBrainsMono Nerd Font", "JetBrainsMono NF", "MesloLGS NF", "Hack Nerd Font", "FiraCode Nerd Font", "Symbols Nerd Font Mono", "JetBrains Mono", Menlo, Monaco, Consolas, monospace';
+
+const ANSI = [
+  'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
+  'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite',
+] as const;
+const kebab = (name: string) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+
+/**
+ * Terminal colours from the panel's CSS variables, so the host theme (light or dark) reaches
+ * xterm too: --agents-term-* first, then the panel's own --agents-bg/--agents-text, and the 16
+ * ANSI colours as --agents-term-<name> (e.g. --agents-term-bright-blue) where the host sets them.
+ */
 function themeFrom(el: HTMLElement): ITheme {
   const css = getComputedStyle(el);
-  const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
-  const background = v('--agents-term-bg', '#0d1424');
-  return {
+  const v = (name: string, fallback = '') => css.getPropertyValue(name).trim() || fallback;
+  const background = v('--agents-term-bg', v('--agents-bg', '#0b1220'));
+  const theme: ITheme = {
     background,
-    foreground: v('--agents-term-fg', '#e4e4e7'),
-    cursor: v('--agents-term-cursor', '#8fd0ff'),
+    foreground: v('--agents-term-fg', v('--agents-text', '#e4e4e7')),
+    cursor: v('--agents-term-cursor', v('--agents-accent', '#8fd0ff')),
     cursorAccent: background,
     selectionBackground: v('--agents-term-selection', '#3f639980'),
   };
+  for (const name of ANSI) {
+    const colour = v(`--agents-term-${kebab(name)}`);
+    if (colour) theme[name] = colour;
+  }
+  return theme;
 }
 
-function createPaneTerminal(container: HTMLElement, onClose: () => void): PaneTerminal {
+const fontFrom = (el: HTMLElement) =>
+  getComputedStyle(el).getPropertyValue('--agents-mono').trim() || DEFAULT_TERMINAL_FONT;
+
+/**
+ * Re-reads colours and font of every open terminal from the --agents-* variables. Runs by itself
+ * when <html>/<body> change class, style or data-theme, or the OS colour scheme flips; a host that
+ * switches its theme elsewhere (a wrapper element) calls it after the switch.
+ */
+export function refreshTerminalTheme() {
+  for (const pane of paneTerminals.values()) {
+    const host = pane.terminal.element?.parentElement;
+    if (!host) continue;
+    const theme = themeFrom(host);
+    const font = fontFrom(host);
+    const style = JSON.stringify([theme, font]);
+    // applying a theme mutates xterm's own styles, which wakes the observer again: stop here
+    if (style === pane.style) continue;
+    const fontChanged = font !== pane.terminal.options.fontFamily;
+    pane.style = style;
+    pane.terminal.options.theme = theme;
+    if (fontChanged) {
+      pane.terminal.options.fontFamily = font;
+      try {
+        pane.fit.fit();
+      } catch {
+        // not laid out
+      }
+    }
+  }
+}
+let themeWatch: (() => void) | null = null;
+/** One watcher for all panes: class/style/data-theme changes anywhere, and the OS colour scheme */
+function watchTheme() {
+  if (themeWatch || typeof MutationObserver === 'undefined') return;
+  let frame = 0;
+  const schedule = () => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(refreshTerminalTheme);
+  };
+  // no subtree: watching every element would run on each xterm repaint; themes live on html/body
+  const observer = new MutationObserver(schedule);
+  const filter = { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] };
+  observer.observe(document.documentElement, filter);
+  if (document.body) observer.observe(document.body, filter);
+  const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+  media?.addEventListener?.('change', schedule);
+  themeWatch = () => {
+    observer.disconnect();
+    media?.removeEventListener?.('change', schedule);
+    themeWatch = null;
+  };
+}
+
+function createPaneTerminal(container: HTMLElement, onClose: () => void, labels: Labels): PaneTerminal {
+  watchTheme();
+  const theme = themeFrom(container);
+  const fontFamily = fontFrom(container);
   const terminal = new XTerm({
-    theme: themeFrom(container),
-    fontFamily:
-      getComputedStyle(container).getPropertyValue('--agents-mono').trim() ||
-      'JetBrains Mono, Menlo, Monaco, "Courier New", monospace',
+    theme,
+    fontFamily,
     fontSize: 13,
     scrollback: 5000,
     cursorBlink: true,
@@ -104,6 +182,8 @@ function createPaneTerminal(container: HTMLElement, onClose: () => void): PaneTe
     exited: false,
     rerender: null,
     onClose,
+    labels,
+    style: JSON.stringify([theme, fontFamily]),
   };
   terminal.loadAddon(fit);
   terminal.open(container);
@@ -147,7 +227,7 @@ function connect(pane: PaneTerminal, agentId: string, transport: AgentsTransport
       onExit: (code) => {
         // a superseded channel (Reattach) must not flag the live one as detached
         if (pane.pty !== pty) return;
-        terminal.write(`\r\n\x1b[2m# detached${code === null ? '' : ` (exit code ${code})`}\x1b[0m\r\n`);
+        terminal.write(`\r\n\x1b[2m${pane.labels.detachedLine(code)}\x1b[0m\r\n`);
         update({ connected: false, exited: true });
       },
       onError: (message) => terminal.write(`\x1b[31m${message}\x1b[0m\r\n`),
@@ -171,12 +251,16 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
   solo,
 }) => {
   const transport = useTransport();
+  const t = useLabels();
   const containerRef = useRef<HTMLDivElement>(null);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const pane = paneTerminals.get(agent.id);
   const connected = pane?.connected ?? false;
   const exited = pane?.exited ?? false;
-  if (pane) pane.onClose = onClose;
+  if (pane) {
+    pane.onClose = onClose;
+    pane.labels = t;
+  }
 
   // Fit, then tell the PTY the real size even if xterm saw no change: a TUI only redraws after a resize
   const syncSize = useCallback(() => {
@@ -199,7 +283,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
       window.clearTimeout(current.release);
       container.appendChild(current.terminal.element);
     } else {
-      current = createPaneTerminal(container, onClose);
+      current = createPaneTerminal(container, onClose, t);
       paneTerminals.set(agent.id, current);
       connect(current, agent.id, transport, false);
     }
@@ -271,7 +355,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
           <>
             <span
               className={`${glyph.className} shrink-0 ${glyph.animate ? 'animate-pulse motion-reduce:animate-none' : ''}`}
-              title={glyph.label}
+              title={t.states[agent.displayState]}
             >
               {glyph.glyph}
             </span>
@@ -281,25 +365,25 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
         <span
           className={`w-1.5 h-1.5 rounded-full shrink-0 ${connected ? 'bg-ag-ok' : 'bg-ag-faint'}`}
           role="img"
-          aria-label={connected ? 'Connected' : 'Disconnected'}
+          aria-label={connected ? t.connected : t.disconnected}
         />
         <div className="flex-1" />
         {active && !solo && (
           <span className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-ag-border text-ag-muted shrink-0">
-            <Keyboard size={11} aria-hidden="true" /> Active
+            <Keyboard size={11} aria-hidden="true" /> {t.active}
           </span>
         )}
         {connected ? (
           <button
             onClick={() => paneTerminals.get(agent.id)?.pty?.write('\x1a')}
             className={paneBtn}
-            title="Detach (Ctrl+Z) - the agent keeps running"
-            aria-label="Detach"
+            title={t.detachTitle}
+            aria-label={t.detach}
           >
             <LogOut size={12} />
           </button>
         ) : (
-          <button onClick={reattach} className={paneBtn} title="Reattach" aria-label="Reattach">
+          <button onClick={reattach} className={paneBtn} title={t.reattach} aria-label={t.reattach}>
             <RefreshCw size={12} />
           </button>
         )}
@@ -307,8 +391,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
           <button
             onClick={onMaximize}
             className={paneBtn}
-            title="Move to its own tab"
-            aria-label="Move to own tab"
+            title={t.moveToOwnTabTitle}
+            aria-label={t.moveToOwnTab}
           >
             <Maximize2 size={12} />
           </button>
@@ -316,8 +400,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
         <button
           onClick={onClose}
           className={`${paneBtn} hover:text-ag-danger`}
-          title="Close (the agent keeps running)"
-          aria-label={`Close ${agent.name}`}
+          title={t.closePaneTitle}
+          aria-label={t.closePane(agent.name)}
         >
           <X size={12} />
         </button>
@@ -326,12 +410,12 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
         <div ref={containerRef} className="absolute inset-0 p-1 bg-ag-term" />
         {exited && (
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-1.5 bg-ag-surface/95 border-t border-ag-border text-xs text-ag-muted">
-            <span>Detached. The agent keeps running.</span>
+            <span>{t.detachedNote}</span>
             <button
               onClick={reattach}
               className="flex items-center gap-1 px-2 py-1 rounded bg-ag-accent hover:opacity-90 text-ag-on-accent shrink-0"
             >
-              <RefreshCw size={12} /> Reattach
+              <RefreshCw size={12} /> {t.reattach}
             </button>
           </div>
         )}

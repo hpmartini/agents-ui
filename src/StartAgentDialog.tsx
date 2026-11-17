@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import type { StartAgentRequest } from './transport';
+import { useLabels } from './labels';
 
 export interface StartAgentDialogProps {
   defaultCwd: string;
@@ -17,6 +18,7 @@ export const StartAgentDialog: React.FC<StartAgentDialogProps> = ({
   onStart,
   onClose,
 }) => {
+  const t = useLabels();
   const [prompt, setPrompt] = useState('');
   const [cwd, setCwd] = useState(defaultCwd);
   const [name, setName] = useState('');
@@ -66,31 +68,31 @@ export const StartAgentDialog: React.FC<StartAgentDialogProps> = ({
       >
         <div className="flex items-center justify-between px-4 h-11 border-b border-ag-border">
           <h2 id="agents-ui-start-title" className="text-sm font-semibold text-ag-text">
-            New agent
+            {t.startTitle}
           </h2>
           <button
             type="button"
             onClick={onClose}
             className="p-1.5 rounded text-ag-muted hover:text-ag-text hover:bg-ag-raised"
-            aria-label="Close"
+            aria-label={t.close}
           >
             <X size={14} />
           </button>
         </div>
         <div className="p-4 flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-xs text-ag-muted">
-            Task
+            {t.task}
             <textarea
               ref={first}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={4}
-              placeholder="What should the agent do? Empty: it starts and waits for input."
+              placeholder={t.taskPlaceholder}
               className={`${field} resize-y`}
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-ag-muted">
-            Folder
+            {t.folder}
             <input
               value={cwd}
               onChange={(e) => setCwd(e.target.value)}
@@ -100,7 +102,7 @@ export const StartAgentDialog: React.FC<StartAgentDialogProps> = ({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-ag-muted">
-            Name (optional)
+            {t.name}
             <input value={name} onChange={(e) => setName(e.target.value)} className={field} />
           </label>
           {error && (
@@ -116,14 +118,14 @@ export const StartAgentDialog: React.FC<StartAgentDialogProps> = ({
             onClick={onClose}
             className="px-3 py-1.5 rounded text-sm text-ag-muted hover:text-ag-text hover:bg-ag-raised"
           >
-            Cancel
+            {t.cancel}
           </button>
           <button
             type="submit"
             disabled={busy || !cwd.trim()}
             className="px-3 py-1.5 rounded text-sm bg-ag-accent text-ag-on-accent hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? 'Starting…' : 'Start'}
+            {busy ? t.starting : t.start}
           </button>
         </div>
       </form>

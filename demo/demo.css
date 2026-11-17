@@ -7,11 +7,14 @@ body { background: #0b1220; color: #e5e7eb; font-family: system-ui, sans-serif; 
 .demo-bar button + button { margin-left: 0; }
 .demo-main { flex: 1; min-height: 0; }
 /* What a host like MAGOS does to theme the panel: set the variables */
-.demo-light {
+.demo-light, .demo-light body {
   background: #f8fafc; color: #0f172a;
   --agents-bg: #f8fafc; --agents-surface: #ffffff; --agents-raised: #eef2f7; --agents-border: #dbe2ea;
   --agents-text: #0f172a; --agents-muted: #475569; --agents-faint: #94a3b8; --agents-accent: #0f766e;
   --agents-working: #c2410c; --agents-warn: #a16207; --agents-ok: #15803d; --agents-danger: #b91c1c;
-  --agents-term-bg: #1e293b;
+  /* no --agents-term-*: the terminal follows --agents-bg / --agents-text; ANSI tuned for light */
+  --agents-term-selection: #0f766e33;
+  --agents-term-green: #15803d; --agents-term-yellow: #a16207; --agents-term-cyan: #0e7490;
+  --agents-term-bright-black: #64748b; --agents-term-white: #334155; --agents-term-bright-white: #0f172a;
 }
 .demo-light .demo-bar { border-color: #dbe2ea; }

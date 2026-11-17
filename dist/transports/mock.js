@@ -12,7 +12,14 @@ export function createMockTransport(initial = [], latencyMs = 0) {
     const ptys = new Map();
     const attachCount = new Map();
     let counter = agents.length;
-    const push = () => listeners.forEach((fn) => fn(agents));
+    const errorListeners = new Set();
+    let failure = null;
+    const push = () => {
+        if (failure)
+            errorListeners.forEach((fn) => fn(failure));
+        else
+            listeners.forEach((fn) => fn(agents));
+    };
     const later = (value) => latencyMs > 0
         ? new Promise((resolve) => setTimeout(() => resolve(value), latencyMs))
         : Promise.resolve(value);
@@ -27,15 +34,26 @@ export function createMockTransport(initial = [], latencyMs = 0) {
             agents = [...next];
             push();
         },
-        subscribe(onAgents) {
+        fail(error) {
+            failure = error
+                ? Object.assign(new Error(error.message ?? `HTTP ${error.status}`), { status: error.status })
+                : null;
+            push();
+        },
+        subscribe(onAgents, onError) {
             listeners.add(onAgents);
+            if (onError)
+                errorListeners.add(onError);
+            const first = () => (failure ? onError?.(failure) : onAgents(agents));
             // with latency the first list arrives late, like a real server (shows the loading state)
             if (!latencyMs)
-                onAgents(agents);
-            const t = latencyMs ? setTimeout(() => onAgents(agents), latencyMs) : undefined;
+                first();
+            const t = latencyMs ? setTimeout(first, latencyMs) : undefined;
             return () => {
                 clearTimeout(t);
                 listeners.delete(onAgents);
+                if (onError)
+                    errorListeners.delete(onError);
             };
         },
         async start({ cwd, prompt, name }) {

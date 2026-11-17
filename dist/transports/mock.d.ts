@@ -6,6 +6,11 @@ export interface MockTransport extends AgentsTransport {
     update: (id: string, patch: Partial<Agent>) => void;
     /** Replaces the whole list and pushes it */
     setAgents: (agents: Agent[]) => void;
+    /** Makes the list fail (e.g. `{status: 403}`) for current and new subscribers; null recovers */
+    fail: (error: {
+        message?: string;
+        status?: number;
+    } | null) => void;
 }
 /**
  * In-memory backend for demos and tests: agents live in an array, a terminal echoes what is typed

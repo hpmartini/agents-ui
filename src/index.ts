@@ -5,6 +5,7 @@ export type {
   PtyChannel,
   PtyHandlers,
   StartAgentRequest,
+  TransportError,
 } from './transport';
 export { createHttpTransport, type HttpTransportOptions } from './transports/http';
 export { createIpcTransport, IPC_CHANNELS, type IpcBridge } from './transports/ipc';
@@ -12,7 +13,9 @@ export { createMockTransport, type MockTransport } from './transports/mock';
 export { AgentsPanel, type AgentsPanelProps } from './AgentsPanel';
 export { AgentList, type AgentListProps } from './AgentList';
 export { AgentWorkspace, type AgentWorkspaceProps } from './AgentWorkspace';
-export { AgentTerminal, typeIntoPane, usePaneConnected } from './AgentTerminal';
+export { AgentTerminal, DEFAULT_TERMINAL_FONT, refreshTerminalTheme, typeIntoPane, usePaneConnected } from './AgentTerminal';
+export { ConfirmDialog } from './ConfirmDialog';
+export { de, en, locales, LabelsContext, useLabels, type Labels, type Locale } from './labels';
 export { StartAgentDialog, type StartAgentDialogProps } from './StartAgentDialog';
 export { ChatInput } from './ChatInput';
 export { TransportContext, stateGlyph } from './state';

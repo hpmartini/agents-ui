@@ -23,7 +23,7 @@ let ptyCounter = 0;
 export function createIpcTransport(bridge) {
     const fail = (handlers) => (err) => handlers.onError?.(err instanceof Error ? err.message : String(err));
     return {
-        subscribe(onAgents) {
+        subscribe(onAgents, onError) {
             let closed = false;
             let pushed = false;
             const off = bridge.on(IPC_CHANNELS.changed, (agents) => {
@@ -31,9 +31,16 @@ export function createIpcTransport(bridge) {
                 onAgents(agents);
             });
             // a push that arrived meanwhile is newer than this snapshot
-            void bridge.invoke(IPC_CHANNELS.list).then((agents) => {
+            bridge.invoke(IPC_CHANNELS.list).then((agents) => {
                 if (!closed && !pushed)
                     onAgents(agents);
+            }, (err) => {
+                if (closed || pushed)
+                    return;
+                const status = err?.status;
+                onError?.(Object.assign(new Error(err instanceof Error ? err.message : String(err)), {
+                    ...(typeof status === 'number' ? { status } : {}),
+                }));
             });
             return () => {
                 closed = true;
