@@ -141,10 +141,14 @@ export function createHttpTransport(options: HttpTransportOptions = {}): AgentsT
               // malformed frame: keep the last list
             }
           });
-          // the server ended the stream: reconnect
-          fail(Object.assign(new Error('Agent stream closed'), {}), true);
+          // the server (or a proxy) ended the stream: after a working stream reconnect quietly,
+          // like EventSource; only a stream that keeps ending is reported
+          if (attempts === 0) {
+            attempts = 1;
+            timer = setTimeout(connect, 1000);
+          } else fail(new Error('Agent stream closed'), true);
         } catch (err) {
-          fail(Object.assign(new Error(err instanceof Error ? err.message : String(err)), {}), true);
+          fail(new Error(err instanceof Error ? err.message : String(err)), true);
         }
       };
       void connect();

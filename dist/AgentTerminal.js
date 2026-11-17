@@ -230,6 +230,8 @@ export const AgentTerminal = ({ agent, visible, active, onFocus, onClose, onMaxi
         if (current?.terminal.element) {
             window.clearTimeout(current.release);
             container.appendChild(current.terminal.element);
+            // a parked pane missed theme switches while it was out of the document
+            refreshTerminalTheme();
         }
         else {
             current = createPaneTerminal(container, onClose, t);

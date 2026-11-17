@@ -157,8 +157,12 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
     [workspace.tabs]
   );
 
-  // selectedId: open the agent once per new value, as soon as it is listed
+  // selectedId: open the agent once per new value, as soon as it is listed. Until it is active,
+  // nothing is reported, so a host syncing both does not get the stored layout's agent back
   const appliedSelection = useRef<string | null | undefined>(undefined);
+  const awaiting = useRef<string | null>(null);
+  if (selectedId && selectedId !== appliedSelection.current && selectedId !== awaiting.current)
+    awaiting.current = selectedId;
   useEffect(() => {
     if (!selectedId) {
       appliedSelection.current = selectedId;
@@ -167,7 +171,7 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
     if (selectedId === appliedSelection.current || !agents.some((a) => a.id === selectedId)) return;
     appliedSelection.current = selectedId;
     if (selectedId !== activeId) open(selectedId);
-    // open is stable in effect (state setters only)
+    // open only sets state; activeId is read, not a trigger
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, agents]);
 
@@ -175,6 +179,13 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
   reportSelection.current = onSelectedIdChange;
   const lastReported = useRef<string | null | undefined>(undefined);
   useEffect(() => {
+    if (!loaded) return;
+    const pending = awaiting.current;
+    if (pending) {
+      // an id that is not listed can never become active: stop waiting for it
+      if (pending !== activeId && agents.some((a) => a.id === pending)) return;
+      awaiting.current = null;
+    }
     if (lastReported.current === undefined && activeId === null) {
       lastReported.current = null;
       return;
@@ -182,7 +193,7 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
     if (activeId === lastReported.current) return;
     lastReported.current = activeId;
     reportSelection.current?.(activeId);
-  }, [activeId]);
+  }, [activeId, loaded, agents]);
 
   // the font sits on our own root, which the theme watcher does not observe
   useEffect(() => {

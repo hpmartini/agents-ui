@@ -282,6 +282,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
     if (current?.terminal.element) {
       window.clearTimeout(current.release);
       container.appendChild(current.terminal.element);
+      // a parked pane missed theme switches while it was out of the document
+      refreshTerminalTheme();
     } else {
       current = createPaneTerminal(container, onClose, t);
       paneTerminals.set(agent.id, current);

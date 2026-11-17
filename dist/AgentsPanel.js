@@ -95,8 +95,12 @@ export const AgentsPanel = ({ transport, defaultCwd, storageKey = 'agents-ui:wor
     const activeId = activeTab?.activeSessionId ?? null;
     const activeAgent = agents.find((a) => a.id === activeId) ?? null;
     const openIds = useMemo(() => new Set(workspace.tabs.flatMap((t) => t.panes)), [workspace.tabs]);
-    // selectedId: open the agent once per new value, as soon as it is listed
+    // selectedId: open the agent once per new value, as soon as it is listed. Until it is active,
+    // nothing is reported, so a host syncing both does not get the stored layout's agent back
     const appliedSelection = useRef(undefined);
+    const awaiting = useRef(null);
+    if (selectedId && selectedId !== appliedSelection.current && selectedId !== awaiting.current)
+        awaiting.current = selectedId;
     useEffect(() => {
         if (!selectedId) {
             appliedSelection.current = selectedId;
@@ -107,13 +111,22 @@ export const AgentsPanel = ({ transport, defaultCwd, storageKey = 'agents-ui:wor
         appliedSelection.current = selectedId;
         if (selectedId !== activeId)
             open(selectedId);
-        // open is stable in effect (state setters only)
+        // open only sets state; activeId is read, not a trigger
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedId, agents]);
     const reportSelection = useRef(onSelectedIdChange);
     reportSelection.current = onSelectedIdChange;
     const lastReported = useRef(undefined);
     useEffect(() => {
+        if (!loaded)
+            return;
+        const pending = awaiting.current;
+        if (pending) {
+            // an id that is not listed can never become active: stop waiting for it
+            if (pending !== activeId && agents.some((a) => a.id === pending))
+                return;
+            awaiting.current = null;
+        }
         if (lastReported.current === undefined && activeId === null) {
             lastReported.current = null;
             return;
@@ -122,7 +135,7 @@ export const AgentsPanel = ({ transport, defaultCwd, storageKey = 'agents-ui:wor
             return;
         lastReported.current = activeId;
         reportSelection.current?.(activeId);
-    }, [activeId]);
+    }, [activeId, loaded, agents]);
     // the font sits on our own root, which the theme watcher does not observe
     useEffect(() => {
         if (terminalFont)

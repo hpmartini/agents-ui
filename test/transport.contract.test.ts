@@ -376,6 +376,33 @@ describe('http transport wire details', () => {
     expect(calls).toBe(2);
   });
 
+  it('reconnects quietly when a working stream ends', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const enc = new TextEncoder();
+    const t = createHttpTransport({
+      baseUrl: 'http://h/api',
+      fetch: (async () => {
+        calls++;
+        return new Response(
+          new ReadableStream({
+            start(c) {
+              c.enqueue(enc.encode('event: sessions\ndata: []\n\n'));
+              c.close();
+            },
+          })
+        );
+      }) as unknown as typeof fetch,
+    });
+    const errors: unknown[] = [];
+    const off = t.subscribe(() => {}, (e) => errors.push(e));
+    await vi.advanceTimersByTimeAsync(1100);
+    off();
+    vi.useRealTimers();
+    expect(calls).toBe(2);
+    expect(errors).toEqual([]);
+  });
+
   it('parses events split across chunks and ignores other event types', async () => {
     const enc = new TextEncoder();
     const chunks = ['event: connected\ndata: {}\n\nevent: sess', 'ions\ndata: [{"id":"a","name":"a","cwd":"/","displayState":"idle","startedAt":0}]\n', '\n'];
