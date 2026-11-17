@@ -24,6 +24,10 @@ if (!localStorage.getItem(KEY)) {
 }
 
 const transport = createMockTransport(agents, 300);
+// Demo of the error path: the mock refuses folders outside ~/MAGOS
+const mockStart = transport.start.bind(transport);
+transport.start = (req) =>
+  req.cwd.startsWith('~/MAGOS') ? mockStart(req) : Promise.reject(new Error(`Folder outside ~/MAGOS: ${req.cwd}`));
 
 function Demo() {
   const [light, setLight] = useState(false);

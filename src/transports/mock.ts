@@ -44,8 +44,13 @@ export function createMockTransport(initial: Agent[] = [], latencyMs = 0): MockT
     },
     subscribe(onAgents) {
       listeners.add(onAgents);
-      onAgents(agents);
-      return () => listeners.delete(onAgents);
+      // with latency the first list arrives late, like a real server (shows the loading state)
+      if (!latencyMs) onAgents(agents);
+      const t = latencyMs ? setTimeout(() => onAgents(agents), latencyMs) : undefined;
+      return () => {
+        clearTimeout(t);
+        listeners.delete(onAgents);
+      };
     },
     async start({ cwd, prompt, name }) {
       const id = `mock${++counter}`;
