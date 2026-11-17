@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { AgentsPanel } from '../src/AgentsPanel';
+import * as ws from '../src/workspace';
 import { createMockTransport } from '../src/transports/mock';
 import type { Agent } from '../src/transport';
 
@@ -147,5 +149,28 @@ describe('AgentsPanel', () => {
     expect(stop).toHaveBeenCalledWith('w');
     const root = container.querySelector('.agents-ui') as HTMLElement;
     expect(root.style.getPropertyValue('--agents-mono')).toBe('Iosevka, monospace');
+  });
+
+  it('a synced selectedId wins over the stored layout (no stale report before the list loads)', async () => {
+    localStorage.setItem('agents-ui:workspace', JSON.stringify(ws.openSession(ws.EMPTY_WORKSPACE, 'a')));
+    const transport = createMockTransport([agent('a'), agent('b')], 20);
+    const reports: (string | null)[] = [];
+    function Host() {
+      const [id, setId] = useState<string | null>('b');
+      return (
+        <AgentsPanel
+          transport={transport}
+          defaultCwd="/w"
+          selectedId={id}
+          onSelectedIdChange={(next) => (reports.push(next), setId(next))}
+        />
+      );
+    }
+    render(<Host />);
+    await act(() => new Promise((r) => setTimeout(r, 40)));
+    expect(reports).not.toContain('a');
+    expect(reports.at(-1)).toBe('b');
+    fireEvent.click(document.querySelector('[data-agent-row][title="a · /w/a"]')!);
+    expect(reports.at(-1)).toBe('a');
   });
 });
