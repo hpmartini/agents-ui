@@ -67,7 +67,41 @@ export function createHttpTransport(options = {}) {
             throw await errorFrom(res);
         return (await res.json().catch(() => null));
     };
+    const transcript = (id, onEntries, onError) => {
+        let closed = false;
+        let timer;
+        let last = '';
+        const poll = async () => {
+            try {
+                const res = await request(`/agents/${encodeURIComponent(id)}/transcript`, {
+                    headers: { Accept: 'application/json' },
+                });
+                if (!res.ok)
+                    throw await errorFrom(res);
+                const { entries } = (await res.json());
+                const list = Array.isArray(entries) ? entries : [];
+                // unchanged window: no re-render, no scroll jump
+                const key = `${list.length}:${list.at(-1)?.id ?? ''}:${list.at(-1)?.text.length ?? 0}`;
+                if (!closed && key !== last) {
+                    last = key;
+                    onEntries(list);
+                }
+            }
+            catch (err) {
+                if (!closed)
+                    onError?.(err instanceof Error ? err : new Error(String(err)));
+            }
+            if (!closed)
+                timer = setTimeout(poll, options.transcriptPollMs);
+        };
+        void poll();
+        return () => {
+            closed = true;
+            clearTimeout(timer);
+        };
+    };
     return {
+        ...(options.transcriptPollMs ? { transcript } : {}),
         subscribe(onAgents, onError) {
             let closed = false;
             let attempts = 0;

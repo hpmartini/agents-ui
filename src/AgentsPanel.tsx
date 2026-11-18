@@ -7,6 +7,7 @@ import { AgentList } from './AgentList';
 import { AgentWorkspace } from './AgentWorkspace';
 import { StartAgentDialog } from './StartAgentDialog';
 import { ChatInput } from './ChatInput';
+import { ResizeHandle, useStoredWidth } from './ResizeHandle';
 import { ConfirmDialog } from './ConfirmDialog';
 import { refreshTerminalTheme } from './AgentTerminal';
 import { LabelsContext, locales, type Labels, type Locale } from './labels';
@@ -15,7 +16,7 @@ export interface AgentsPanelProps {
   transport: AgentsTransport;
   /** Folder the start dialog proposes */
   defaultCwd: string;
-  /** localStorage key of the open tabs and splits; null keeps them in memory only */
+  /** localStorage key of the open tabs and splits (the list width goes under `<key>:list`); null keeps them in memory only */
   storageKey?: string | null;
   /** List heading (default: the locale's "Agents") */
   title?: string;
@@ -63,6 +64,11 @@ function useWidth(ref: React.RefObject<HTMLElement | null>): number {
   return width;
 }
 
+const LIST_DEFAULT = 300;
+const LIST_MIN = 200;
+const LIST_MAX = 640;
+const PANES_MIN = 320;
+
 /** The whole agents view: list, tabs with split panes of terminals, chat input, start dialog */
 export const AgentsPanel: React.FC<AgentsPanelProps> = ({
   transport,
@@ -90,7 +96,15 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
   const [confirming, setConfirming] = useState<Agent | null>(null);
   const [mobileView, setMobileView] = useState<'list' | 'panes'>('list');
   const rootRef = useRef<HTMLDivElement>(null);
-  const narrow = useWidth(rootRef) < narrowBelowPx;
+  const rootWidth = useWidth(rootRef);
+  const narrow = rootWidth < narrowBelowPx;
+  // the panes keep at least PANES_MIN; a stored width larger than that is clamped, not lost
+  const [listWidth, setListWidth] = useStoredWidth(
+    storageKey ? `${storageKey}:list` : null,
+    LIST_DEFAULT,
+    LIST_MIN,
+    Math.min(LIST_MAX, rootWidth - PANES_MIN)
+  );
 
   useEffect(
     () =>
@@ -213,7 +227,8 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
       >
         {showList && (
           <aside
-            className={`${narrow ? 'w-full' : 'w-[300px] border-r border-ag-border'} shrink-0 min-h-0`}
+            className={`${narrow ? 'w-full' : ''} shrink-0 min-h-0`}
+            style={narrow ? undefined : { width: listWidth }}
           >
             <AgentList
               agents={agents}
@@ -229,6 +244,16 @@ export const AgentsPanel: React.FC<AgentsPanelProps> = ({
               onNew={() => setStarting(true)}
             />
           </aside>
+        )}
+        {!narrow && (
+          <ResizeHandle
+            width={listWidth}
+            min={LIST_MIN}
+            max={Math.min(LIST_MAX, rootWidth - PANES_MIN)}
+            onChange={setListWidth}
+            edge="right"
+            label={t.resizeList}
+          />
         )}
         {/* stays mounted while the narrow list shows, so terminals keep their channels */}
         <section

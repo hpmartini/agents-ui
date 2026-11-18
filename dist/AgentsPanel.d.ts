@@ -5,7 +5,7 @@ export interface AgentsPanelProps {
     transport: AgentsTransport;
     /** Folder the start dialog proposes */
     defaultCwd: string;
-    /** localStorage key of the open tabs and splits; null keeps them in memory only */
+    /** localStorage key of the open tabs and splits (the list width goes under `<key>:list`); null keeps them in memory only */
     storageKey?: string | null;
     /** List heading (default: the locale's "Agents") */
     title?: string;

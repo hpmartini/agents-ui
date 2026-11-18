@@ -5,6 +5,7 @@ export type {
   PtyChannel,
   PtyHandlers,
   StartAgentRequest,
+  TranscriptEntry,
   TransportError,
 } from './transport';
 export { createHttpTransport, type HttpTransportOptions } from './transports/http';
@@ -18,5 +19,7 @@ export { ConfirmDialog } from './ConfirmDialog';
 export { de, en, locales, LabelsContext, useLabels, type Labels, type Locale } from './labels';
 export { StartAgentDialog, type StartAgentDialogProps } from './StartAgentDialog';
 export { ChatInput } from './ChatInput';
+export { AgentTranscript } from './AgentTranscript';
+export { ResizeHandle, clampWidth, useStoredWidth, type ResizeHandleProps } from './ResizeHandle';
 export { TransportContext, stateGlyph } from './state';
 export * as workspace from './workspace';
