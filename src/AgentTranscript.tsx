@@ -49,7 +49,7 @@ export const AgentTranscript: React.FC<{ agentId: string }> = ({ agentId }) => {
       className="absolute inset-0 overflow-y-auto bg-ag-bg px-3 py-2 text-sm"
     >
       {error && (
-        <p role="alert" className="mb-2 rounded border border-ag-danger/50 px-2 py-1.5 text-xs text-ag-danger">
+        <p role="alert" className="sticky top-0 z-10 mb-2 rounded border border-ag-danger/50 bg-ag-bg px-2 py-1.5 text-xs text-ag-danger">
           {t.transcriptFailed(error.message)}
         </p>
       )}
