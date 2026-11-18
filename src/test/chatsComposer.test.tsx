@@ -1,0 +1,236 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import React, { useState } from 'react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { AgentsView, type AgentsPrefill } from '../components/AgentsView/AgentsView';
+import { STORAGE_KEY as RAIL_KEY } from '../hooks/useRailPreferences';
+import { STORAGE_KEY as WORKSPACE_KEY } from '../hooks/useAgentWorkspace';
+import { summarizeSessions } from '../utils/agentSessions';
+import { DEFAULT_AGENT_VIEW_SETTINGS, type AgentDispatchRequest, type AgentSession } from '../types';
+import { renderWithAgents } from './agents';
+import { nav, orkumoHost, orkumoTransport } from './agentsView';
+
+// #19 AK-1 / AK-2: "New chat" from /chats runs in the chats folder, with a model per chat
+
+const CHATS = '/data/chats';
+// stable values across renders, as the real hook keeps them
+const hoisted = vi.hoisted(() => ({
+  model: null as string | null,
+  sessions: [] as AgentSession[],
+  settings: null as object | null,
+}));
+
+vi.mock('../hooks/useAgentSessions', () => ({
+  useAgentSessions: () => {
+    hoisted.settings ??= {
+      ...DEFAULT_AGENT_VIEW_SETTINGS,
+      dispatch: {
+        ...DEFAULT_AGENT_VIEW_SETTINGS.dispatch,
+        harness: 'claude',
+        model: hoisted.model,
+      },
+    };
+    return {
+      sessions: hoisted.sessions,
+      daemon: null,
+      userSettings: null,
+      cliInstalled: true,
+      capabilities: null,
+      settings: hoisted.settings,
+      updateSettings: () => {},
+      loading: false,
+      error: null,
+      errorStatus: null,
+      received: true,
+      connected: true,
+      counts: summarizeSessions(hoisted.sessions),
+      lastCompleted: null,
+      refresh: () => {},
+    };
+  },
+}));
+// the pane shows what it would start: command, args and folder
+vi.mock('../components/AgentsView/AgentTerminal', async (orig) => ({
+  ...(await orig<object>()),
+  AgentTerminal: ({ session }: { session: AgentSession }) => (
+    <div
+      data-agent-pane={session.id}
+      data-command={session.ptyCommand ?? 'claude'}
+      data-args={JSON.stringify(session.ptyArgs ?? [])}
+      data-cwd={session.cwd}
+    />
+  ),
+}));
+
+let dispatched: AgentDispatchRequest[] = [];
+
+const pending = () => new Promise<never>(() => {});
+const transport = () => {
+  const base = orkumoTransport();
+  return orkumoTransport({
+    agents: {
+      ...base.agents,
+      dispatchAgent: vi.fn(async (body: AgentDispatchRequest) => {
+        dispatched.push(body);
+        return { id: 'job-1', name: 'chat', alreadyRunning: false, output: '' };
+      }),
+    },
+    // the discovery data, where the chats folder comes from
+    discovery: {
+      fetchAgentRepos: vi.fn(async () => ({
+        cwd: '/p',
+        repos: [],
+        home: '/home/dev',
+        chats: CHATS,
+      })),
+      fetchSubagents: vi.fn(async () => []),
+      fetchAgentCommands: vi.fn(async () => []),
+      fetchHarnesses: vi.fn(pending),
+      fetchHarnessModels: vi.fn(async () =>
+        ['fable', 'opus', 'sonnet'].map((id) => ({
+          id,
+          label: id,
+          group: 'Claude',
+          efforts: ['low', 'high', 'max'],
+        }))
+      ),
+    },
+  });
+};
+
+/** The host's route: it clears the prefill once the view took it (Orkumo: the router state) */
+const Shell: React.FC<{ initial: AgentsPrefill }> = ({ initial }) => {
+  const [prefill, setPrefill] = useState<AgentsPrefill | null>(initial);
+  return (
+    <AgentsView
+      active
+      apps={[]}
+      onExit={() => {}}
+      nav={nav}
+      onOpenView={() => {}}
+      prefill={prefill}
+      onPrefillConsumed={() => setPrefill(null)}
+    />
+  );
+};
+const showAgents = (state: AgentsPrefill) =>
+  renderWithAgents(<Shell initial={state} />, { transport: transport(), host: orkumoHost() });
+const openNewChat = () => showAgents({ dispatch: '', mode: 'chat', place: 'chats' });
+
+beforeEach(() => {
+  localStorage.removeItem(RAIL_KEY);
+  localStorage.removeItem(WORKSPACE_KEY);
+  window.HTMLElement.prototype.scrollIntoView = () => {};
+  window.HTMLElement.prototype.scrollTo = () => {};
+  hoisted.model = null;
+  hoisted.settings = null;
+  dispatched = [];
+});
+afterEach(() => {
+  cleanup();
+});
+
+const dialog = async () => screen.findByRole('dialog', { name: 'New chat' });
+
+describe('New chat without a project (#19)', () => {
+  it('AK-1: opens the chat composer in the chats folder and sends the first prompt there', async () => {
+    openNewChat();
+    const composer = await dialog();
+    expect(within(composer).getByText(CHATS)).toBeInTheDocument();
+    fireEvent.change(within(composer).getByLabelText('Task description'), {
+      target: { value: 'Was ist Sauerteig?' },
+    });
+    fireEvent.click(within(composer).getByRole('button', { name: /Start chat/ }));
+    await waitFor(() => expect(dispatched).toHaveLength(1));
+    expect(dispatched[0]).toMatchObject({ prompt: 'Was ist Sauerteig?', cwd: CHATS, idle: true });
+  });
+
+  it('AK-2: model and effort picked in the matrix go along; empty keeps the global default', async () => {
+    hoisted.model = 'sonnet';
+    openNewChat();
+    const composer = await dialog();
+    const picker = within(composer).getByRole('button', { name: /default \(sonnet\)/ });
+    fireEvent.click(picker);
+    const matrix = await screen.findByRole('dialog', { name: 'Model and effort' });
+    // models from the CLI help plus the aliases it leaves out; each with the CLI's levels
+    await within(matrix).findByRole('button', { name: 'haiku · max' });
+    expect(
+      within(matrix)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent)
+    ).toEqual(['Model', 'default', 'low', 'high', 'max']);
+    fireEvent.click(within(matrix).getByRole('button', { name: 'opus · high' }));
+    expect(picker).toHaveTextContent('opus · high');
+    fireEvent.change(within(composer).getByLabelText('Task description'), {
+      target: { value: 'Hallo' },
+    });
+    fireEvent.click(within(composer).getByRole('button', { name: /Start chat/ }));
+    await waitFor(() => expect(dispatched).toHaveLength(1));
+    expect(dispatched[0]).toMatchObject({
+      prompt: 'Hallo',
+      cwd: CHATS,
+      model: 'opus',
+      effort: 'high',
+    });
+
+    cleanup();
+    dispatched = [];
+    openNewChat();
+    const again = await dialog();
+    fireEvent.change(within(again).getByLabelText('Task description'), {
+      target: { value: 'Hallo' },
+    });
+    fireEvent.click(within(again).getByRole('button', { name: /Start chat/ }));
+    await waitFor(() => expect(dispatched).toHaveLength(1));
+    // the dispatch defaults (settings.dispatch) carry the global model
+    expect(dispatched[0]).toMatchObject({ model: 'sonnet', cwd: CHATS });
+  });
+
+  it('AK-2: Codex gets --model before its first message, in the chats folder', async () => {
+    openNewChat();
+    const composer = await dialog();
+    fireEvent.change(within(composer).getByRole('combobox', { name: /Harness/ }), {
+      target: { value: 'codex' },
+    });
+    const model = within(composer).getByRole('textbox', { name: 'Model' });
+    expect(model).toHaveAttribute('placeholder', 'default');
+    fireEvent.change(model, { target: { value: 'gpt-5-codex' } });
+    fireEvent.change(within(composer).getByLabelText('Task description'), {
+      target: { value: 'Hallo' },
+    });
+    fireEvent.click(within(composer).getByRole('button', { name: /Start chat/ }));
+    const pane = await waitFor(() => {
+      const el = document.querySelector('[data-command="codex"]');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(JSON.parse(pane.getAttribute('data-args')!)).toEqual([
+      '--model',
+      'gpt-5-codex',
+      '--',
+      'Hallo',
+    ]);
+    expect(pane.getAttribute('data-cwd')).toBe(CHATS);
+    expect(dispatched).toHaveLength(0);
+  });
+});
+
+describe('Open an Orkumo chat from /chats (#19 AK-4)', () => {
+  const id = '0f0f0f0f-0000-4000-8000-000000000009';
+
+  it('a Claude chat no pane runs resumes in its folder, in the UI view', async () => {
+    showAgents({ openChat: { harness: 'claude', sessionId: id, cwd: CHATS, title: 'Brot' } });
+    await waitFor(() => expect(dispatched).toHaveLength(1));
+    expect(dispatched[0]).toMatchObject({ resume: id, cwd: CHATS });
+  });
+
+  it('a Codex chat resumes in a terminal pane with its own resume form', async () => {
+    showAgents({ openChat: { harness: 'codex', sessionId: id, cwd: CHATS, title: 'Steuer' } });
+    const pane = await waitFor(() => {
+      const el = document.querySelector('[data-command="codex"]');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(JSON.parse(pane.getAttribute('data-args')!)).toEqual(['resume', id]);
+    expect(pane.getAttribute('data-cwd')).toBe(CHATS);
+  });
+});

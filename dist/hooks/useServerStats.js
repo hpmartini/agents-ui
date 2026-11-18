@@ -1,0 +1,53 @@
+import { useEffect, useState } from 'react';
+import { useTransport } from '../host';
+import { pollWhileVisible } from '../utils/visiblePoll';
+const POLL_MS = 5_000;
+// Matches the server limit (processStatsService MAX_PIDS)
+const MAX_PIDS = 50;
+/** Failed refreshes in a row after which the last values are dropped instead of shown as stale */
+export const MAX_STALE_FAILURES = 3;
+const EMPTY = { stats: {}, checked: new Set(), updatedAt: null, failures: 0 };
+/**
+ * CPU/memory per server pid. Polls every 5s only while `enabled` (panel open) and the tab is
+ * visible; a failed refresh keeps the last data and counts up `failures` so the UI can mark it stale.
+ * Without the transport's `servers` group it never polls.
+ */
+export function useServerStats(pids, enabled) {
+    const [state, setState] = useState(EMPTY);
+    const fetchServerStats = useTransport().servers?.fetchServerStats;
+    const pidKey = [...new Set(pids)]
+        .sort((a, b) => a - b)
+        .slice(0, MAX_PIDS)
+        .join(',');
+    useEffect(() => {
+        if (!enabled || !pidKey || !fetchServerStats)
+            return;
+        const wanted = pidKey.split(',').map(Number);
+        let controller = null;
+        const load = () => {
+            controller?.abort();
+            const own = (controller = new AbortController());
+            fetchServerStats(wanted, own.signal)
+                .then((list) => {
+                if (own.signal.aborted)
+                    return;
+                setState({
+                    stats: Object.fromEntries(list.map((s) => [s.pid, s])),
+                    checked: new Set(wanted),
+                    updatedAt: Date.now(),
+                    failures: 0,
+                });
+            })
+                .catch(() => {
+                if (!own.signal.aborted)
+                    setState((s) => ({ ...s, failures: s.failures + 1 }));
+            });
+        };
+        const stop = pollWhileVisible(load, POLL_MS);
+        return () => {
+            stop();
+            controller?.abort();
+        };
+    }, [enabled, pidKey, fetchServerStats]);
+    return state;
+}

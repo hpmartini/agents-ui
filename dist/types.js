@@ -1,0 +1,52 @@
+// ============================================
+// Claude Code Agent View (browser counterpart of `claude agents`)
+// ============================================
+export const DEFAULT_AGENT_DISPATCH_DEFAULTS = {
+    harness: 'omp',
+    model: null,
+    effort: null,
+    permissionMode: null,
+    agent: null,
+    fallbackModel: null,
+    skipPermissions: false,
+    allowSkipPermissions: false,
+    restricted: false,
+    settings: null,
+    addDirs: [],
+    pluginDirs: [],
+    mcpConfigs: [],
+    strictMcpConfig: false,
+};
+export const DEFAULT_AGENT_CARD_FIELDS = {
+    issue: 'left',
+    pr: 'left',
+    project: 'row2',
+    branch: 'row2',
+    git: 'row2',
+    metrics: 'row3',
+    status: 'row4',
+    links: 'details',
+    servers: 'details',
+    subagents: 'details',
+    harness: 'title',
+};
+export const DEFAULT_AGENT_VIEW_SETTINGS = {
+    grouping: 'project',
+    layout: 'tabs',
+    scopeCwd: null,
+    taskCwd: null,
+    collapsedGroups: [],
+    notifications: true,
+    desktopNotifications: false,
+    cardDensity: 'comfortable',
+    cardFields: DEFAULT_AGENT_CARD_FIELDS,
+    disabled: false,
+    chatSubmitKey: 'mod+enter',
+    chatShowSteps: false,
+    agentOpenView: 'chat',
+    mainAgent: { name: 'main-orchestrator', keepAlive: true },
+    orchestrators: [],
+    orchestratorRoles: {},
+    dispatch: DEFAULT_AGENT_DISPATCH_DEFAULTS,
+    version: 1,
+};

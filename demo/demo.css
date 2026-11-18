@@ -1,20 +1,11 @@
 html, body, #root { height: 100%; margin: 0; }
-body { background: #0b1220; color: #e5e7eb; font-family: system-ui, sans-serif; }
+body { background: #243562; color: #d6dff1; font-family: Inter, system-ui, sans-serif; }
 .demo { height: 100%; display: flex; flex-direction: column; }
-.demo-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; font-size: 13px; border-bottom: 1px solid #273244; flex-wrap: wrap; }
-.demo-bar span { color: #9ca3af; }
-.demo-bar button { margin-left: auto; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid #273244; background: transparent; color: inherit; cursor: pointer; }
-.demo-bar button + button { margin-left: 0; }
-.demo-main { flex: 1; min-height: 0; }
-/* What a host like MAPLE does to theme the panel: set the variables */
-.demo-light, .demo-light body {
-  background: #f8fafc; color: #0f172a;
-  --agents-bg: #f8fafc; --agents-surface: #ffffff; --agents-raised: #eef2f7; --agents-border: #dbe2ea;
-  --agents-text: #0f172a; --agents-muted: #475569; --agents-faint: #94a3b8; --agents-accent: #0f766e;
-  --agents-working: #c2410c; --agents-warn: #a16207; --agents-ok: #15803d; --agents-danger: #b91c1c;
-  /* no --agents-term-*: the terminal follows --agents-bg / --agents-text; ANSI tuned for light */
-  --agents-term-selection: #0f766e33;
-  --agents-term-green: #15803d; --agents-term-yellow: #a16207; --agents-term-cyan: #0e7490;
-  --agents-term-bright-black: #64748b; --agents-term-white: #334155; --agents-term-bright-white: #0f172a;
-}
-.demo-light .demo-bar { border-color: #dbe2ea; }
+.demo-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; font-size: 13px; border-bottom: 1px solid #4f67a0; }
+.demo-bar span { color: #adbde0; }
+.demo-bar button { margin-left: auto; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid #4f67a0; background: transparent; color: inherit; cursor: pointer; }
+.demo-main { flex: 1; min-height: 0; display: flex; }
+.demo-toasts { position: fixed; bottom: 16px; right: 16px; z-index: 100; display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.demo-toast { padding: 8px 12px; border-radius: 6px; font-size: 13px; background: #1a274b; border: 1px solid #4f67a0; cursor: pointer; }
+.demo-toast-success { border-color: #34d399; }
+.demo-toast-error { border-color: #f87171; }
