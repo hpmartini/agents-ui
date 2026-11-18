@@ -1,19 +1,26 @@
-import type { Agent, AgentsTransport } from '../transport';
+import type { AgentsTransport } from '../transport';
+import type { AgentSession } from '../types';
+export interface MockTransportOptions {
+    /** Delay (ms) of the first list and of every answer; 0 answers at once (tests) */
+    latencyMs?: number;
+}
 export interface MockTransport extends AgentsTransport {
-    /** Terminals attached so far, per agent id (tests: a remount must not open a second one) */
+    /** Terminals attached so far, per session id (tests: a remount must not open a second one) */
     attachCount: Map<string, number>;
-    /** Replaces one agent's fields and pushes the list */
-    update: (id: string, patch: Partial<Agent>) => void;
+    /** Replaces one session's fields and pushes the list */
+    update: (id: string, patch: Partial<AgentSession>) => void;
     /** Replaces the whole list and pushes it */
-    setAgents: (agents: Agent[]) => void;
-    /** Makes the list fail (e.g. `{status: 403}`) for current and new subscribers; null recovers */
+    setAgents: (sessions: AgentSession[]) => void;
+    /** Makes the list fail (`onError` with the message) for current and new subscribers; null recovers */
     fail: (error: {
         message?: string;
         status?: number;
     } | null) => void;
 }
 /**
- * In-memory backend for demos and tests: agents live in an array, a terminal echoes what is typed
- * and answers each line. No timers run unless `latencyMs` > 0.
+ * In-memory transport for the demo and tests: sessions live in an array, `dispatchAgent` adds
+ * one, `stopAgent` marks it stopped, a terminal echoes what is typed and answers each line, and
+ * `logs` returns those lines (peek panel). Settings are kept in memory. No timers run unless
+ * `latencyMs` > 0.
  */
-export declare function createMockTransport(initial?: Agent[], latencyMs?: number): MockTransport;
+export declare function createMockTransport(initial?: AgentSession[], { latencyMs }?: MockTransportOptions): MockTransport;

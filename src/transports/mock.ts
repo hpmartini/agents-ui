@@ -1,162 +1,252 @@
-import type { Agent, AgentsTransport, PtyHandlers, TranscriptEntry, TransportError } from '../transport';
+import type { AgentsHandlers, AgentsTransport, PtyAttachRequest, PtySocket } from '../transport';
+import { createLocalSettings } from '../settings';
+import type { AgentLogEntry, AgentSession, AgentsResponse } from '../types';
+
+export interface MockTransportOptions {
+  /** Delay (ms) of the first list and of every answer; 0 answers at once (tests) */
+  latencyMs?: number;
+}
 
 export interface MockTransport extends AgentsTransport {
-  /** Terminals attached so far, per agent id (tests: a remount must not open a second one) */
+  /** Terminals attached so far, per session id (tests: a remount must not open a second one) */
   attachCount: Map<string, number>;
-  /** Replaces one agent's fields and pushes the list */
-  update: (id: string, patch: Partial<Agent>) => void;
+  /** Replaces one session's fields and pushes the list */
+  update: (id: string, patch: Partial<AgentSession>) => void;
   /** Replaces the whole list and pushes it */
-  setAgents: (agents: Agent[]) => void;
-  /** Makes the list fail (e.g. `{status: 403}`) for current and new subscribers; null recovers */
+  setAgents: (sessions: AgentSession[]) => void;
+  /** Makes the list fail (`onError` with the message) for current and new subscribers; null recovers */
   fail: (error: { message?: string; status?: number } | null) => void;
 }
 
 const ESC = '\x1b[';
-const banner = (agent: Agent) =>
-  `${ESC}2m# mock attach ${agent.id} in ${agent.cwd}${ESC}0m\r\n` +
-  `${ESC}38;5;208m✻${ESC}0m ${agent.name}\r\n` +
-  `${ESC}2m${agent.detail ?? 'waiting for input'}${ESC}0m\r\n\r\n> `;
+const banner = (session: AgentSession) =>
+  `${ESC}38;5;208m✻${ESC}0m ${session.name}\r\n` +
+  `${ESC}2m${session.detail ?? session.intent ?? 'waiting for input'}${ESC}0m\r\n\r\n> `;
+
+/** A new background session as the list shows it */
+function mockSession(id: string, fields: Partial<AgentSession> & { cwd: string; name: string }) {
+  return {
+    id,
+    sessionId: null,
+    kind: 'background',
+    startedAt: Date.now(),
+    state: 'working',
+    pinned: false,
+    order: null,
+    links: [],
+    displayState: 'working',
+    ...fields,
+  } satisfies AgentSession;
+}
 
 /**
- * In-memory backend for demos and tests: agents live in an array, a terminal echoes what is typed
- * and answers each line. No timers run unless `latencyMs` > 0.
+ * The socket the terminal reads: Orkumo's PTY protocol over an in-memory object with the
+ * WebSocket surface the terminal uses. Echoes what is typed and answers each line.
  */
-export function createMockTransport(initial: Agent[] = [], latencyMs = 0): MockTransport {
-  let agents = [...initial];
-  const listeners = new Set<(agents: Agent[]) => void>();
-  const ptys = new Map<string, Set<PtyHandlers>>();
+class MockPtySocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+  readyState = MockPtySocket.CONNECTING;
+  onopen: ((event: Event) => void) | null = null;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onclose: ((event: CloseEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+  private line = '';
+
+  constructor(
+    private readonly session: AgentSession | undefined,
+    private readonly onLine: (line: string) => void,
+    private readonly onClose: () => void,
+    delayMs: number
+  ) {
+    const open = () => {
+      if (this.readyState !== MockPtySocket.CONNECTING) return;
+      this.readyState = MockPtySocket.OPEN;
+      this.onopen?.(new Event('open'));
+      if (!session) {
+        this.emit({ type: 'error', message: 'unknown agent' });
+        return;
+      }
+      this.emit({ type: 'connected', pid: 4242, cwd: session.cwd });
+      this.output(banner(session));
+    };
+    if (delayMs > 0) setTimeout(open, delayMs);
+    else queueMicrotask(open);
+  }
+
+  private emit(message: object) {
+    if (this.readyState !== MockPtySocket.OPEN) return;
+    this.onmessage?.(new MessageEvent('message', { data: JSON.stringify(message) }));
+  }
+
+  private output(data: string) {
+    this.emit({ type: 'output', data });
+  }
+
+  send(raw: string) {
+    if (this.readyState !== MockPtySocket.OPEN) return;
+    const message = JSON.parse(raw) as { type: string; data?: string };
+    if (message.type !== 'input' || !message.data) return;
+    for (const ch of message.data) {
+      if (ch === '\r') {
+        this.output(`\r\n${ESC}36m●${ESC}0m mock answer to: ${this.line}\r\n\r\n> `);
+        this.onLine(this.line);
+        this.line = '';
+      } else if (ch === '\x7f') {
+        if (this.line) this.output('\b \b');
+        this.line = this.line.slice(0, -1);
+      } else if (ch >= ' ') {
+        this.line += ch;
+        this.output(ch);
+      }
+    }
+  }
+
+  /** The session ended (stop): the terminal sees `exit`, then the socket closes */
+  exit() {
+    this.emit({ type: 'exit', exitCode: 0 });
+    this.close();
+  }
+
+  close() {
+    if (this.readyState === MockPtySocket.CLOSED) return;
+    this.readyState = MockPtySocket.CLOSED;
+    this.onClose();
+    this.onclose?.(new CloseEvent('close'));
+  }
+}
+
+/**
+ * In-memory transport for the demo and tests: sessions live in an array, `dispatchAgent` adds
+ * one, `stopAgent` marks it stopped, a terminal echoes what is typed and answers each line, and
+ * `logs` returns those lines (peek panel). Settings are kept in memory. No timers run unless
+ * `latencyMs` > 0.
+ */
+export function createMockTransport(
+  initial: AgentSession[] = [],
+  { latencyMs = 0 }: MockTransportOptions = {}
+): MockTransport {
+  let sessions = [...initial];
+  const subscribers = new Set<AgentsHandlers>();
+  const sockets = new Map<string, Set<MockPtySocket>>();
+  const transcripts = new Map<string, AgentLogEntry[]>();
   const attachCount = new Map<string, number>();
-  let counter = agents.length;
-  const errorListeners = new Set<(error: TransportError) => void>();
-  let failure: TransportError | null = null;
-  const push = () => {
-    if (failure) errorListeners.forEach((fn) => fn(failure!));
-    else listeners.forEach((fn) => fn(agents));
+  let counter = sessions.length;
+  let failure: { message: string; status?: number } | null = null;
+
+  const deliver = (handlers: AgentsHandlers) => {
+    if (failure) {
+      handlers.onConnectionChange?.(false);
+      handlers.onError?.(failure.message);
+    } else {
+      handlers.onConnectionChange?.(true);
+      handlers.onSessions(sessions);
+    }
   };
+  const push = () => subscribers.forEach(deliver);
   const later = <T>(value: T) =>
     latencyMs > 0
       ? new Promise<T>((resolve) => setTimeout(() => resolve(value), latencyMs))
       : Promise.resolve(value);
-  // transcript per agent: its task (detail) first, then every line typed and its answer
-  const transcripts = new Map<string, TranscriptEntry[]>();
-  const transcriptListeners = new Map<string, Set<(entries: TranscriptEntry[]) => void>>();
-  const transcriptOf = (id: string) => {
-    if (!transcripts.has(id)) {
-      const detail = agents.find((a) => a.id === id)?.detail;
-      transcripts.set(id, detail ? [{ id: `${id}-0`, role: 'user', text: detail }] : []);
-    }
-    return transcripts.get(id)!;
+  const rejectIfFailing = () => {
+    if (!failure) return null;
+    return Promise.reject(Object.assign(new Error(failure.message), { status: failure.status }));
   };
-  const say = (id: string, role: TranscriptEntry['role'], text: string) => {
-    const list = [...transcriptOf(id)];
-    list.push({ id: `${id}-${list.length}`, role, text, at: Date.now() });
-    transcripts.set(id, list);
-    transcriptListeners.get(id)?.forEach((fn) => fn(list));
-  };
-  const update = (id: string, patch: Partial<Agent>) => {
-    agents = agents.map((a) => (a.id === id ? { ...a, ...patch } : a));
+  const update = (id: string, patch: Partial<AgentSession>) => {
+    sessions = sessions.map((s) => (s.id === id ? { ...s, ...patch } : s));
     push();
+  };
+  const record = (id: string, line: string) => {
+    const list = transcripts.get(id) ?? [];
+    const timestamp = new Date().toISOString();
+    list.push(
+      { role: 'user', text: line, timestamp },
+      { role: 'assistant', text: `mock answer to: ${line}`, timestamp }
+    );
+    transcripts.set(id, list);
   };
 
   return {
     attachCount,
     update,
     setAgents(next) {
-      agents = [...next];
+      sessions = [...next];
       push();
     },
     fail(error) {
-      failure = error
-        ? Object.assign(new Error(error.message ?? `HTTP ${error.status}`), { status: error.status })
-        : null;
+      failure = error ? { message: error.message ?? `HTTP ${error.status}`, status: error.status } : null;
       push();
     },
-    subscribe(onAgents, onError) {
-      listeners.add(onAgents);
-      if (onError) errorListeners.add(onError);
-      const first = () => (failure ? onError?.(failure) : onAgents(agents));
-      // with latency the first list arrives late, like a real server (shows the loading state)
-      if (!latencyMs) first();
-      const t = latencyMs ? setTimeout(first, latencyMs) : undefined;
-      return () => {
-        clearTimeout(t);
-        listeners.delete(onAgents);
-        if (onError) errorListeners.delete(onError);
-      };
+    agents: {
+      fetchAgents: async () =>
+        rejectIfFailing() ??
+        later<AgentsResponse>({
+          sessions,
+          daemon: null,
+          userSettings: null,
+          cli: { installed: true, path: null },
+        }),
+      subscribeToAgents(handlers) {
+        subscribers.add(handlers);
+        // with latency the first list arrives late, like a real server (shows the loading state)
+        const timer = latencyMs ? setTimeout(() => deliver(handlers), latencyMs) : undefined;
+        if (!latencyMs) deliver(handlers);
+        return () => {
+          clearTimeout(timer);
+          subscribers.delete(handlers);
+        };
+      },
+      async dispatchAgent({ cwd, prompt, name, idle }) {
+        const failed = rejectIfFailing();
+        if (failed) return failed;
+        const id = `mock${++counter}`;
+        const label = name || prompt?.slice(0, 40) || `agent ${counter}`;
+        sessions = [
+          ...sessions,
+          mockSession(id, {
+            cwd,
+            name: label,
+            intent: prompt ?? null,
+            ...(idle || !prompt
+              ? { state: null, status: 'idle', displayState: 'idle' }
+              : { state: 'working', displayState: 'working' }),
+          }),
+        ];
+        push();
+        return later({ id, name: label, alreadyRunning: false, output: '' });
+      },
+      async stopAgent(id) {
+        if (!sessions.some((s) => s.id === id)) throw new Error(`unknown agent ${id}`);
+        update(id, { state: 'stopped', displayState: 'stopped', status: null });
+        sockets.get(id)?.forEach((socket) => socket.exit());
+        sockets.delete(id);
+        return later({ output: '' });
+      },
     },
-    async start({ cwd, prompt, name }) {
-      const id = `mock${++counter}`;
-      agents = [
-        ...agents,
-        {
-          id,
-          name: name || prompt?.slice(0, 40) || `agent ${counter}`,
-          cwd,
-          displayState: prompt ? 'working' : 'idle',
-          detail: prompt ?? null,
-          startedAt: Date.now(),
-        },
-      ];
-      push();
-      return later({ id });
+    settings: createLocalSettings(null),
+    pty: {
+      attach({ id }: PtyAttachRequest): PtySocket {
+        attachCount.set(id, (attachCount.get(id) ?? 0) + 1);
+        const set = sockets.get(id) ?? new Set();
+        sockets.set(id, set);
+        const socket = new MockPtySocket(
+          sessions.find((s) => s.id === id),
+          (line) => record(id, line),
+          () => set.delete(socket),
+          latencyMs
+        );
+        set.add(socket);
+        // The terminal only uses readyState, send, close and the on* handlers (see PtySocket)
+        return socket as unknown as PtySocket;
+      },
     },
-    async stop(id) {
-      if (!agents.some((a) => a.id === id)) throw new Error(`unknown agent ${id}`);
-      update(id, { displayState: 'stopped', detail: 'stopped' });
-      ptys.get(id)?.forEach((h) => h.onExit(0));
-      ptys.delete(id);
-      await later(undefined);
-    },
-    transcript(id, onEntries, onError) {
-      if (!agents.some((a) => a.id === id)) {
-        onError?.(Object.assign(new Error(`unknown agent ${id}`), { status: 404 }));
-        return () => {};
-      }
-      const set = transcriptListeners.get(id) ?? new Set();
-      transcriptListeners.set(id, set);
-      set.add(onEntries);
-      const first = () => onEntries(transcriptOf(id));
-      if (!latencyMs) first();
-      const t = latencyMs ? setTimeout(first, latencyMs) : undefined;
-      return () => {
-        clearTimeout(t);
-        set.delete(onEntries);
-      };
-    },
-    attach(id, _size, handlers) {
-      attachCount.set(id, (attachCount.get(id) ?? 0) + 1);
-      const agent = agents.find((a) => a.id === id);
-      const set = ptys.get(id) ?? new Set();
-      ptys.set(id, set);
-      set.add(handlers);
-      let line = '';
-      queueMicrotask(() => {
-        handlers.onOpen?.();
-        if (agent) handlers.onData(banner(agent));
-        else handlers.onError?.(`unknown agent ${id}`);
-      });
-      return {
-        write(data) {
-          for (const ch of data) {
-            if (ch === '\r') {
-              handlers.onData(`\r\n${ESC}36m●${ESC}0m mock answer to: ${line}\r\n\r\n> `);
-              say(id, 'user', line);
-              say(id, 'assistant', `mock answer to: ${line}`);
-              line = '';
-            } else if (ch === '\x7f') {
-              if (line) handlers.onData('\b \b');
-              line = line.slice(0, -1);
-            } else if (ch >= ' ') {
-              line += ch;
-              handlers.onData(ch);
-            }
-          }
-        },
-        resize() {},
-        close() {
-          set.delete(handlers);
-        },
-      };
+    logs: {
+      async fetchAgentLogs(id) {
+        const entries = transcripts.get(id) ?? [];
+        return later({ source: 'transcript' as const, text: '', entries });
+      },
     },
   };
 }

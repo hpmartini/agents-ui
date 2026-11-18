@@ -1,0 +1,40 @@
+import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { AgentSettingsPanel } from '../components/AgentsView/AgentSettingsPanel';
+import { DEFAULT_AGENT_VIEW_SETTINGS } from '../types';
+import { renderWithAgents, testHost, testTransport } from './agents';
+
+const props = {
+  open: true,
+  onClose: vi.fn(),
+  settings: DEFAULT_AGENT_VIEW_SETTINGS,
+  onUpdate: vi.fn(async () => {}),
+  userSettings: null,
+  daemon: null,
+  repos: [],
+  capabilities: null,
+  onRefresh: vi.fn(),
+};
+
+describe('AgentSettingsPanel transport groups', () => {
+  it('hides the supervisor section without the `daemon` group', () => {
+    renderWithAgents(<AgentSettingsPanel {...props} />);
+    expect(screen.getByText('Agent view settings')).toBeTruthy();
+    expect(screen.queryByText('Background service (supervisor)')).toBeNull();
+    expect(screen.queryByRole('button', { name: /claude respawn --all/ })).toBeNull();
+  });
+
+  it('runs the daemon actions through the transport and toasts the first output line', async () => {
+    const respawnAllAgents = vi.fn(async () => ({ output: 'respawned 2\nmore' }));
+    const host = testHost();
+    renderWithAgents(<AgentSettingsPanel {...props} />, {
+      transport: testTransport({ daemon: { respawnAllAgents, stopAgentDaemon: vi.fn() } }),
+      host,
+    });
+    fireEvent.click(screen.getByRole('button', { name: /claude respawn --all/ }));
+    await waitFor(() => expect(host.toast.success).toHaveBeenCalledWith('respawned 2'));
+    expect(respawnAllAgents).toHaveBeenCalledTimes(1);
+    expect(props.onRefresh).toHaveBeenCalled();
+  });
+});

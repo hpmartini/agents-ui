@@ -1,72 +1,186 @@
 /*
- * agents-ui styles. Built with Tailwind v4 into dist/styles.css, without preflight (the host's
- * base styles stay untouched). Every colour is a CSS variable: set the --agents-* ones on
- * .agents-ui (or any ancestor) to theme the panel.
+ * agents-ui styles: Orkumo's Tailwind classes, built with Tailwind v4 into dist/styles.css.
+ * No global preflight: the base rules below (a scoped copy of Tailwind v3's preflight and
+ * Orkumo's global CSS) apply only inside `.agents-ui`, so the host's own styles stay untouched.
+ * Orkumo itself styles the view with its Tailwind v3 setup and does not import this file.
+ *
+ * Theming: set these variables on `.agents-ui` (or any ancestor); defaults are Orkumo's.
+ *   --agents-gray-50 … --agents-gray-950   the `gray` scale (incl. 750 and 850) every
+ *                                         `*-gray-*` class uses; 900 is the app background
+ *   --agents-sel                           selected rail row while the rail has focus
+ *   --agents-cursor                        rail outline while it does not, focus ring
+ *   --agents-font, --agents-font-mono      `font-sans` / `font-mono` (Inter, JetBrains Mono)
+ *   --agents-border                        `.kbd` border and the width handle
+ *   --agents-scrollbar                     scrollbar thumb
+ *   --agents-accent                        width handle while hovered or dragged
  */
 @layer theme, base, utilities;
 @import 'tailwindcss/theme.css' layer(theme);
-@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
 @source './';
 
 @theme inline {
-  --color-ag-bg: var(--agents-bg, #0b1220);
-  --color-ag-surface: var(--agents-surface, #111827);
-  --color-ag-raised: var(--agents-raised, #1c2536);
-  --color-ag-border: var(--agents-border, #273244);
-  --color-ag-text: var(--agents-text, #e5e7eb);
-  --color-ag-muted: var(--agents-muted, #9ca3af);
-  --color-ag-faint: var(--agents-faint, #6b7280);
-  --color-ag-accent: var(--agents-accent, #3b82f6);
-  --color-ag-on-accent: var(--agents-on-accent, #ffffff);
-  --color-ag-working: var(--agents-working, #fb923c);
-  --color-ag-warn: var(--agents-warn, #facc15);
-  --color-ag-ok: var(--agents-ok, #34d399);
-  --color-ag-danger: var(--agents-danger, #f87171);
-  --color-ag-term: var(--agents-term-bg, var(--agents-bg, #0b1220));
+  /* Orkumo's blue-tinted gray scale (derived from its Ghostty theme #304370) */
+  --color-gray-50: var(--agents-gray-50, #f6f8fd);
+  --color-gray-100: var(--agents-gray-100, #eaeff9);
+  --color-gray-200: var(--agents-gray-200, #d6dff1);
+  --color-gray-300: var(--agents-gray-300, #c4d0ea);
+  --color-gray-400: var(--agents-gray-400, #b8c7e6);
+  --color-gray-500: var(--agents-gray-500, #adbde0);
+  --color-gray-600: var(--agents-gray-600, #94a8d6);
+  --color-gray-700: var(--agents-gray-700, #4f67a0);
+  --color-gray-750: var(--agents-gray-750, #3b5081);
+  --color-gray-800: var(--agents-gray-800, #344a7b);
+  --color-gray-850: var(--agents-gray-850, #2c4070);
+  --color-gray-900: var(--agents-gray-900, #243562);
+  --color-gray-950: var(--agents-gray-950, #1a274b);
+  --color-sel: var(--agents-sel, #3f6399);
+  --color-cursor: var(--agents-cursor, #8fd0ff);
+  --font-sans: var(--agents-font, Inter, ui-sans-serif, system-ui, sans-serif);
+  --font-mono: var(--agents-font-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace);
+  /* Tailwind v3 values where v4 changed them */
+  --radius-sm: 0.125rem;
 }
 
-/* resets in a layer below utilities, so the utility classes win */
+/* Below the utilities layer, so the utility classes win */
 @layer base {
-  .agents-ui {
-    font-family: var(--agents-font, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif);
-    box-sizing: border-box;
-  }
+  /* Tailwind v3 preflight, scoped */
+  .agents-ui,
   .agents-ui *,
-  .agents-ui *::before,
-  .agents-ui *::after {
-    box-sizing: inherit;
+  .agents-ui ::before,
+  .agents-ui ::after {
+    box-sizing: border-box;
+    border: 0 solid var(--agents-gray-200, #d6dff1);
   }
-  .agents-ui button,
-  .agents-ui input,
-  .agents-ui textarea {
-    font: inherit;
-    color: inherit;
+  .agents-ui {
+    font-family: var(--agents-font, Inter, ui-sans-serif, system-ui, sans-serif);
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    color-scheme: dark;
+    scrollbar-color: var(--agents-scrollbar, #5c73a8) var(--agents-gray-900, #243562);
   }
-  .agents-ui button {
-    background: none;
-    border: 0;
-    cursor: pointer;
+  .agents-ui :is(h1, h2, h3, h4, h5, h6) {
+    font-size: inherit;
+    font-weight: inherit;
   }
-  .agents-ui button:disabled {
-    cursor: default;
+  .agents-ui :is(blockquote, dl, dd, h1, h2, h3, h4, h5, h6, hr, figure, p, pre) {
+    margin: 0;
   }
-  .agents-ui ul {
+  .agents-ui :is(ol, ul, menu) {
     list-style: none;
     margin: 0;
-    padding-left: 0;
+    padding: 0;
   }
-  .agents-ui h2,
-  .agents-ui p {
+  .agents-ui a {
+    color: inherit;
+    text-decoration: inherit;
+  }
+  .agents-ui :is(b, strong) {
+    font-weight: bolder;
+  }
+  .agents-ui :is(code, kbd, samp, pre) {
+    font-family: var(--agents-font-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 1em;
+  }
+  .agents-ui small {
+    font-size: 80%;
+  }
+  .agents-ui table {
+    text-indent: 0;
+    border-color: inherit;
+    border-collapse: collapse;
+  }
+  .agents-ui :is(button, input, optgroup, select, textarea) {
+    font-family: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    font-size: 100%;
+    font-weight: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    color: inherit;
     margin: 0;
+    padding: 0;
+  }
+  .agents-ui :is(button, select) {
+    text-transform: none;
+  }
+  .agents-ui :is(button, input:where([type='button'], [type='reset'], [type='submit'])) {
+    -webkit-appearance: button;
+    background-color: transparent;
+    background-image: none;
+  }
+  .agents-ui :is(button, [role='button']) {
+    cursor: pointer;
+  }
+  .agents-ui :disabled {
+    cursor: default;
+  }
+  .agents-ui :is(input, textarea)::placeholder {
+    opacity: 1;
+    color: var(--agents-gray-400, #b8c7e6);
+  }
+  .agents-ui textarea {
+    resize: vertical;
+  }
+  .agents-ui :is(img, svg, video, canvas, audio, iframe, embed, object) {
+    display: block;
+    vertical-align: middle;
+  }
+  .agents-ui :is(img, video) {
+    max-width: 100%;
+    height: auto;
+  }
+  .agents-ui [hidden]:where(:not([hidden='until-found'])) {
+    display: none;
+  }
+
+  /* Orkumo's global rules (its index.html) */
+  .agents-ui :focus-visible {
+    outline: 2px solid var(--agents-cursor, #8fd0ff);
+    outline-offset: 2px;
+  }
+  .agents-ui .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .agents-ui .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .agents-ui .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--agents-scrollbar, #5c73a8) transparent;
+  }
+  .agents-ui .animate-fade-in {
+    animation: agents-fade-in 0.15s ease-out forwards;
+  }
+  .agents-ui .kbd {
+    display: inline-block;
+    padding: 0 0.35rem;
+    border: 1px solid var(--agents-border, #4f67a0);
+    border-bottom-width: 2px;
+    border-radius: 0.25rem;
+    background: var(--agents-gray-950, #1a274b);
+    color: #b9d6ff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.7rem;
+    line-height: 1.2rem;
   }
 }
-.ag-no-scrollbar {
-  scrollbar-width: none;
+
+@keyframes agents-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
-.ag-no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-/* width handle (ResizeHandle): also used outside .agents-ui, so plain CSS on the --agents-* vars */
+
+/* Width handle (ResizeHandle): also used outside .agents-ui, so plain CSS on the --agents-* vars */
 .ag-resize-handle {
   position: relative;
   flex: none;
@@ -81,14 +195,14 @@
   content: '';
   position: absolute;
   inset: 0 3px;
-  background: var(--agents-border, #273244);
+  background: var(--agents-border, #4f67a0);
   transition: background-color 120ms, inset 120ms;
 }
 .ag-resize-handle:hover::after,
 .ag-resize-handle:focus-visible::after,
 .ag-resize-handle[data-dragging]::after {
   inset: 0 2px;
-  background: var(--agents-accent, #3b82f6);
+  background: var(--agents-accent, #8fd0ff);
 }
 @media (prefers-reduced-motion: reduce) {
   .ag-resize-handle::after {
