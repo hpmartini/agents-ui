@@ -43,6 +43,16 @@ export interface PtyChannel {
 export interface TransportError extends Error {
     status?: number;
 }
+/** One line of an agent's conversation, as the transcript view shows it (plain text, no markup) */
+export interface TranscriptEntry {
+    /** Stable per entry, so the view can keep its scroll position across updates */
+    id: string;
+    /** `tool`: a tool call of the agent, summarised to one line */
+    role: 'user' | 'assistant' | 'tool';
+    text: string;
+    /** epoch ms, where known */
+    at?: number | null;
+}
 export interface AgentsTransport {
     /**
      * Pushes the full agent list now (as soon as known) and on every change; returns unsubscribe.
@@ -59,4 +69,9 @@ export interface AgentsTransport {
         cols: number;
         rows: number;
     }, handlers: PtyHandlers) => PtyChannel;
+    /**
+     * Optional: pushes the agent's conversation (oldest first, the whole visible window each time)
+     * now and on every change; returns unsubscribe. Without it the panes offer no transcript view.
+     */
+    transcript?: (id: string, onEntries: (entries: TranscriptEntry[]) => void, onError?: (error: TransportError) => void) => () => void;
 }

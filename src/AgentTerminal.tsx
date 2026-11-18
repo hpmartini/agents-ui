@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useReducer, useRef, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { Terminal as XTerm, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -7,6 +7,10 @@ import type { Agent, AgentsTransport, PtyChannel } from './transport';
 import { attachTerminalKeys } from './terminalKeys';
 import { stateGlyph, useTransport } from './state';
 import { en, useLabels, type Labels } from './labels';
+import { AgentTranscript } from './AgentTranscript';
+
+// terminal or transcript per agent; outlives the pane, which remounts on split and unsplit
+const paneViews = new Map<string, 'terminal' | 'transcript'>();
 
 const paneBtn =
   'p-1.5 rounded text-ag-muted hover:text-ag-text hover:bg-ag-raised shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ag-accent';
@@ -252,6 +256,11 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
 }) => {
   const transport = useTransport();
   const t = useLabels();
+  const [view, setViewState] = useState(() => (transport.transcript && paneViews.get(agent.id)) || 'terminal');
+  const setView = (next: 'terminal' | 'transcript') => {
+    paneViews.set(agent.id, next);
+    setViewState(next);
+  };
   const containerRef = useRef<HTMLDivElement>(null);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const pane = paneTerminals.get(agent.id);
@@ -370,6 +379,26 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
           aria-label={connected ? t.connected : t.disconnected}
         />
         <div className="flex-1" />
+        {transport.transcript && (
+          <div
+            role="group"
+            aria-label={t.viewSwitch}
+            className="flex shrink-0 rounded border border-ag-border overflow-hidden"
+          >
+            {(['terminal', 'transcript'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                aria-pressed={view === v}
+                className={`px-1.5 py-0.5 text-[11px] leading-none ${
+                  view === v ? 'bg-ag-accent text-ag-on-accent' : 'text-ag-muted hover:text-ag-text'
+                }`}
+              >
+                {v === 'terminal' ? t.terminalView : t.transcriptView}
+              </button>
+            ))}
+          </div>
+        )}
         {active && !solo && (
           <span className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-ag-border text-ag-muted shrink-0">
             <Keyboard size={11} aria-hidden="true" /> {t.active}
@@ -410,6 +439,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
       </div>
       <div className="relative flex-1 min-h-0">
         <div ref={containerRef} className="absolute inset-0 p-1 bg-ag-term" />
+        {/* over the terminal, which stays attached underneath and keeps its scrollback */}
+        {view === 'transcript' && <AgentTranscript agentId={agent.id} />}
         {exited && (
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-1.5 bg-ag-surface/95 border-t border-ag-border text-xs text-ag-muted">
             <span>{t.detachedNote}</span>

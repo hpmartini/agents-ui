@@ -9,5 +9,7 @@ export { ConfirmDialog } from './ConfirmDialog';
 export { de, en, locales, LabelsContext, useLabels } from './labels';
 export { StartAgentDialog } from './StartAgentDialog';
 export { ChatInput } from './ChatInput';
+export { AgentTranscript } from './AgentTranscript';
+export { ResizeHandle, clampWidth, useStoredWidth } from './ResizeHandle';
 export { TransportContext, stateGlyph } from './state';
 export * as workspace from './workspace';

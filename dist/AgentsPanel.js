@@ -7,6 +7,7 @@ import { AgentList } from './AgentList';
 import { AgentWorkspace } from './AgentWorkspace';
 import { StartAgentDialog } from './StartAgentDialog';
 import { ChatInput } from './ChatInput';
+import { ResizeHandle, useStoredWidth } from './ResizeHandle';
 import { ConfirmDialog } from './ConfirmDialog';
 import { refreshTerminalTheme } from './AgentTerminal';
 import { LabelsContext, locales } from './labels';
@@ -33,6 +34,10 @@ function useWidth(ref) {
     }, [ref]);
     return width;
 }
+const LIST_DEFAULT = 300;
+const LIST_MIN = 200;
+const LIST_MAX = 640;
+const PANES_MIN = 320;
 /** The whole agents view: list, tabs with split panes of terminals, chat input, start dialog */
 export const AgentsPanel = ({ transport, defaultCwd, storageKey = 'agents-ui:workspace', title, narrowBelowPx = 720, className = '', locale = 'en', labels, selectedId, onSelectedIdChange, canStop, confirmStop = true, terminalFont, }) => {
     const t = useMemo(() => ({ ...locales[locale], ...labels }), [locale, labels]);
@@ -46,7 +51,10 @@ export const AgentsPanel = ({ transport, defaultCwd, storageKey = 'agents-ui:wor
     const [confirming, setConfirming] = useState(null);
     const [mobileView, setMobileView] = useState('list');
     const rootRef = useRef(null);
-    const narrow = useWidth(rootRef) < narrowBelowPx;
+    const rootWidth = useWidth(rootRef);
+    const narrow = rootWidth < narrowBelowPx;
+    // the panes keep at least PANES_MIN; a stored width larger than that is clamped, not lost
+    const [listWidth, setListWidth] = useStoredWidth(storageKey ? `${storageKey}:list` : null, LIST_DEFAULT, LIST_MIN, Math.min(LIST_MAX, rootWidth - PANES_MIN));
     useEffect(() => transport.subscribe((list) => {
         setAgents(list);
         setLoaded(true);
@@ -143,7 +151,7 @@ export const AgentsPanel = ({ transport, defaultCwd, storageKey = 'agents-ui:wor
     }, [terminalFont]);
     const showList = !narrow || mobileView === 'list';
     const showPanes = !narrow || mobileView === 'panes';
-    return (_jsx(LabelsContext.Provider, { value: t, children: _jsx(TransportContext.Provider, { value: transport, children: _jsxs("div", { ref: rootRef, style: terminalFont ? { '--agents-mono': terminalFont } : undefined, className: `agents-ui relative flex h-full min-h-0 w-full overflow-hidden bg-ag-bg text-ag-text ${className}`, children: [showList && (_jsx("aside", { className: `${narrow ? 'w-full' : 'w-[300px] border-r border-ag-border'} shrink-0 min-h-0`, children: _jsx(AgentList, { agents: agents, openIds: openIds, activeId: activeId, loaded: loaded, error: listError, onRetry: () => setRetries((n) => n + 1), title: title ?? t.title, onOpen: open, onStop: stop, canStop: canStop, onNew: () => setStarting(true) }) })), _jsxs("section", { className: `${showPanes ? 'flex' : 'hidden'} flex-1 min-w-0 min-h-0 flex-col`, "aria-label": t.openAgents, children: [narrow && (_jsxs("button", { onClick: () => setMobileView('list'), className: "flex items-center gap-1 px-3 h-9 text-sm text-ag-accent border-b border-ag-border shrink-0 text-left", children: [_jsx(ChevronLeft, { size: 14, "aria-hidden": "true" }), " ", t.allAgents] })), _jsx("div", { className: "flex-1 min-h-0", children: _jsx(AgentWorkspace, { agents: agents, workspace: workspace, onActivateTab: apply(ws.activateTab), onFocusPane: apply(ws.focusSession), onClosePane: apply(ws.closeSession), onCloseTab: apply(ws.closeTab), onMoveTab: apply(ws.moveTab), onSplit: apply(ws.splitInto), onDetach: apply(ws.detachSession), onSetLayout: apply(ws.setTabLayout) }) }), _jsx(ChatInput, { target: activeAgent })] }), error && (_jsx("div", { role: "alert", className: "absolute bottom-16 left-1/2 -translate-x-1/2 z-40 max-w-[90%] rounded-md border border-ag-danger/50 bg-ag-surface px-3 py-2 text-xs text-ag-danger shadow-lg", onClick: () => setError(null), children: error })), confirming && (_jsx(ConfirmDialog, { title: t.confirmStopTitle, body: t.confirmStopBody(confirming.name), confirm: t.confirmStop, onCancel: () => setConfirming(null), onConfirm: () => {
+    return (_jsx(LabelsContext.Provider, { value: t, children: _jsx(TransportContext.Provider, { value: transport, children: _jsxs("div", { ref: rootRef, style: terminalFont ? { '--agents-mono': terminalFont } : undefined, className: `agents-ui relative flex h-full min-h-0 w-full overflow-hidden bg-ag-bg text-ag-text ${className}`, children: [showList && (_jsx("aside", { className: `${narrow ? 'w-full' : ''} shrink-0 min-h-0`, style: narrow ? undefined : { width: listWidth }, children: _jsx(AgentList, { agents: agents, openIds: openIds, activeId: activeId, loaded: loaded, error: listError, onRetry: () => setRetries((n) => n + 1), title: title ?? t.title, onOpen: open, onStop: stop, canStop: canStop, onNew: () => setStarting(true) }) })), !narrow && (_jsx(ResizeHandle, { width: listWidth, min: LIST_MIN, max: Math.min(LIST_MAX, rootWidth - PANES_MIN), onChange: setListWidth, edge: "right", label: t.resizeList })), _jsxs("section", { className: `${showPanes ? 'flex' : 'hidden'} flex-1 min-w-0 min-h-0 flex-col`, "aria-label": t.openAgents, children: [narrow && (_jsxs("button", { onClick: () => setMobileView('list'), className: "flex items-center gap-1 px-3 h-9 text-sm text-ag-accent border-b border-ag-border shrink-0 text-left", children: [_jsx(ChevronLeft, { size: 14, "aria-hidden": "true" }), " ", t.allAgents] })), _jsx("div", { className: "flex-1 min-h-0", children: _jsx(AgentWorkspace, { agents: agents, workspace: workspace, onActivateTab: apply(ws.activateTab), onFocusPane: apply(ws.focusSession), onClosePane: apply(ws.closeSession), onCloseTab: apply(ws.closeTab), onMoveTab: apply(ws.moveTab), onSplit: apply(ws.splitInto), onDetach: apply(ws.detachSession), onSetLayout: apply(ws.setTabLayout) }) }), _jsx(ChatInput, { target: activeAgent })] }), error && (_jsx("div", { role: "alert", className: "absolute bottom-16 left-1/2 -translate-x-1/2 z-40 max-w-[90%] rounded-md border border-ag-danger/50 bg-ag-surface px-3 py-2 text-xs text-ag-danger shadow-lg", onClick: () => setError(null), children: error })), confirming && (_jsx(ConfirmDialog, { title: t.confirmStopTitle, body: t.confirmStopBody(confirming.name), confirm: t.confirmStop, onCancel: () => setConfirming(null), onConfirm: () => {
                             doStop(confirming.id);
                             setConfirming(null);
                         } })), starting && (_jsx(StartAgentDialog, { defaultCwd: defaultCwd, onStart: start, onClose: () => setStarting(false) }))] }) }) }));

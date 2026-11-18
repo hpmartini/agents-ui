@@ -23,6 +23,22 @@ export function createMockTransport(initial = [], latencyMs = 0) {
     const later = (value) => latencyMs > 0
         ? new Promise((resolve) => setTimeout(() => resolve(value), latencyMs))
         : Promise.resolve(value);
+    // transcript per agent: its task (detail) first, then every line typed and its answer
+    const transcripts = new Map();
+    const transcriptListeners = new Map();
+    const transcriptOf = (id) => {
+        if (!transcripts.has(id)) {
+            const detail = agents.find((a) => a.id === id)?.detail;
+            transcripts.set(id, detail ? [{ id: `${id}-0`, role: 'user', text: detail }] : []);
+        }
+        return transcripts.get(id);
+    };
+    const say = (id, role, text) => {
+        const list = [...transcriptOf(id)];
+        list.push({ id: `${id}-${list.length}`, role, text, at: Date.now() });
+        transcripts.set(id, list);
+        transcriptListeners.get(id)?.forEach((fn) => fn(list));
+    };
     const update = (id, patch) => {
         agents = agents.map((a) => (a.id === id ? { ...a, ...patch } : a));
         push();
@@ -80,6 +96,23 @@ export function createMockTransport(initial = [], latencyMs = 0) {
             ptys.delete(id);
             await later(undefined);
         },
+        transcript(id, onEntries, onError) {
+            if (!agents.some((a) => a.id === id)) {
+                onError?.(Object.assign(new Error(`unknown agent ${id}`), { status: 404 }));
+                return () => { };
+            }
+            const set = transcriptListeners.get(id) ?? new Set();
+            transcriptListeners.set(id, set);
+            set.add(onEntries);
+            const first = () => onEntries(transcriptOf(id));
+            if (!latencyMs)
+                first();
+            const t = latencyMs ? setTimeout(first, latencyMs) : undefined;
+            return () => {
+                clearTimeout(t);
+                set.delete(onEntries);
+            };
+        },
         attach(id, _size, handlers) {
             attachCount.set(id, (attachCount.get(id) ?? 0) + 1);
             const agent = agents.find((a) => a.id === id);
@@ -99,6 +132,8 @@ export function createMockTransport(initial = [], latencyMs = 0) {
                     for (const ch of data) {
                         if (ch === '\r') {
                             handlers.onData(`\r\n${ESC}36m●${ESC}0m mock answer to: ${line}\r\n\r\n> `);
+                            say(id, 'user', line);
+                            say(id, 'assistant', `mock answer to: ${line}`);
                             line = '';
                         }
                         else if (ch === '\x7f') {
