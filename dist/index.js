@@ -1,15 +1,11 @@
-export { createHttpTransport } from './transports/http';
-export { createIpcTransport, IPC_CHANNELS } from './transports/ipc';
-export { createMockTransport } from './transports/mock';
-export { AgentsPanel } from './AgentsPanel';
-export { AgentList } from './AgentList';
-export { AgentWorkspace } from './AgentWorkspace';
-export { AgentTerminal, DEFAULT_TERMINAL_FONT, refreshTerminalTheme, typeIntoPane, usePaneConnected } from './AgentTerminal';
-export { ConfirmDialog } from './ConfirmDialog';
-export { de, en, locales, LabelsContext, useLabels } from './labels';
-export { StartAgentDialog } from './StartAgentDialog';
-export { ChatInput } from './ChatInput';
-export { AgentTranscript } from './AgentTranscript';
+// The view and what a host needs to run it. Every module is also importable on its own path
+// (`@hpmartini/agents-ui/utils/agentSessions`, …), as Orkumo does for its other pages.
+export { AgentsView, isNewTaskKey, } from './components/AgentsView/AgentsView';
+export { MAIN_AGENT_EVENT } from './components/AgentsView/MainAgentDialog';
+export { AgentsProvider, useHost, useTransport, } from './host';
+export { createLocalSettings } from './settings';
+export { de, en, useLabels } from './labels';
+export { createMockTransport, } from './transports/mock';
+export { DEFAULT_TERMINAL_FONT, refreshTerminalTheme } from './components/AgentsView/AgentTerminal';
+export { configureLinks } from './utils/links';
 export { ResizeHandle, clampWidth, useStoredWidth } from './ResizeHandle';
-export { TransportContext, stateGlyph } from './state';
-export * as workspace from './workspace';

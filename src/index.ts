@@ -1,25 +1,35 @@
-export type {
-  Agent,
-  AgentDisplayState,
-  AgentsTransport,
-  PtyChannel,
-  PtyHandlers,
-  StartAgentRequest,
-  TranscriptEntry,
-  TransportError,
-} from './transport';
-export { createHttpTransport, type HttpTransportOptions } from './transports/http';
-export { createIpcTransport, IPC_CHANNELS, type IpcBridge } from './transports/ipc';
-export { createMockTransport, type MockTransport } from './transports/mock';
-export { AgentsPanel, type AgentsPanelProps } from './AgentsPanel';
-export { AgentList, type AgentListProps } from './AgentList';
-export { AgentWorkspace, type AgentWorkspaceProps } from './AgentWorkspace';
-export { AgentTerminal, DEFAULT_TERMINAL_FONT, refreshTerminalTheme, typeIntoPane, usePaneConnected } from './AgentTerminal';
-export { ConfirmDialog } from './ConfirmDialog';
-export { de, en, locales, LabelsContext, useLabels, type Labels, type Locale } from './labels';
-export { StartAgentDialog, type StartAgentDialogProps } from './StartAgentDialog';
-export { ChatInput } from './ChatInput';
-export { AgentTranscript } from './AgentTranscript';
+// The view and what a host needs to run it. Every module is also importable on its own path
+// (`@hpmartini/agents-ui/utils/agentSessions`, …), as Orkumo does for its other pages.
+export {
+  AgentsView,
+  isNewTaskKey,
+  type AgentsPrefill,
+  type AgentsViewProps,
+} from './components/AgentsView/AgentsView';
+export { MAIN_AGENT_EVENT } from './components/AgentsView/MainAgentDialog';
+export {
+  AgentsProvider,
+  useHost,
+  useTransport,
+  type AgentIssues,
+  type AgentsHost,
+  type BrowserPaneProps,
+  type IssueCreateProps,
+  type IssueDraft,
+  type Notifier,
+  type PaletteCommand,
+  type PaletteScope,
+  type ToastOptions,
+} from './host';
+export type * from './transport';
+export { createLocalSettings } from './settings';
+export { de, en, useLabels, type LabelOverrides, type Labels, type Locale } from './labels';
+export {
+  createMockTransport,
+  type MockTransport,
+  type MockTransportOptions,
+} from './transports/mock';
+export { DEFAULT_TERMINAL_FONT, refreshTerminalTheme } from './components/AgentsView/AgentTerminal';
+export { configureLinks, type LinkPlatform } from './utils/links';
 export { ResizeHandle, clampWidth, useStoredWidth, type ResizeHandleProps } from './ResizeHandle';
-export { TransportContext, stateGlyph } from './state';
-export * as workspace from './workspace';
+export type { AgentDisplayState, AgentHarness, AgentSession, AgentViewSettings } from './types';

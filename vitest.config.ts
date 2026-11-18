@@ -1,5 +1,16 @@
 import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+
+// React's production build has no act(); agent shells may export NODE_ENV=production
+process.env.NODE_ENV = 'test';
 
 export default defineConfig({
-  test: { environment: 'jsdom', include: ['test/**/*.test.{ts,tsx}'], css: false },
+  plugins: [react()],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
+    include: ['src/**/*.test.{ts,tsx}'],
+    css: false,
+  },
 });
