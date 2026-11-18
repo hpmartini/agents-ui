@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { FileText, ImagePlus, Paperclip, X } from 'lucide-react';
 import { PROMPT_IMAGE_TYPES, attachableFiles, imageFiles } from '../utils/composer';
+import { useLabels } from '../labels';
 
 type Pick = (list: FileList | File[] | null | undefined) => File[];
 
@@ -50,6 +51,7 @@ export const ImageAttachments: React.FC<ImageAttachmentsProps> = ({
   files,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const t = useLabels().terminal;
   const urls = useMemo(
     () => images.map((f) => (f.type.startsWith('image/') ? URL.createObjectURL(f) : null)),
     [images]
@@ -62,7 +64,7 @@ export const ImageAttachments: React.FC<ImageAttachmentsProps> = ({
       disabled={disabled}
       onClick={() => onChange(images.filter((_, j) => j !== i))}
       className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-gray-900 border border-gray-600 text-gray-200 hover:text-white hover:bg-red-600 focus-visible:outline-2 focus-visible:outline-blue-400"
-      aria-label={`Remove ${file.name || `attachment ${i + 1}`}`}
+      aria-label={t.removeAttachment(file.name, i + 1)}
     >
       <X size={11} />
     </button>
@@ -76,7 +78,7 @@ export const ImageAttachments: React.FC<ImageAttachmentsProps> = ({
           <div key={url} className="relative group">
             <img
               src={url}
-              alt={file.name || `Image ${i + 1}`}
+              alt={file.name || t.imageAlt(i + 1)}
               className="h-14 w-14 object-cover rounded-md border border-gray-600"
             />
             {remove(file, i)}
@@ -98,14 +100,10 @@ export const ImageAttachments: React.FC<ImageAttachmentsProps> = ({
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
         className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-gray-200 hover:bg-gray-700 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50"
-        title={
-          files
-            ? 'Attach images, PDF, text or code files up to 20 MB (or paste / drop them)'
-            : 'Attach images (or paste / drop them)'
-        }
+        title={files ? t.attachFilesTitle : t.attachImagesTitle}
       >
         {files ? <Paperclip size={13} aria-hidden /> : <ImagePlus size={13} aria-hidden />}
-        {files ? 'Attach' : 'Add image'}
+        {files ? t.attach : t.addImage}
       </button>
       {note && <span className="text-[11px] text-gray-400">{note}</span>}
       <input

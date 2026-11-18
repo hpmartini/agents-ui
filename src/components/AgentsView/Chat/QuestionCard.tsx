@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, MessageCircleQuestion, ShieldAlert } from 'lucide-react';
 import type { AgentDialog, DialogAnswer } from '../../../utils/agentDialog';
+import { useLabels } from '../../../labels';
 
 interface QuestionCardProps {
   dialog: AgentDialog;
@@ -68,6 +69,7 @@ export function QuestionCard({
   sent = false,
   disabled = false,
 }: QuestionCardProps) {
+  const t = useLabels().terminal;
   const off = disabled || sent;
   const pick = (row: number) => !off && onAnswer({ type: 'pick', row });
   const permission = dialog.kind === 'permission';
@@ -81,18 +83,18 @@ export function QuestionCard({
   return (
     <div
       role="group"
-      aria-label={permission ? 'Permission request' : 'Agent question'}
+      aria-label={permission ? t.permissionRequest : t.agentQuestion}
       className="mb-2 rounded-md border border-amber-400/40 bg-amber-500/10 p-2 text-xs"
     >
       <div className="flex items-center gap-1.5 font-medium text-amber-200">
         <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
         <span className="min-w-0 truncate">
-          {permission ? dialog.title || 'Permission' : 'The agent is asking'}
+          {permission ? dialog.title || t.permission : t.agentAsking}
         </span>
         {sent && (
           <span className="ml-auto flex shrink-0 items-center gap-1 font-normal text-emerald-300">
             <Check className="h-3 w-3" aria-hidden />
-            Answer sent
+            {t.answerSent}
           </span>
         )}
       </div>
@@ -152,11 +154,11 @@ export function QuestionCard({
       {other && (
         <div className="mt-1.5">
           {other.option.description && (
-            <div className="mb-1 text-gray-400">Typed: {other.option.description}</div>
+            <div className="mb-1 text-gray-400">{t.typed(other.option.description)}</div>
           )}
           <TextAnswer
-            label="Other answer"
-            button="Send"
+            label={t.otherAnswer}
+            button={t.send}
             disabled={off}
             onSend={(text) => onAnswer({ type: 'text', row: other.row, text })}
           />
@@ -165,8 +167,8 @@ export function QuestionCard({
       {deny && (
         <div className="mt-1.5">
           <TextAnswer
-            label="Reason"
-            button="No, with reason"
+            label={t.reason}
+            button={t.denyWithReason}
             disabled={off}
             onSend={(text) => onAnswer({ type: 'text', row: deny.row, text })}
           />
@@ -179,7 +181,7 @@ export function QuestionCard({
           onClick={() => pick(submit.row)}
           className={`${sendBtn} mt-2 bg-amber-500/20`}
         >
-          Submit
+          {t.submit}
         </button>
       )}
     </div>

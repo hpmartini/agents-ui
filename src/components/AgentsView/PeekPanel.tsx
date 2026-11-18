@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, ArrowRight, RefreshCw, Copy, ExternalLink, Maximize2, Minimize2 } from 'lucide-react';
 import type { AgentSession, AgentLogs } from '../../types';
 import { useHost, useTransport } from '../../host';
+import { useLabels } from '../../labels';
 import { extractNumberedChoices } from '../../utils/agentInput';
 import { renderTerminalScreen } from '../../utils/terminalScreen';
 import { useDialogA11y } from '../CommandPalette/useDialogA11y';
@@ -34,6 +35,8 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
   const outputRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const { toast } = useHost();
+  const labels = useLabels();
+  const t = labels.panels;
   const transport = useTransport();
   const logsApi = transport.logs;
   const canReply = !!transport.messaging;
@@ -51,9 +54,7 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
         source: 'logs',
         text: '',
         entries: [],
-        note: harness
-          ? 'The session shows up here once its first message is written.'
-          : 'Interactive sessions run in their own terminal. Background them with /bg or ← to manage them here.',
+        note: harness ? t.peekHarnessNote : t.peekInteractiveNote,
       });
       setLoading(false);
       return;
@@ -70,12 +71,12 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
         source: 'logs',
         text: '',
         entries: [],
-        note: err instanceof Error ? err.message : 'Failed to load output',
+        note: err instanceof Error ? err.message : t.peekLoadFailed,
       });
     } finally {
       setLoading(false);
     }
-  }, [session.id, session.kind, harness, harnessTranscript, logsApi]);
+  }, [session.id, session.kind, harness, harnessTranscript, logsApi, t]);
 
   useEffect(() => {
     setLoading(true);
@@ -114,10 +115,10 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
     try {
       await onReply(text);
       setReply('');
-      toast.success(text.startsWith('!') ? 'Command sent' : 'Reply sent');
+      toast.success(text.startsWith('!') ? t.peekCommandSent : t.peekReplySent);
       setTimeout(load, 1500);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send reply');
+      toast.error(err instanceof Error ? err.message : t.peekReplyFailed);
     } finally {
       setSending(false);
     }
@@ -146,7 +147,7 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
     }
   };
 
-  const glyph = stateGlyph(session.displayState);
+  const glyph = stateGlyph(session.displayState, labels.shell.displayStates);
   const appUrl = session.app?.url;
   const outputLines = screen
     .split('\n')
@@ -174,7 +175,7 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
           <button
             onClick={load}
             className="p-1 rounded text-gray-500 hover:text-white hover:bg-gray-800"
-            title="Refresh"
+            title={t.peekRefresh}
           >
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           </button>
@@ -182,18 +183,18 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
         <button
           onClick={() => {
             navigator.clipboard?.writeText(session.sessionId || session.id);
-            toast.success('Session id copied');
+            toast.success(t.peekIdCopied);
           }}
           className="p-1 rounded text-gray-500 hover:text-white hover:bg-gray-800"
-          title="Copy session id"
+          title={t.peekCopyId}
         >
           <Copy size={12} />
         </button>
         <button
           onClick={() => setExpanded((v) => !v)}
           className="p-1 rounded text-gray-500 hover:text-white hover:bg-gray-800"
-          title={expanded ? 'Back to panel (Esc)' : 'Open large view'}
-          aria-label={expanded ? 'Back to panel' : 'Open large view'}
+          title={expanded ? t.peekBackToPanelEsc : t.peekOpenLarge}
+          aria-label={expanded ? t.peekBackToPanel : t.peekOpenLarge}
         >
           {expanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
         </button>
@@ -201,7 +202,7 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
           <button
             onClick={() => openInSystemBrowser(appUrl)}
             className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/40"
-            title="Open this session on claude.ai (Enter)"
+            title={t.peekOpenOnClaudeAi}
           >
             <ExternalLink size={12} /> claude.ai
           </button>
@@ -209,19 +210,15 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
           <button
             onClick={onAttach}
             className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-600/20 text-blue-300 hover:bg-blue-600/40"
-            title={
-              harness
-                ? 'Open in a terminal pane, resuming the session (Enter / →)'
-                : 'Attach (Enter / →)'
-            }
+            title={harness ? t.peekOpenInTerminal : t.peekAttachTitle}
           >
-            <ArrowRight size={12} /> {harness ? 'Open' : 'Attach'}
+            <ArrowRight size={12} /> {harness ? t.open : t.peekAttach}
           </button>
         )}
         <button
           onClick={onClose}
           className="p-1 rounded text-gray-500 hover:text-white hover:bg-gray-800"
-          title="Close (Esc / Space)"
+          title={t.peekCloseTitle}
         >
           <X size={14} />
         </button>
@@ -230,30 +227,31 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
       {/* Meta */}
       <div className="px-3 py-2 border-b border-gray-800 text-xs space-y-1 shrink-0">
         <div className="text-gray-400">
-          <span className="text-gray-500">state </span>
+          <span className="text-gray-500">{t.peekState}</span>
           {glyph.label.toLowerCase()}
           {session.app && (
             <span className="text-violet-300">
-              {' '}
-              · started in the Claude app ({appOriginLabel(session)})
+              {t.peekStartedInApp(appOriginLabel(session) ?? '')}
             </span>
           )}
           {session.waitingFor && (
-            <span className="text-yellow-400"> · waiting for {session.waitingFor}</span>
+            <span className="text-yellow-400">{t.peekWaitingFor(session.waitingFor)}</span>
           )}
           {session.tokens != null && (
-            <span className="text-gray-500"> · {session.tokens} tokens</span>
+            <span className="text-gray-500">{t.peekTokens(session.tokens)}</span>
           )}
         </div>
         {session.detail && <div className="text-gray-300">{session.detail}</div>}
         {session.intent && (
           <div className="text-gray-500 line-clamp-3" title={session.intent}>
-            <span className="text-gray-500">task </span>
+            <span className="text-gray-500">{t.peekTask}</span>
             {session.intent}
           </div>
         )}
         {session.worktree && (
-          <div className="text-gray-500 font-mono truncate">worktree {session.worktree}</div>
+          <div className="text-gray-500 font-mono truncate">
+            {t.peekWorktree} {session.worktree}
+          </div>
         )}
         {session.links.length > 0 && (
           <div className="flex flex-wrap gap-1 pt-1">
@@ -282,10 +280,10 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
           style={{ backgroundColor: '#1a274b' }}
         >
           {loading && !logs ? (
-            <div className="text-gray-500 italic">Loading recent output…</div>
+            <div className="text-gray-500 italic">{t.peekLoading}</div>
           ) : logs?.source === 'transcript' ? (
             logs.entries.length === 0 ? (
-              <div className="text-gray-500 italic">{logs.note || 'No output yet.'}</div>
+              <div className="text-gray-500 italic">{logs.note || t.peekNoOutput}</div>
             ) : (
               logs.entries.map((entry, idx) => (
                 <div
@@ -300,7 +298,7 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
               ))
             )
           ) : outputLines.length === 0 ? (
-            <div className="text-gray-500 italic">{logs?.note || 'No output yet.'}</div>
+            <div className="text-gray-500 italic">{logs?.note || t.peekNoOutput}</div>
           ) : (
             // Terminal layout: no wrapping (it would tear tables apart), scroll sideways instead
             <pre className="w-max min-w-full whitespace-pre text-gray-300" data-peek-screen>
@@ -349,15 +347,15 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
               disabled={sending || !!session.app || harness}
               placeholder={
                 session.app
-                  ? 'Reply in the Claude app or on claude.ai'
+                  ? t.peekReplyInApp
                   : harness
-                    ? 'Open the session (Enter) to reply in its terminal'
+                    ? t.peekReplyHarness
                     : session.kind === 'interactive'
-                      ? 'Interactive sessions cannot be replied to here'
-                      : 'reply · ! for a shell command · 1-9 to pick a choice'
+                      ? t.peekReplyInteractive
+                      : t.peekReplyPlaceholder
               }
               className="flex-1 bg-transparent text-sm text-gray-100 placeholder-gray-600 outline-none font-mono"
-              aria-label="Reply to session"
+              aria-label={t.peekReplyLabel}
             />
             {sending && <RefreshCw size={12} className="animate-spin text-gray-500" />}
           </div>

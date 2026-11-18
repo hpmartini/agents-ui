@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, History, RefreshCw } from 'lucide-react';
 import type { AgentPastSession } from '../../types';
 import { useTransport } from '../../host';
+import { useLabels } from '../../labels';
 import { formatAge, shortenPath } from '../../utils/agentSessions';
 
 interface ResumePickerProps {
@@ -29,6 +30,8 @@ export const ResumePicker: React.FC<ResumePickerProps> = ({
   const [index, setIndex] = useState(0);
   const [scoped, setScoped] = useState(!!cwd);
   const history = useTransport().history;
+  const labels = useLabels();
+  const t = labels.panels;
 
   useEffect(() => {
     if (!open) return;
@@ -98,13 +101,13 @@ export const ResumePicker: React.FC<ResumePickerProps> = ({
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search past sessions (name, prompt, id)"
+            placeholder={t.resumeSearch}
             className="flex-1 bg-transparent text-sm text-gray-100 placeholder-gray-600 outline-none"
-            aria-label="Search past sessions"
+            aria-label={t.resumeSearchLabel}
           />
           <label
             className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer"
-            title="Only sessions from the current directory"
+            title={t.resumeScopeTitle}
           >
             <input
               type="checkbox"
@@ -112,22 +115,20 @@ export const ResumePicker: React.FC<ResumePickerProps> = ({
               disabled={!cwd}
               onChange={(e) => setScoped(e.target.checked)}
             />
-            this directory
+            {t.resumeScope}
           </label>
           {loading && <RefreshCw size={12} className="animate-spin text-gray-500" />}
           <button
             onClick={onClose}
             className="p-1 rounded text-gray-500 hover:text-white hover:bg-gray-800"
-            aria-label="Close"
+            aria-label={t.close}
           >
             <X size={14} />
           </button>
         </div>
         <div className="max-h-[50vh] overflow-y-auto">
           {sessions.length === 0 && !loading && (
-            <div className="px-4 py-6 text-sm text-gray-500 text-center">
-              No past sessions found.
-            </div>
+            <div className="px-4 py-6 text-sm text-gray-500 text-center">{t.resumeEmpty}</div>
           )}
           {sessions.map((session, i) => (
             <button
@@ -148,13 +149,13 @@ export const ResumePicker: React.FC<ResumePickerProps> = ({
                 </div>
               </div>
               <span className="text-xs text-gray-500 font-mono">
-                {formatAge(Date.now() - session.lastActivity)} ago
+                {t.resumeAgo(formatAge(Date.now() - session.lastActivity, labels.shell.ageUnits))}
               </span>
             </button>
           ))}
         </div>
         <div className="px-4 py-2 border-t border-gray-800 text-[11px] text-gray-500">
-          ↑↓ select · enter resume as background session · esc close
+          {t.resumeFooter}
         </div>
       </div>
     </div>

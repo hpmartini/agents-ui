@@ -12,6 +12,7 @@ import { useOpenFile } from '../../utils/openFile';
 import '@xterm/xterm/css/xterm.css';
 import { RefreshCw, LogOut, Eye, X, Maximize2, SquareTerminal, MoreHorizontal, Keyboard, MessageSquare, } from 'lucide-react';
 import { useHost, useTransport } from '../../host';
+import { useLabels } from '../../labels';
 import { attachTerminalKeys } from '../../utils/terminalKeys';
 import { stateGlyph } from '../../utils/agentSessions';
 import { shellCwd } from '../../utils/agentWorkspace';
@@ -146,8 +147,22 @@ export function paneSuggestion(id) {
 /** Nerd Font first (prompt and TUI glyphs), plain monospace when none is installed */
 export const DEFAULT_TERMINAL_FONT = '"JetBrainsMono Nerd Font", "JetBrainsMono NF", "MesloLGS NF", "Hack Nerd Font", "FiraCode Nerd Font", "Symbols Nerd Font Mono", "JetBrains Mono", Menlo, Monaco, Consolas, monospace';
 const ANSI = [
-    'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
-    'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite',
+    'black',
+    'red',
+    'green',
+    'yellow',
+    'blue',
+    'magenta',
+    'cyan',
+    'white',
+    'brightBlack',
+    'brightRed',
+    'brightGreen',
+    'brightYellow',
+    'brightBlue',
+    'brightMagenta',
+    'brightCyan',
+    'brightWhite',
 ];
 const kebab = (name) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 /**
@@ -407,6 +422,8 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
             // ignore
         }
     }, [terminalOptions, session.id]);
+    const labels = useLabels();
+    const t = labels.terminal;
     const ghostty = transport.ghostty;
     const openInGhostty = useCallback(async () => {
         try {
@@ -417,9 +434,9 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
             });
         }
         catch (err) {
-            host.toast.error(`Open in Ghostty failed: ${err instanceof Error ? err.message : err}`);
+            host.toast.error(t.openInGhosttyFailed(String(err instanceof Error ? err.message : err)));
         }
-    }, [ghostty, host.toast, session.cwd, session.id]);
+    }, [ghostty, host.toast, session.cwd, session.id, t]);
     // (Re)connect the PTY whenever generation changes
     useEffect(() => {
         const current = paneTerminals.get(session.id);
@@ -444,19 +461,18 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
         }
         const size = { cwd: session.cwd, cols: terminal.cols, rows: terminal.rows };
         const openShell = transport.pty.shell;
-        if (shell && !openShell) {
-            terminal.write('\x1b[31mThis host cannot open shells\x1b[0m\r\n');
+        const spawn = transport.pty.spawn;
+        const args = session.ptyArgs;
+        if (shell ? !openShell : args && !spawn) {
+            terminal.write(`\x1b[31m${shell ? t.noShells : t.noSpawn}\x1b[0m\r\n`);
             update({ exited: true });
             return;
         }
         const ws = shell && openShell
             ? openShell(size)
-            : transport.pty.attach({
-                ...size,
-                id: session.id,
-                args: session.ptyArgs,
-                command: session.ptyCommand,
-            });
+            : args && spawn
+                ? spawn({ ...size, id: session.id, command: session.ptyCommand ?? 'claude', args })
+                : transport.pty.attach({ ...size, id: session.id });
         current.ws = ws;
         if (generation > 0)
             terminal.reset();
@@ -480,15 +496,15 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
                         const cwd = safe(data.cwd ?? session.cwd);
                         // the server falls back to $HOME when the folder is gone (e.g. a removed worktree)
                         if (shell && data.cwd && data.cwd !== session.cwd.replace(/(.)\/+$/, '$1')) {
-                            terminal.write(`\x1b[33m# ${safe(session.cwd)} not found\x1b[0m\r\n`);
+                            terminal.write(`\x1b[33m# ${t.cwdNotFound(safe(session.cwd))}\x1b[0m\r\n`);
                         }
                         terminal.write(shell
-                            ? `\x1b[2m# ${data.shell ?? 'shell'} in ${cwd} (PID ${data.pid})\x1b[0m\r\n`
-                            : `\x1b[2m# ${data.reattached ? 'reattached: ' : ''}${session.ptyCommand ?? 'claude'} ${(session.ptyArgs ?? ['attach', session.id]).join(' ')} (PID ${data.pid})\x1b[0m\r\n`);
+                            ? `\x1b[2m# ${t.shellStarted(data.shell ?? 'shell', cwd, data.pid)}\x1b[0m\r\n`
+                            : `\x1b[2m# ${data.reattached ? t.reattachedPrefix : ''}${session.ptyCommand ?? 'claude'} ${(session.ptyArgs ?? ['attach', session.id]).join(' ')} (PID ${data.pid})\x1b[0m\r\n`);
                         break;
                     }
                     case 'exit':
-                        terminal.write(`\r\n\x1b[2m# ${shell ? 'shell exited' : 'detached'} (exit code ${data.exitCode})\x1b[0m\r\n`);
+                        terminal.write(`\r\n\x1b[2m# ${t.ptyExit(shell, data.exitCode)}\x1b[0m\r\n`);
                         update({ connected: false, exited: true });
                         if (!shell)
                             scheduleReattach(current);
@@ -513,7 +529,7 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
             if (!shell && wasUp)
                 scheduleReattach(current);
         };
-        ws.onerror = () => terminal.write('\x1b[31mWebSocket connection error\x1b[0m\r\n');
+        ws.onerror = () => terminal.write(`\x1b[31m${t.wsError}\x1b[0m\r\n`);
         // no cleanup: the socket belongs to the pane terminal, released with it
         // session.id / cwd are stable for the pane lifetime
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -550,15 +566,15 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
             return () => cancelAnimationFrame(id);
         }
     }, [visible, active, syncSize, session.id]);
-    const glyph = stateGlyph(session.displayState);
+    const glyph = stateGlyph(session.displayState, labels.shell.displayStates);
     const reconnect = () => setGeneration((g) => g + 1);
     if (pane)
         pane.reconnect = reconnect;
     const moveToTab = onMaximize
         ? [
             {
-                label: 'Move to own tab',
-                title: 'Move to its own tab',
+                label: t.moveToOwnTab,
+                title: t.moveToItsOwnTab,
                 icon: _jsx(Maximize2, { size: 12 }),
                 run: onMaximize,
             },
@@ -570,8 +586,8 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
             ? []
             : [
                 {
-                    label: 'Restart',
-                    title: 'Start a new shell in this directory',
+                    label: t.restart,
+                    title: t.restartTitle,
                     icon: _jsx(RefreshCw, { size: 12 }),
                     run: reconnect,
                     showLabel: true,
@@ -581,13 +597,13 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
     ];
     const agentActions = [
         ...(onPeek
-            ? [{ label: 'Peek', title: 'Peek (recent output)', icon: _jsx(Eye, { size: 12 }), run: onPeek }]
+            ? [{ label: t.peek, title: t.peekTitle, icon: _jsx(Eye, { size: 12 }), run: onPeek }]
             : []),
         ...(onShowChat
             ? [
                 {
-                    label: 'UI view',
-                    title: 'Show this agent in the UI view (same process, it keeps running)',
+                    label: t.uiView,
+                    title: t.uiViewTitle,
                     icon: _jsx(MessageSquare, { size: 12 }),
                     run: onShowChat,
                 },
@@ -595,8 +611,8 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
             : []),
         connected
             ? {
-                label: 'Detach',
-                title: 'Detach (Ctrl+Z) - the session keeps running',
+                label: t.detach,
+                title: t.detachTitle,
                 icon: _jsx(LogOut, { size: 12 }),
                 run: () => {
                     const current = paneTerminals.get(session.id);
@@ -606,8 +622,8 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
                 },
             }
             : {
-                label: 'Reattach',
-                title: 'Reattach',
+                label: t.reattach,
+                title: t.reattach,
                 icon: _jsx(RefreshCw, { size: 12 }),
                 run: () => reattachPane(session.id),
                 showLabel: true,
@@ -620,8 +636,8 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
             ? []
             : [
                 {
-                    label: 'Open in Ghostty',
-                    title: 'Open in Ghostty',
+                    label: t.openInGhostty,
+                    title: t.openInGhostty,
                     icon: _jsx(SquareTerminal, { size: 12 }),
                     run: openInGhostty,
                 },
@@ -633,14 +649,14 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
             ? 'border-blue-300 ring-2 ring-blue-300/70'
             : active
                 ? 'border-blue-400/40'
-                : 'border-gray-800'}`, onMouseDown: onFocus, "data-agent-pane": session.id, "data-pane-active": active, "data-pane-focused": focused, children: [_jsxs("div", { ...headerProps, className: `flex flex-nowrap items-center gap-x-1.5 h-8 px-2 border-b text-xs shrink-0 ${focused ? 'bg-blue-600/40 border-blue-300/50' : 'bg-gray-900 border-gray-800'} ${headerProps?.draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${headerProps?.className ?? ''}`, children: [!solo && (_jsxs(_Fragment, { children: [_jsx("span", { className: `${glyph.className} shrink-0 ${glyph.animate ? 'animate-pulse motion-reduce:animate-none' : ''}`, title: glyph.label, children: glyph.glyph }), _jsx("span", { className: "font-medium text-gray-200 truncate min-w-0", children: session.name }), _jsx("span", { className: "text-gray-500 font-mono truncate min-w-0 hidden xl:inline", children: session.id })] })), _jsx("span", { className: `w-1.5 h-1.5 rounded-full shrink-0 ${connected ? 'bg-emerald-500' : 'bg-gray-600'}`, role: "img", "aria-label": connected ? 'Connected' : 'Disconnected' }), meta && (_jsx("div", { className: "flex items-center gap-x-2 min-w-0 overflow-hidden ml-1 text-[11px] text-gray-400", children: meta })), _jsx("div", { className: "flex-1" }), focused ? (_jsxs("span", { className: "flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-300 text-gray-950 font-medium shrink-0", children: [_jsx(Keyboard, { size: 11, "aria-hidden": "true" }), " Typing here"] })) : (active && (_jsx("span", { className: "px-1.5 py-0.5 rounded border border-gray-600 text-gray-300 shrink-0", children: "Active" }))), narrow ? (_jsxs("div", { className: "relative shrink-0", children: [_jsx("button", { onClick: () => setMenuOpen((o) => !o), onBlur: (e) => {
+                : 'border-gray-800'}`, onMouseDown: onFocus, "data-agent-pane": session.id, "data-pane-active": active, "data-pane-focused": focused, children: [_jsxs("div", { ...headerProps, className: `flex flex-nowrap items-center gap-x-1.5 h-8 px-2 border-b text-xs shrink-0 ${focused ? 'bg-blue-600/40 border-blue-300/50' : 'bg-gray-900 border-gray-800'} ${headerProps?.draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${headerProps?.className ?? ''}`, children: [!solo && (_jsxs(_Fragment, { children: [_jsx("span", { className: `${glyph.className} shrink-0 ${glyph.animate ? 'animate-pulse motion-reduce:animate-none' : ''}`, title: glyph.label, children: glyph.glyph }), _jsx("span", { className: "font-medium text-gray-200 truncate min-w-0", children: session.name }), _jsx("span", { className: "text-gray-500 font-mono truncate min-w-0 hidden xl:inline", children: session.id })] })), _jsx("span", { className: `w-1.5 h-1.5 rounded-full shrink-0 ${connected ? 'bg-emerald-500' : 'bg-gray-600'}`, role: "img", "aria-label": connected ? t.connected : t.disconnected }), meta && (_jsx("div", { className: "flex items-center gap-x-2 min-w-0 overflow-hidden ml-1 text-[11px] text-gray-400", children: meta })), _jsx("div", { className: "flex-1" }), focused ? (_jsxs("span", { className: "flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-300 text-gray-950 font-medium shrink-0", children: [_jsx(Keyboard, { size: 11, "aria-hidden": "true" }), " ", t.typingHere] })) : (active && (_jsx("span", { className: "px-1.5 py-0.5 rounded border border-gray-600 text-gray-300 shrink-0", children: t.active }))), narrow ? (_jsxs("div", { className: "relative shrink-0", children: [_jsx("button", { onClick: () => setMenuOpen((o) => !o), onBlur: (e) => {
                                     if (!e.currentTarget.parentElement?.contains(e.relatedTarget))
                                         setMenuOpen(false);
-                                }, "aria-haspopup": "menu", "aria-expanded": menuOpen, className: `p-1.5 rounded text-gray-300 hover:text-white hover:bg-gray-800 ${paneBtnFocus}`, title: "Pane actions", "aria-label": "Pane actions", children: _jsx(MoreHorizontal, { size: 14 }) }), menuOpen && (_jsx("div", { role: "menu", className: "absolute right-0 top-full mt-1 z-30 min-w-40 py-1 rounded-md border border-gray-700 bg-gray-900 shadow-lg", onKeyDown: (e) => e.key === 'Escape' && setMenuOpen(false), onBlur: (e) => {
+                                }, "aria-haspopup": "menu", "aria-expanded": menuOpen, className: `p-1.5 rounded text-gray-300 hover:text-white hover:bg-gray-800 ${paneBtnFocus}`, title: t.paneActions, "aria-label": t.paneActions, children: _jsx(MoreHorizontal, { size: 14 }) }), menuOpen && (_jsx("div", { role: "menu", className: "absolute right-0 top-full mt-1 z-30 min-w-40 py-1 rounded-md border border-gray-700 bg-gray-900 shadow-lg", onKeyDown: (e) => e.key === 'Escape' && setMenuOpen(false), onBlur: (e) => {
                                     if (!e.currentTarget.parentElement?.contains(e.relatedTarget))
                                         setMenuOpen(false);
                                 }, children: actions.map((a) => (_jsxs("button", { role: "menuitem", onClick: () => {
                                         setMenuOpen(false);
                                         a.run();
-                                    }, className: `w-full flex items-center gap-2 px-3 py-1.5 text-left text-gray-200 hover:bg-gray-800 ${paneBtnFocus}`, children: [a.icon, " ", a.label] }, a.label))) }))] })) : (actions.map((a) => (_jsxs("button", { onClick: a.run, className: `flex items-center gap-1 p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 shrink-0 ${paneBtnFocus}`, title: a.title, "aria-label": a.label, children: [a.icon, a.showLabel && _jsx("span", { children: a.label })] }, a.label)))), _jsx("button", { onClick: onClose, className: `p-1.5 rounded text-gray-400 hover:text-red-300 hover:bg-gray-800 shrink-0 ${paneBtnFocus}`, title: shell ? 'Close (ends the shell)' : 'Close (the agent keeps running)', "aria-label": `Close ${session.name}`, children: _jsx(X, { size: 12 }) })] }), _jsxs("div", { className: `relative flex-1 min-h-0 transition-opacity motion-reduce:transition-none ${focused ? '' : active ? 'opacity-80' : 'opacity-60'}`, children: [_jsx("div", { ref: containerRef, className: "absolute inset-0 p-1", style: { backgroundColor: terminalOptions?.theme?.background ?? CSS_TERMINAL_BG } }), exited && (_jsxs("div", { className: "absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-1.5 bg-gray-900/95 border-t border-gray-800 text-xs text-gray-400", children: [_jsx("span", { children: "Detached. The session keeps running in the background." }), _jsxs("button", { onClick: () => setGeneration((g) => g + 1), className: "flex items-center gap-1 px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white shrink-0", children: [_jsx(RefreshCw, { size: 12 }), " Reattach"] })] }))] })] }));
+                                    }, className: `w-full flex items-center gap-2 px-3 py-1.5 text-left text-gray-200 hover:bg-gray-800 ${paneBtnFocus}`, children: [a.icon, " ", a.label] }, a.label))) }))] })) : (actions.map((a) => (_jsxs("button", { onClick: a.run, className: `flex items-center gap-1 p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 shrink-0 ${paneBtnFocus}`, title: a.title, "aria-label": a.label, children: [a.icon, a.showLabel && _jsx("span", { children: a.label })] }, a.label)))), _jsx("button", { onClick: onClose, className: `p-1.5 rounded text-gray-400 hover:text-red-300 hover:bg-gray-800 shrink-0 ${paneBtnFocus}`, title: shell ? t.closeShellTitle : t.closeAgentTitle, "aria-label": t.closeNamed(session.name), children: _jsx(X, { size: 12 }) })] }), _jsxs("div", { className: `relative flex-1 min-h-0 transition-opacity motion-reduce:transition-none ${focused ? '' : active ? 'opacity-80' : 'opacity-60'}`, children: [_jsx("div", { ref: containerRef, className: "absolute inset-0 p-1", style: { backgroundColor: terminalOptions?.theme?.background ?? CSS_TERMINAL_BG } }), exited && (_jsxs("div", { className: "absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-1.5 bg-gray-900/95 border-t border-gray-800 text-xs text-gray-400", children: [_jsx("span", { children: t.detachedNotice }), _jsxs("button", { onClick: () => setGeneration((g) => g + 1), className: "flex items-center gap-1 px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white shrink-0", children: [_jsx(RefreshCw, { size: 12 }), " ", t.reattach] })] }))] })] }));
 };

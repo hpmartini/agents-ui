@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Settings2, AlertTriangle, Power, RefreshCw } from 'lucide-react';
 import { useHost, useTransport } from '../../host';
+import { useLabels } from '../../labels';
 import type {
   AgentHarness,
   AgentViewSettings,
@@ -66,6 +67,8 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
   const [busy, setBusy] = useState<string | null>(null);
   const { toast } = useHost();
   const daemonApi = useTransport().daemon;
+  const labels = useLabels();
+  const t = labels.panels;
   if (!open) return null;
 
   const dispatch = settings.dispatch;
@@ -77,10 +80,10 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
     setBusy(label);
     try {
       const result = await fn();
-      toast.success(result.output ? result.output.split('\n')[0] : `${label} done`);
+      toast.success(result.output ? result.output.split('\n')[0] : t.settingsDaemonDone(label));
       onRefresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : `${label} failed`);
+      toast.error(err instanceof Error ? err.message : t.settingsDaemonFailed(label));
     } finally {
       setBusy(null);
     }
@@ -103,11 +106,11 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
       >
         <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-800 sticky top-0 bg-gray-900 z-10">
           <Settings2 size={16} className="text-blue-300" />
-          <h3 className="text-sm font-semibold text-gray-100">Agent view settings</h3>
+          <h3 className="text-sm font-semibold text-gray-100">{t.settingsTitle}</h3>
           <button
             onClick={onClose}
             className="ml-auto p-1 rounded text-gray-500 hover:text-white hover:bg-gray-800"
-            aria-label="Close"
+            aria-label={t.close}
           >
             <X size={14} />
           </button>
@@ -116,16 +119,16 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
         <div className="p-5 space-y-6">
           {/* View */}
           <section className="space-y-3">
-            <h4 className="text-xs text-gray-500">View</h4>
+            <h4 className="text-xs text-gray-500">{t.settingsView}</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className={label}>Scope (claude agents --cwd)</label>
+                <label className={label}>{t.settingsScope}</label>
                 <select
                   className={field}
                   value={settings.scopeCwd || ''}
                   onChange={(e) => onUpdate({ scopeCwd: e.target.value || null })}
                 >
-                  <option value="">All sessions</option>
+                  <option value="">{t.settingsAllSessions}</option>
                   {repos.map((repo) => (
                     <option key={repo.path} value={repo.path}>
                       {repo.name} — {repo.path}
@@ -135,18 +138,18 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
               </div>
               <div>
                 <label className={label} htmlFor="agent-task-cwd">
-                  New tasks start in
+                  {t.settingsTaskCwd}
                 </label>
                 <input
                   id="agent-task-cwd"
                   className={field}
-                  placeholder="Selected project or last pick, e.g. ~/MAPLE"
+                  placeholder={t.settingsTaskCwdPlaceholder}
                   defaultValue={settings.taskCwd || ''}
                   onBlur={(e) => onUpdate({ taskCwd: e.target.value.trim() || null })}
                 />
               </div>
               <div>
-                <label className={label}>Group by</label>
+                <label className={label}>{t.settingsGroupBy}</label>
                 <select
                   className={field}
                   value={settings.grouping}
@@ -154,15 +157,13 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                     onUpdate({ grouping: e.target.value as AgentViewSettings['grouping'] })
                   }
                 >
-                  <option value="state">
-                    State (pinned · review · needs input · working · completed)
-                  </option>
-                  <option value="directory">Directory</option>
+                  <option value="state">{t.settingsGroupState}</option>
+                  <option value="directory">{t.settingsGroupDirectory}</option>
                 </select>
               </div>
               <div>
                 <label className={label} htmlFor="agent-card-density">
-                  Card density
+                  {t.settingsCardDensity}
                 </label>
                 <select
                   id="agent-card-density"
@@ -172,13 +173,13 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                     onUpdate({ cardDensity: e.target.value as AgentViewSettings['cardDensity'] })
                   }
                 >
-                  <option value="comfortable">Comfortable (metrics on their own line)</option>
-                  <option value="compact">Compact</option>
+                  <option value="comfortable">{t.settingsDensityComfortable}</option>
+                  <option value="compact">{t.settingsDensityCompact}</option>
                 </select>
               </div>
               <div>
                 <label className={label} htmlFor="agent-chat-submit-key">
-                  Chat: send message with
+                  {t.settingsChatSubmit}
                 </label>
                 <select
                   id="agent-chat-submit-key"
@@ -190,13 +191,13 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                     })
                   }
                 >
-                  <option value="mod+enter">Cmd/Ctrl+Enter (Enter = new line)</option>
-                  <option value="enter">Enter (Shift+Enter = new line)</option>
+                  <option value="mod+enter">{t.settingsSubmitModEnter}</option>
+                  <option value="enter">{t.settingsSubmitEnter}</option>
                 </select>
               </div>
               <div>
                 <label className={label} htmlFor="agent-open-view">
-                  Open agents in
+                  {t.settingsOpenAgentsIn}
                 </label>
                 <select
                   id="agent-open-view"
@@ -208,20 +209,20 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                     })
                   }
                 >
-                  <option value="chat">UI view (switch to the terminal any time)</option>
-                  <option value="terminal">Terminal view</option>
+                  <option value="chat">{t.settingsOpenChat}</option>
+                  <option value="terminal">{t.settingsOpenTerminal}</option>
                 </select>
               </div>
             </div>
             <fieldset className="space-y-2">
               <legend className={`${label} flex items-center gap-2 w-full`}>
-                Card fields: where each detail sits on an agent card
+                {t.settingsCardFields}
                 <button
                   type="button"
                   onClick={() => onUpdate({ cardFields: DEFAULT_AGENT_CARD_FIELDS })}
                   className="ml-auto text-[11px] text-blue-300 hover:text-white"
                 >
-                  Reset
+                  {t.settingsReset}
                 </button>
               </legend>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1.5">
@@ -231,7 +232,7 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                       htmlFor={`agent-card-field-${element.key}`}
                       className="flex-1 min-w-0 truncate text-xs text-gray-300"
                     >
-                      {element.label}
+                      {labels.shell.cardElements[element.key]}
                     </label>
                     <select
                       id={`agent-card-field-${element.key}`}
@@ -248,7 +249,7 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                     >
                       {CARD_SLOTS.map((slot) => (
                         <option key={slot.key} value={slot.key}>
-                          {slot.label}
+                          {labels.shell.cardSlots[slot.key]}
                         </option>
                       ))}
                     </select>
@@ -263,7 +264,7 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                   checked={settings.notifications}
                   onChange={(e) => onUpdate({ notifications: e.target.checked })}
                 />
-                In-app notifications (needs input · finished · failed)
+                {t.settingsInAppNotifications}
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -277,24 +278,24 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                     ) {
                       const permission = await Notification.requestPermission();
                       if (permission !== 'granted') {
-                        toast.error('Browser notifications were not allowed');
+                        toast.error(t.settingsNotificationsDenied);
                         return;
                       }
                     }
                     onUpdate({ desktopNotifications: e.target.checked });
                   }}
                 />
-                Browser notifications when the tab is hidden
+                {t.settingsBrowserNotifications}
               </label>
             </div>
           </section>
 
           {/* Default harness (#195) */}
           <section className="space-y-2">
-            <h4 className="text-xs text-gray-500">Harness</h4>
+            <h4 className="text-xs text-gray-500">{t.settingsHarness}</h4>
             <div className="max-w-xs">
               <label className={label} htmlFor="agent-default-harness">
-                Default harness for new agents
+                {t.settingsDefaultHarness}
               </label>
               <select
                 id="agent-default-harness"
@@ -309,32 +310,30 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                 ))}
               </select>
             </div>
-            <p className="text-xs text-gray-500">
-              Preselected in New task / New agent. Other harnesses run interactively in a terminal
-              pane; the flags below apply to Claude Code only.
-            </p>
+            <p className="text-xs text-gray-500">{t.settingsHarnessHint}</p>
           </section>
 
           {/* Dispatch defaults */}
           <section className="space-y-3">
-            <h4 className="text-xs text-gray-500">Dispatch defaults (flags of `claude agents`)</h4>
+            <h4 className="text-xs text-gray-500">{t.settingsDispatchDefaults}</h4>
             {unsafeLocked && (
               <div className="flex items-start gap-2 text-xs text-gray-300 bg-gray-800 border border-gray-700 rounded p-2">
                 <AlertTriangle size={14} className="shrink-0 mt-0.5 text-yellow-400" />
-                <span>
-                  Bypass permissions, --settings, --mcp-config and --plugin-dir are locked on this
-                  server. Start it with DEVORBIT_AGENTS_ALLOW_UNSAFE_FLAGS=true to enable them.
-                  Sessions can only run inside the configured project directories.
-                </span>
+                <span>{t.settingsUnsafeLocked}</span>
               </div>
             )}
             {userSettings && (
               <div className="text-xs text-gray-500">
-                From ~/.claude/settings.json: model{' '}
-                <span className="text-gray-300">{userSettings.model || 'default'}</span>, effort{' '}
-                <span className="text-gray-300">{userSettings.effortLevel || 'default'}</span>,
-                permission mode{' '}
-                <span className="text-gray-300">{userSettings.permissionMode || 'default'}</span>
+                {t.settingsFromUserSettings}{' '}
+                <span className="text-gray-300">{userSettings.model || t.settingsDefault}</span>
+                {t.settingsEffortSep}{' '}
+                <span className="text-gray-300">
+                  {userSettings.effortLevel || t.settingsDefault}
+                </span>
+                {t.settingsPermissionSep}{' '}
+                <span className="text-gray-300">
+                  {userSettings.permissionMode || t.settingsDefault}
+                </span>
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -344,7 +343,7 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                   list="agent-model-options"
                   className={field}
                   value={dispatch.model || ''}
-                  placeholder="default"
+                  placeholder={t.settingsDefault}
                   onChange={(e) => setDispatch({ model: e.target.value || null })}
                 />
                 <datalist id="agent-model-options">
@@ -362,7 +361,7 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                 >
                   {EFFORTS.map((e) => (
                     <option key={e} value={e}>
-                      {e || 'default'}
+                      {e || t.settingsDefault}
                     </option>
                   ))}
                 </select>
@@ -376,17 +375,17 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                 >
                   {PERMISSION_MODES.map((m) => (
                     <option key={m} value={m}>
-                      {m || 'directory rules'}
+                      {m || t.settingsDirectoryRules}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className={label}>--agent (default subagent)</label>
+                <label className={label}>--agent ({t.settingsDefaultSubagent})</label>
                 <input
                   className={field}
                   value={dispatch.agent || ''}
-                  placeholder="none"
+                  placeholder={t.settingsNone}
                   onChange={(e) => setDispatch({ agent: e.target.value || null })}
                 />
               </div>
@@ -395,12 +394,12 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                 <input
                   className={field}
                   value={dispatch.fallbackModel || ''}
-                  placeholder="none"
+                  placeholder={t.settingsNone}
                   onChange={(e) => setDispatch({ fallbackModel: e.target.value || null })}
                 />
               </div>
               <div>
-                <label className={label}>--settings (file or JSON)</label>
+                <label className={label}>--settings ({t.settingsFileOrJson})</label>
                 <input
                   disabled={unsafeLocked}
                   className={field}
@@ -412,7 +411,7 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className={label}>--add-dir (one per line)</label>
+                <label className={label}>--add-dir ({t.settingsOnePerLine})</label>
                 <textarea
                   className={`${field} font-mono text-xs`}
                   rows={3}
@@ -421,7 +420,7 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                 />
               </div>
               <div>
-                <label className={label}>--plugin-dir (one per line)</label>
+                <label className={label}>--plugin-dir ({t.settingsOnePerLine})</label>
                 <textarea
                   disabled={unsafeLocked}
                   className={`${field} font-mono text-xs`}
@@ -431,7 +430,7 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                 />
               </div>
               <div>
-                <label className={label}>--mcp-config (file or JSON, one per line)</label>
+                <label className={label}>--mcp-config ({t.settingsFileOrJsonPerLine})</label>
                 <textarea
                   disabled={unsafeLocked}
                   className={`${field} font-mono text-xs`}
@@ -473,12 +472,7 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                   checked={dispatch.skipPermissions}
                   disabled={unsafeLocked}
                   onChange={(e) => {
-                    if (
-                      e.target.checked &&
-                      !window.confirm(
-                        'Start every dispatched session with --dangerously-skip-permissions? Claude will run commands without asking.'
-                      )
-                    )
+                    if (e.target.checked && !window.confirm(t.settingsSkipPermissionsConfirm))
                       return;
                     setDispatch({ skipPermissions: e.target.checked });
                   }}
@@ -489,7 +483,7 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
             {dispatch.skipPermissions && (
               <div className="flex items-start gap-2 text-xs text-red-300 bg-red-900/20 border border-red-800 rounded p-2">
                 <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                Bypass mode is on for new sessions. Only use this in trusted environments.
+                {t.settingsBypassOn}
               </div>
             )}
           </section>
@@ -497,15 +491,12 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
           {/* Supervisor (only with a transport that controls the daemon) */}
           {daemonApi && (
             <section className="space-y-3">
-              <h4 className="text-xs text-gray-500">Background service (supervisor)</h4>
+              <h4 className="text-xs text-gray-500">{t.settingsSupervisor}</h4>
               <pre className="text-[11px] text-gray-400 bg-gray-950 border border-gray-800 rounded p-2 whitespace-pre-wrap max-h-40 overflow-y-auto">
-                {daemon?.raw || 'status unavailable'}
+                {daemon?.raw || t.settingsStatusUnavailable}
               </pre>
               {daemon?.versionMismatch && (
-                <div className="text-xs text-yellow-300">
-                  The supervisor runs a different Claude Code version. Stop it (--any) so it
-                  restarts on the current version.
-                </div>
+                <div className="text-xs text-yellow-300">{t.settingsVersionMismatch}</div>
               )}
               <div className="flex flex-wrap gap-2">
                 <button
@@ -529,8 +520,10 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                 <button
                   disabled={!!busy}
                   onClick={() => {
-                    if (window.confirm('Stop the supervisor and all background sessions?')) {
-                      runDaemon('daemon stop --any', () => daemonApi.stopAgentDaemon({ any: true }));
+                    if (window.confirm(t.settingsStopSupervisorConfirm)) {
+                      runDaemon('daemon stop --any', () =>
+                        daemonApi.stopAgentDaemon({ any: true })
+                      );
                     }
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 rounded bg-red-900/40 hover:bg-red-900/60 text-sm text-red-200 disabled:opacity-50"
@@ -543,20 +536,17 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
 
           {/* Turn off */}
           <section className="space-y-2">
-            <h4 className="text-xs text-gray-500">Turn off</h4>
+            <h4 className="text-xs text-gray-500">{t.settingsTurnOff}</h4>
             <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
               <input
                 type="checkbox"
                 checked={settings.disabled}
                 onChange={(e) => onUpdate({ disabled: e.target.checked })}
               />
-              Hide the agent view in Orkumo (mirrors the CLI `disableAgentView` setting)
+              {t.settingsHideView}
             </label>
             {userSettings?.disableAgentView && (
-              <div className="text-xs text-yellow-300">
-                The CLI agent view is turned off via `disableAgentView` /
-                CLAUDE_CODE_DISABLE_AGENT_VIEW. Background sessions still work from here.
-              </div>
+              <div className="text-xs text-yellow-300">{t.settingsCliViewOff}</div>
             )}
           </section>
         </div>

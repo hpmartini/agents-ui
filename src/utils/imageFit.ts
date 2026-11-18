@@ -27,9 +27,7 @@ function encode(canvas: Canvas, type: string, quality?: number): Promise<Blob | 
 function draw(bitmap: ImageBitmap, width: number, height: number, opaque: boolean): Canvas {
   const canvas = canvasOf(width, height);
   const ctx = canvas.getContext('2d') as
-    | OffscreenCanvasRenderingContext2D
-    | CanvasRenderingContext2D
-    | null;
+    OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
   if (!ctx) throw new Error('no 2d context');
   // JPEG has no alpha: transparent pixels would turn black
   if (opaque) {

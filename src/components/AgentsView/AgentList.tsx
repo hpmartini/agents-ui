@@ -72,6 +72,7 @@ import { RailNavProps } from './ProjectsRail';
 import { IssuePill, PrPill, ServerLinks, SubagentsBadge } from './SessionLinks';
 import { CacheBadge } from './CacheBadge';
 import { cacheCountdown, isCacheWarning } from '../../utils/agentCache';
+import { useLabels } from '../../labels';
 
 /** Harness badge colours (#195): Claude stays quiet, the others stand out */
 const HARNESS_BADGE: Record<AgentHarness, string> = {
@@ -181,9 +182,9 @@ export const selectedClass = (focused: boolean) =>
     ? 'bg-sel text-white [&_.text-gray-300]:text-gray-100 [&_.text-gray-400]:text-gray-200 [&_.text-gray-500]:text-gray-200 [&_.text-gray-500]:text-gray-200 [&_.text-emerald-400]:text-emerald-200 [&_.text-yellow-400]:text-yellow-200 [&_.text-blue-300]:text-blue-100 [&_.text-sky-300]:text-sky-100'
     : 'bg-transparent text-white ring-2 ring-inset ring-cursor';
 
-/** Name and path of a linked worktree for tooltips */
-const worktreeTitle = (repo: NonNullable<AgentContext['repo']>) =>
-  `worktree${repo.worktreeName ? ` ${repo.worktreeName}` : ''}${repo.worktreePath ? `\n${repo.worktreePath}` : ''}`;
+/** Name and path of a linked worktree for tooltips; `word` is the locale's "worktree" */
+const worktreeTitle = (repo: NonNullable<AgentContext['repo']>, word: string) =>
+  `${word}${repo.worktreeName ? ` ${repo.worktreeName}` : ''}${repo.worktreePath ? `\n${repo.worktreePath}` : ''}`;
 
 /** Star toggle: hidden until the parent `group` is hovered or focused (always on touch), always visible when set */
 const FavoriteButton: React.FC<{
@@ -351,6 +352,7 @@ export const AgentList: React.FC<AgentListProps> = ({
   orchestratorIds,
   orchestratorRoles,
 }) => {
+  const t = useLabels().shell;
   // One card per group (its header plus rows); ungrouped items form a single card
   const clusters = items.reduce<number[][]>((acc, item, i) => {
     if (item.type === 'group' || acc.length === 0) acc.push([]);
@@ -594,7 +596,7 @@ export const AgentList: React.FC<AgentListProps> = ({
       ? [
           {
             id: 'favorite',
-            label: isFav ? 'Remove from favorites' : 'Add to favorites',
+            label: t.favoriteToggle(isFav),
             onSelect: toggle,
           },
         ]
@@ -616,13 +618,13 @@ export const AgentList: React.FC<AgentListProps> = ({
         ? [
             {
               id: 'move-up',
-              label: 'Move up',
+              label: t.moveUp,
               disabled: !up,
               onSelect: () => up && onMoveGroup?.(key, up, reorderableKeys),
             },
             {
               id: 'move-down',
-              label: 'Move down',
+              label: t.moveDown,
               disabled: !down,
               onSelect: () => down && onMoveGroup?.(key, down, reorderableKeys),
             },
@@ -647,15 +649,16 @@ export const AgentList: React.FC<AgentListProps> = ({
   return (
     <div ref={listRef} className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 thin-scrollbar">
       {top}
-      <div className="p-2 space-y-2" role="listbox" aria-label="Agent sessions">
+      <div className="p-2 space-y-2" role="listbox" aria-label={t.agentSessions}>
         {items.length === 0 && (
           <div className="px-4 py-8 text-sm text-gray-400 text-center">
             {filtered ? (
-              'No agents match the current filters.'
+              t.noFilterMatch
             ) : (
               <>
-                No sessions yet. Press <kbd className="kbd">Ctrl/Cmd+P</kbd> and choose New task to
-                start one.
+                {t.noSessions[0]}
+                <kbd className="kbd">Ctrl/Cmd+P</kbd>
+                {t.noSessions[1]}
               </>
             )}
           </div>
@@ -775,7 +778,7 @@ export const AgentList: React.FC<AgentListProps> = ({
                             else onActivate(item);
                           }}
                           className="p-1 -m-1 text-gray-400 hover:text-white rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
-                          aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${item.group.title}`}
+                          aria-label={t.toggleGroup(collapsed, item.group.title)}
                         >
                           {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                         </button>
@@ -787,7 +790,7 @@ export const AgentList: React.FC<AgentListProps> = ({
                                 nav.onOpenProject(app.id);
                               }}
                               className="truncate min-w-0 text-sm font-medium text-gray-100 hover:text-white hover:underline"
-                              title={`Open ${app.name}\n${app.path}`}
+                              title={`${t.openNamed(app.name)}\n${app.path}`}
                             >
                               {item.group.title}
                             </button>
@@ -805,19 +808,16 @@ export const AgentList: React.FC<AgentListProps> = ({
                         {attachedCount > 0 && (
                           <span
                             className={`shrink-0 ${groupHasActive ? 'text-blue-300' : 'text-blue-300/60'}`}
-                            title={`${attachedCount} agent${attachedCount === 1 ? '' : 's'} attached${groupHasActive ? ', one shown in the workspace' : ''}`}
+                            title={t.groupAttached(attachedCount, groupHasActive)}
                           >
                             <SquareTerminal size={12} aria-hidden="true" />
-                            <span className="sr-only">{attachedCount} attached</span>
+                            <span className="sr-only">{t.attachedCount(attachedCount)}</span>
                           </span>
                         )}
                         {groupCacheWarning && (
-                          <span
-                            className="shrink-0 text-amber-300"
-                            title="Prompt cache of an agent here expires within 10 minutes"
-                          >
+                          <span className="shrink-0 text-amber-300" title={t.groupCacheWarning}>
                             <Timer size={12} aria-hidden="true" />
-                            <span className="sr-only">cache expiring</span>
+                            <span className="sr-only">{t.cacheExpiringCount}</span>
                           </span>
                         )}
                         <span className="flex-1" />
@@ -828,7 +828,7 @@ export const AgentList: React.FC<AgentListProps> = ({
                             rel="noreferrer"
                             onClick={(e) => e.stopPropagation()}
                             className="shrink-0 flex items-center gap-1 text-[11px] font-normal text-gray-400 hover:text-white tabular-nums"
-                            title={`${groupIssues.open} open issue${groupIssues.open === 1 ? '' : 's'} in the repository`}
+                            title={t.openIssuesInRepo(groupIssues.open)}
                           >
                             <CircleDot size={11} />
                             {groupIssues.open}
@@ -838,13 +838,13 @@ export const AgentList: React.FC<AgentListProps> = ({
                           <Network
                             size={11}
                             className="shrink-0 text-indigo-300"
-                            aria-label="Orchestrators"
+                            aria-label={t.groupTitles.orchestrators}
                           />
                         ) : isFavSection || groupFav ? (
                           <Star
                             size={11}
                             className="shrink-0 fill-amber-400 text-amber-400"
-                            aria-label="Favorite"
+                            aria-label={t.favorite}
                           />
                         ) : null}
                         {!isFavSection && !isOrchSection && (
@@ -860,8 +860,8 @@ export const AgentList: React.FC<AgentListProps> = ({
                             aria-haspopup="menu"
                             aria-expanded={menu?.index === index}
                             className="shrink-0 p-0.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
-                            title="Project actions"
-                            aria-label={`Actions for ${item.group.title}`}
+                            title={t.projectActions}
+                            aria-label={t.actionsFor(item.group.title)}
                           >
                             <MoreHorizontal size={12} />
                           </button>
@@ -880,13 +880,13 @@ export const AgentList: React.FC<AgentListProps> = ({
                         onDoubleClick={() => onActivate(item)}
                         className={`px-6 py-1.5 text-xs cursor-pointer ${selected ? selectedClass(railFocused) : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
                       >
-                        … {item.count} more
+                        {t.moreCount(item.count)}
                       </div>
                     );
                   }
                   const { session } = item;
-                  const glyph = stateGlyph(session.displayState);
-                  const age = formatAge(sessionAgeMs(session, now));
+                  const glyph = stateGlyph(session.displayState, t.displayStates);
+                  const age = formatAge(sessionAgeMs(session, now), t.ageUnits);
                   const isPeeking = peekId === session.id;
                   const isOpen = openIds.has(session.id);
                   const isActive = activeSessionId === session.id;
@@ -906,7 +906,7 @@ export const AgentList: React.FC<AgentListProps> = ({
                   const actions = rowActions(session);
                   const extra =
                     session.state === 'blocked' && session.waitingFor
-                      ? `waiting: ${session.waitingFor}`
+                      ? t.waitingShort(session.waitingFor)
                       : session.state === 'working' || session.kind === 'app'
                         ? session.detail
                         : null;
@@ -916,8 +916,8 @@ export const AgentList: React.FC<AgentListProps> = ({
                     harness: appOrigin ? (
                       <span
                         className="shrink-0 flex items-center gap-0.5 leading-4 px-1 rounded border text-[10px] font-medium border-violet-400/60 text-violet-200"
-                        title={`Started in the Claude app (${appOrigin}), runs on this machine. Opens on claude.ai`}
-                        aria-label={`Claude app session from ${appOrigin}`}
+                        title={t.appSessionTitle(appOrigin)}
+                        aria-label={t.appSessionLabel(appOrigin)}
                       >
                         <Smartphone size={9} aria-hidden />
                         {appOrigin}
@@ -925,8 +925,8 @@ export const AgentList: React.FC<AgentListProps> = ({
                     ) : (
                       <span
                         className={`shrink-0 leading-4 px-1 rounded border text-[10px] font-medium ${HARNESS_BADGE[harness]}`}
-                        title={`Runs with ${harnessLabel(harness)}`}
-                        aria-label={`Harness: ${harnessLabel(harness)}`}
+                        title={t.runsWith(harnessLabel(harness))}
+                        aria-label={t.harnessLabel(harnessLabel(harness))}
                       >
                         {harnessLabel(harness)}
                       </span>
@@ -942,7 +942,7 @@ export const AgentList: React.FC<AgentListProps> = ({
                       ) : (
                         <span
                           className="shrink-0 font-mono leading-4 px-1 rounded border border-gray-600 text-gray-300"
-                          title={`Issue #${workflow.number}`}
+                          title={t.issueNumber(workflow.number)}
                         >
                           #{workflow.number}
                         </span>
@@ -963,8 +963,8 @@ export const AgentList: React.FC<AgentListProps> = ({
                         className="flex items-center gap-1 min-w-0"
                         title={[
                           repo.slug || repo.name,
-                          `branch ${repo.branch}`,
-                          repo.isWorktree ? worktreeTitle(repo) : null,
+                          t.branchNamed(repo.branch),
+                          repo.isWorktree ? worktreeTitle(repo, t.worktree) : null,
                         ]
                           .filter(Boolean)
                           .join('\n')}
@@ -978,9 +978,9 @@ export const AgentList: React.FC<AgentListProps> = ({
                         {repo.isWorktree && (
                           <span
                             className="shrink-0 rounded border border-sky-300/40 px-1 text-[11px] leading-4 text-sky-300"
-                            title={`Git ${worktreeTitle(repo)}`}
+                            title={`Git ${worktreeTitle(repo, t.worktree)}`}
                           >
-                            worktree
+                            {t.worktree}
                           </span>
                         )}
                       </span>
@@ -989,9 +989,9 @@ export const AgentList: React.FC<AgentListProps> = ({
                       <span
                         className="flex items-center gap-1 shrink-0 text-gray-500 tabular-nums"
                         title={[
-                          repo.dirty ? 'uncommitted changes' : null,
-                          repo.ahead ? `${repo.ahead} ahead of upstream` : null,
-                          repo.behind ? `${repo.behind} behind upstream` : null,
+                          repo.dirty ? t.uncommittedChanges : null,
+                          repo.ahead ? t.aheadOfUpstream(repo.ahead) : null,
+                          repo.behind ? t.behindUpstream(repo.behind) : null,
                         ]
                           .filter(Boolean)
                           .join('\n')}
@@ -999,7 +999,7 @@ export const AgentList: React.FC<AgentListProps> = ({
                         {repo.dirty && (
                           <span
                             className="w-1.5 h-1.5 rounded-full bg-amber-400"
-                            aria-label="Uncommitted changes"
+                            aria-label={t.uncommittedChangesLabel}
                           />
                         )}
                         {repo.ahead > 0 && (
@@ -1101,7 +1101,7 @@ export const AgentList: React.FC<AgentListProps> = ({
                               ? 'ring-1 ring-inset ring-amber-400/70 bg-amber-400/5'
                               : ''
                       }`}
-                      title={`${session.name}\n${session.id} · ${session.cwd}${session.waitingFor ? ` · waiting for ${session.waitingFor}` : ''}`}
+                      title={`${session.name}\n${session.id} · ${session.cwd}${session.waitingFor ? t.waitingForSuffix(session.waitingFor) : ''}`}
                     >
                       {hasDetails ? (
                         <button
@@ -1112,8 +1112,8 @@ export const AgentList: React.FC<AgentListProps> = ({
                           }}
                           onDoubleClick={(e) => e.stopPropagation()}
                           className="shrink-0 w-4 h-5 -mx-1 flex items-center justify-center text-gray-400 hover:text-white rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
-                          aria-label={`${expanded ? 'Hide' : 'Show'} details of ${session.name}`}
-                          title={expanded ? 'Hide details' : 'Show details'}
+                          aria-label={t.toggleDetailsOf(expanded, session.name)}
+                          title={expanded ? t.hideDetails : t.showDetails}
                         >
                           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                         </button>
@@ -1145,11 +1145,11 @@ export const AgentList: React.FC<AgentListProps> = ({
                           {isOrchestrator(session, orchestratorIds) && (
                             <span
                               className="shrink-0 flex items-center gap-0.5 leading-4 px-1 rounded border text-[10px] font-medium text-indigo-200 border-indigo-400/60 bg-indigo-400/10"
-                              title="Orchestrator: watches and distributes the other agents' work, does none itself"
+                              title={t.orchestratorBadgeTitle}
                               data-testid="orchestrator-badge"
                             >
                               <Network size={9} aria-hidden />
-                              {orchestratorRole(session, orchestratorRoles) ?? 'Orchestrator'}
+                              {orchestratorRole(session, orchestratorRoles) ?? t.orchestrator}
                             </span>
                           )}
                           {slot.title.length > 0 && (
@@ -1160,30 +1160,31 @@ export const AgentList: React.FC<AgentListProps> = ({
                           {session.copies && session.copies.length > 0 && (
                             <span
                               className="shrink-0 leading-4 px-1 rounded border text-[10px] font-medium text-amber-200 border-amber-400/60 bg-amber-400/10"
-                              title={`Second process on this session (same worktree, can overwrite work):\n${session.copies
+                              title={`${t.copiesTitle}\n${session.copies
                                 .map((c) => `${c.id} · ${c.sessionId ?? ''}`)
                                 .join('\n')}`}
                               data-testid="copy-badge"
                             >
-                              +{session.copies.length}{' '}
-                              {session.copies.length === 1 ? 'copy' : 'copies'}
+                              {t.copiesCount(session.copies.length)}
                             </span>
                           )}
                           {session.pinned && <Pin size={10} className="text-blue-300 shrink-0" />}
                           {isOpen && (
                             <span
                               className="shrink-0 text-blue-300"
-                              title={
-                                isActive ? 'Attached, shown in the workspace' : 'Attached in a tab'
-                              }
+                              title={isActive ? t.attachedActive : t.attachedInTab}
                             >
                               <SquareTerminal size={11} aria-hidden="true" />
-                              <span className="sr-only">{isActive ? 'active' : 'attached'}</span>
+                              <span className="sr-only">
+                                {isActive ? t.activeSr : t.attachedSr}
+                              </span>
                             </span>
                           )}
-                          {session.loop && <span className="text-[11px] text-blue-300">loop</span>}
+                          {session.loop && (
+                            <span className="text-[11px] text-blue-300">{t.loop}</span>
+                          )}
                           <span className="flex-1" />
-                          <span className="text-xs text-gray-500 font-mono shrink-0" title="Age">
+                          <span className="text-xs text-gray-500 font-mono shrink-0" title={t.age}>
                             {age}
                           </span>
                         </div>
@@ -1227,8 +1228,8 @@ export const AgentList: React.FC<AgentListProps> = ({
                               onTogglePeek(session);
                             }}
                             className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
-                            title="Peek (Space)"
-                            aria-label="Peek"
+                            title={t.peekTitle}
+                            aria-label={t.peek}
                           >
                             <MoreHorizontal size={12} />
                           </button>
@@ -1256,7 +1257,7 @@ export const AgentList: React.FC<AgentListProps> = ({
                           <FavoriteButton
                             active={isFav}
                             alwaysVisible={isActive}
-                            label={`${isFav ? 'Remove' : 'Add'} ${session.name} ${isFav ? 'from' : 'to'} favorites`}
+                            label={t.favoriteSessionToggle(isFav, session.name)}
                             onToggle={() => onToggleFavoriteSession(session.id)}
                           />
                         )}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Cloud } from 'lucide-react';
 import { parseCloudTarget } from '../../utils/cloudSession';
+import { useLabels } from '../../labels';
 
 interface CloudSessionBarProps {
   /** Open a PTY tab: with a target `claude --cloud <id|url>`, without `claude --teleport` */
@@ -11,6 +12,7 @@ interface CloudSessionBarProps {
 export const CloudSessionBar: React.FC<CloudSessionBarProps> = ({ onOpen }) => {
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const t = useLabels().panels;
 
   const run = async (target?: string) => {
     setError(null);
@@ -18,13 +20,13 @@ export const CloudSessionBar: React.FC<CloudSessionBarProps> = ({ onOpen }) => {
       await onOpen(target);
       if (target) setValue('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to open session');
+      setError(e instanceof Error ? e.message : t.cloudOpenFailed);
     }
   };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const parsed = parseCloudTarget(value);
+    const parsed = parseCloudTarget(value, t);
     if (!parsed.ok) return setError(parsed.error);
     void run(value.trim());
   };
@@ -35,7 +37,7 @@ export const CloudSessionBar: React.FC<CloudSessionBarProps> = ({ onOpen }) => {
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="Cloud session ID or claude.ai/code URL"
+          placeholder={t.cloudPlaceholder}
           className="flex-1 min-w-0 px-2 py-1 rounded bg-gray-900 border border-gray-800 text-gray-200 placeholder-gray-600"
         />
         <button
@@ -43,7 +45,7 @@ export const CloudSessionBar: React.FC<CloudSessionBarProps> = ({ onOpen }) => {
           disabled={!value.trim()}
           className="px-2 py-1 rounded bg-gray-800 text-gray-200 hover:bg-gray-700 disabled:opacity-40"
         >
-          Open
+          {t.open}
         </button>
         <button
           type="button"
@@ -51,13 +53,12 @@ export const CloudSessionBar: React.FC<CloudSessionBarProps> = ({ onOpen }) => {
           className="px-2 py-1 rounded bg-gray-800 text-gray-200 hover:bg-gray-700 flex items-center gap-1"
           title="claude --teleport"
         >
-          <Cloud size={12} /> Cloud-Sessions
+          <Cloud size={12} /> {t.cloudSessions}
         </button>
       </div>
       {error && <div className="text-red-400">{error}</div>}
       <div className="text-gray-500">
-        Sessions on other machines only show up if started there with{' '}
-        <code className="font-mono text-gray-400">claude --remote-control</code>.
+        {t.cloudHint} <code className="font-mono text-gray-400">claude --remote-control</code>.
       </div>
     </form>
   );

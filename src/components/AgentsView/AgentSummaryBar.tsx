@@ -19,6 +19,7 @@ import {
   QUICK_FILTERS,
   SORT_OPTIONS,
 } from '../../utils/agentSessions';
+import { useLabels } from '../../labels';
 import { usePopover } from './PullRequestsPanel';
 import { SEARCH_SHORTCUT, isMac } from '../../utils/platform';
 
@@ -60,11 +61,12 @@ export const AgentSummaryBar: React.FC<AgentSummaryBarProps> = ({
   onOpenServers,
   panel,
 }) => {
+  const t = useLabels().shell;
   const toggle = (key: AgentQuickFilter, count: number, label: string, tone: string) => (
     <button
       onClick={() => onToggle(key)}
       aria-pressed={active.has(key)}
-      title={`${active.has(key) ? 'Remove filter' : 'Filter'}: ${label}`}
+      title={t.filterToggleTitle(active.has(key), label)}
       className={`px-1.5 py-0.5 rounded tabular-nums hover:bg-gray-800 ${
         active.has(key) ? 'bg-gray-800 ring-1 ring-inset ring-gray-600' : ''
       } ${count > 0 ? tone : 'text-gray-500'}`}
@@ -77,36 +79,36 @@ export const AgentSummaryBar: React.FC<AgentSummaryBarProps> = ({
     <div className="flex items-center gap-0.5 text-xs text-gray-400 min-w-0 flex-wrap whitespace-nowrap">
       <span
         className={`w-1.5 h-1.5 rounded-full mr-1.5 shrink-0 ${daemon?.running ? 'bg-emerald-500' : 'bg-gray-600'}`}
-        title={`Supervisor ${daemon?.running ? 'running' : 'idle'}${daemon?.raw ? `\n${daemon.raw}` : ''}`}
+        title={`${t.supervisor(!!daemon?.running)}${daemon?.raw ? `\n${daemon.raw}` : ''}`}
         role="img"
-        aria-label={`Supervisor ${daemon?.running ? 'running' : 'idle'}`}
+        aria-label={t.supervisor(!!daemon?.running)}
       />
       {daemon?.versionMismatch && (
         <AlertTriangle
           size={11}
           className="text-yellow-400 mr-1"
-          aria-label="Supervisor version mismatch"
+          aria-label={t.supervisorMismatch}
         />
       )}
       {counts.awaitingInput > 0 ? (
         <button
           onClick={() => onToggle('needs-input')}
           aria-pressed={active.has('needs-input')}
-          title="Filter: agents waiting for your input"
+          title={t.awaitingInputFilterTitle}
           className={`px-1.5 py-0.5 rounded font-semibold tabular-nums bg-yellow-500/15 text-yellow-300 hover:bg-yellow-500/25 ${
             active.has('needs-input') ? 'ring-1 ring-inset ring-yellow-500/60' : ''
           }`}
         >
-          {counts.awaitingInput} awaiting input
+          {counts.awaitingInput} {t.awaitingInput}
         </button>
       ) : (
-        toggle('needs-input', 0, 'awaiting input', '')
+        toggle('needs-input', 0, t.awaitingInput, '')
       )}
-      {toggle('working', counts.working, 'working', 'text-orange-300')}
-      {toggle('completed', counts.completed, 'completed', 'text-emerald-300')}
-      {toggle('cache-expiring', counts.cacheExpiring, 'cache expiring', 'text-amber-300')}
+      {toggle('working', counts.working, t.workingCount, 'text-orange-300')}
+      {toggle('completed', counts.completed, t.completedCount, 'text-emerald-300')}
+      {toggle('cache-expiring', counts.cacheExpiring, t.cacheExpiringCount, 'text-amber-300')}
       {(counts.failed > 0 || active.has('failed')) &&
-        toggle('failed', counts.failed, 'failed', 'text-red-300')}
+        toggle('failed', counts.failed, t.failedCount, 'text-red-300')}
       {onOpenPrs && onOpenServers && (
         <>
           <span className="text-gray-500 px-1" aria-hidden="true">
@@ -118,10 +120,10 @@ export const AgentSummaryBar: React.FC<AgentSummaryBarProps> = ({
             data-popover-trigger
             aria-haspopup="dialog"
             aria-expanded={panel === 'prs'}
-            title="List open pull requests across all agents"
+            title={t.openPrsTitle}
             className="px-1.5 py-0.5 rounded tabular-nums hover:bg-gray-800 disabled:opacity-50 disabled:hover:bg-transparent"
           >
-            {openPrs ?? '-'} open {openPrs === 1 ? 'PR' : 'PRs'}
+            {t.openPrsCount(openPrs)}
           </button>
           <button
             onClick={onOpenServers}
@@ -129,14 +131,16 @@ export const AgentSummaryBar: React.FC<AgentSummaryBarProps> = ({
             data-popover-trigger
             aria-haspopup="dialog"
             aria-expanded={panel === 'servers'}
-            title="List servers listening in agent directories"
+            title={t.serversTitle}
             className="px-1.5 py-0.5 rounded tabular-nums hover:bg-gray-800 disabled:opacity-50 disabled:hover:bg-transparent"
           >
-            {runningServers ?? '-'} {runningServers === 1 ? 'server' : 'servers'} running
+            {t.serversRunning(runningServers)}
           </button>
         </>
       )}
-      {justCompleted > 0 && <span className="text-emerald-400 px-1.5">+{justCompleted} done</span>}
+      {justCompleted > 0 && (
+        <span className="text-emerald-400 px-1.5">{t.justDone(justCompleted)}</span>
+      )}
     </div>
   );
 };
@@ -181,6 +185,7 @@ const SearchPanel: React.FC<{
   onToggle: (key: string) => void;
   onClose: () => void;
 }> = ({ query, onQuery, entries, selected, onToggle, onClose }) => {
+  const t = useLabels().shell;
   const ref = usePopover(onClose);
   const inputRef = useRef<HTMLInputElement>(null);
   // After usePopover's effect, which focuses the panel itself
@@ -194,7 +199,7 @@ const SearchPanel: React.FC<{
       ref={ref}
       tabIndex={-1}
       role="dialog"
-      aria-label="Search agents, PRs and issues"
+      aria-label={t.searchPanel}
       className="absolute left-0 right-0 top-full mt-1 z-30 bg-gray-800 border border-gray-700 rounded-lg shadow-xl outline-none"
     >
       <div className="p-2 border-b border-gray-700">
@@ -211,19 +216,19 @@ const SearchPanel: React.FC<{
               e.preventDefault();
               onClose();
             }}
-            placeholder="Search agents, PRs and issues"
-            aria-label="Search agents"
+            placeholder={t.searchPanel}
+            aria-label={t.searchAgents}
             className="w-full min-w-0 bg-transparent text-xs text-gray-200 placeholder-gray-500 outline-none"
           />
         </label>
       </div>
       <div className="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-        Pull requests and issues
+        {t.linksHeading}
       </div>
-      <ul className="max-h-72 overflow-y-auto pb-1" aria-label="PRs and issues">
+      <ul className="max-h-72 overflow-y-auto pb-1" aria-label={t.linksList}>
         {shown.length === 0 && (
           <li className="px-3 py-2 text-xs text-gray-500">
-            {entries.length === 0 ? 'No open PRs or issues here' : 'No match'}
+            {entries.length === 0 ? t.noLinks : t.noMatch}
           </li>
         )}
         {shown.map((entry) => {
@@ -280,6 +285,7 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
   leading,
   trailing,
 }) => {
+  const t = useLabels().shell;
   const [open, setOpen] = useState(false);
   const [chipsOpen, setChipsOpenState] = useState(() => {
     try {
@@ -348,12 +354,12 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
             onClick={() => setOpen((v) => !v)}
             aria-haspopup="menu"
             aria-expanded={open}
-            aria-label={`Sort agents: ${current.label}`}
-            title="Sort agents"
+            aria-label={t.sortAgentsBy(t.sortOptions[current.key])}
+            title={t.sortAgents}
             className="w-full flex items-center gap-1 px-1.5 py-1 rounded text-gray-300 hover:bg-gray-800 border border-gray-800"
           >
             <ArrowUpDown size={12} className="shrink-0" />
-            <span className="truncate">{current.label}</span>
+            <span className="truncate">{t.sortOptions[current.key]}</span>
           </button>
           {open && (
             <div
@@ -372,7 +378,7 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
                   className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-gray-200 hover:bg-gray-700 hover:text-white"
                 >
                   <span className="w-3">{option.key === sort.key && <Check size={12} />}</span>
-                  {option.label}
+                  {t.sortOptions[option.key]}
                 </button>
               ))}
             </div>
@@ -381,12 +387,8 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
         <button
           onClick={() => onSort({ ...sort, dir: sort.dir === 'asc' ? 'desc' : 'asc' })}
           disabled={!current.directional}
-          title={
-            current.directional
-              ? `Direction: ${sort.dir === 'asc' ? 'ascending' : 'descending'} (click to reverse)`
-              : 'This sort has a fixed direction'
-          }
-          aria-label="Reverse sort direction"
+          title={current.directional ? t.sortDirection(sort.dir === 'asc') : t.fixedDirection}
+          aria-label={t.reverseSort}
           className="shrink-0 p-1 rounded text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
         >
           {sort.dir === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
@@ -395,8 +397,8 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
           onClick={() => setChipsOpen(!chipsOpen)}
           aria-expanded={chipsOpen}
           aria-controls="agent-filter-chips"
-          title={chipsOpen ? 'Hide filters' : 'Show filters'}
-          aria-label={chipsOpen ? 'Hide filters' : 'Show filters'}
+          title={chipsOpen ? t.hideFilters : t.showFilters}
+          aria-label={chipsOpen ? t.hideFilters : t.showFilters}
           className={`shrink-0 flex items-center gap-1 px-1.5 py-1 rounded hover:bg-gray-800 ${
             active.size > 0 ? 'text-blue-300' : 'text-gray-400 hover:text-white'
           }`}
@@ -410,8 +412,8 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
             data-popover-trigger
             aria-haspopup="dialog"
             aria-expanded={searchOpen}
-            title={`Search agents, PRs and issues (${SEARCH_SHORTCUT})`}
-            aria-label={`Search agents, PRs and issues (${SEARCH_SHORTCUT})`}
+            title={t.searchTitle(SEARCH_SHORTCUT)}
+            aria-label={t.searchTitle(SEARCH_SHORTCUT)}
             className={`max-w-full flex items-center gap-1 px-1.5 py-1 rounded hover:bg-gray-800 ${
               searching ? 'text-blue-300' : 'text-gray-400 hover:text-white'
             } ${searchOpen ? 'bg-gray-800' : ''}`}
@@ -439,14 +441,14 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
         {trailing}
         <span className="flex-1" />
         <span className="shrink-0 text-gray-500 tabular-nums whitespace-nowrap" aria-live="polite">
-          {filtered ? `${shown} of ${total}` : `${total} ${total === 1 ? 'agent' : 'agents'}`}
+          {filtered ? t.shownOf(shown, total) : t.agentCount(total)}
         </span>
         {filtered && (
           <button
             onClick={onClear}
             className="shrink-0 p-1 rounded text-blue-300 hover:text-white hover:bg-gray-800"
-            title="Clear all filters"
-            aria-label="Clear all filters"
+            title={t.clearFilters}
+            aria-label={t.clearFilters}
           >
             <X size={12} />
           </button>
@@ -457,7 +459,7 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
           id="agent-filter-chips"
           className="flex flex-wrap gap-1"
           role="group"
-          aria-label="Filter agents"
+          aria-label={t.filterAgents}
         >
           {QUICK_FILTERS.map((chip) => {
             const on = active.has(chip.key);
@@ -467,7 +469,7 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
                 key={chip.key}
                 onClick={() => onToggle(chip.key)}
                 aria-pressed={on}
-                title={chip.title}
+                title={t.quickFilters[chip.key].title}
                 className={`px-2 py-0.5 rounded-full text-[11px] border tabular-nums ${
                   on
                     ? 'bg-blue-500/20 border-blue-500/50 text-blue-200'
@@ -476,7 +478,8 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
                       : 'border-gray-700 text-gray-300 hover:bg-gray-800'
                 }`}
               >
-                {chip.label} <span className={on ? 'text-blue-300' : 'text-gray-500'}>{count}</span>
+                {t.quickFilters[chip.key].label}{' '}
+                <span className={on ? 'text-blue-300' : 'text-gray-500'}>{count}</span>
               </button>
             );
           })}

@@ -1,4 +1,4 @@
-/** Model × effort picker: one row per model, one column per effort level any model takes */
+import { panelsEn } from '../labels/panels';
 /** Low to high; levels a CLI names that are not listed here go to the end */
 const EFFORT_ORDER = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'];
 export function effortColumns(models) {
@@ -45,4 +45,4 @@ export const isCurrentModel = (id, current) => !!id &&
             .toLowerCase()
             .split(/[-/:.]/)
             .includes(id.toLowerCase()));
-export const pickLabel = (model, effort, defaultModel) => `${model || (defaultModel ? `default (${defaultModel})` : 'default')}${effort ? ` · ${effort}` : ''}`;
+export const pickLabel = (model, effort, defaultModel, t = panelsEn) => `${model || t.pickDefault(defaultModel)}${effort ? ` · ${effort}` : ''}`;

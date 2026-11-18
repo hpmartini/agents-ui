@@ -3,6 +3,8 @@
  * pinned entries (home, current) first, then one group per parent directory.
  */
 
+import { panelsEn } from '../labels/panels';
+
 export interface DirectoryChoice {
   name: string;
   path: string;
@@ -89,10 +91,17 @@ const byItem = (a: GroupItem, b: GroupItem) =>
 
 export function groupDirectories(
   choices: DirectoryChoice[],
-  opts: { home?: string | null; current?: string | null; query?: string } = {}
+  opts: {
+    home?: string | null;
+    current?: string | null;
+    query?: string;
+    /** Detail text of a worktree entry */
+    worktreeOf?: (repo: string) => string;
+  } = {}
 ): DirectoryGroup[] {
   const home = opts.home ?? null;
   const query = (opts.query || '').trim().toLowerCase();
+  const worktreeOf = opts.worktreeOf ?? panelsEn.dirWorktreeOf;
   const pinnedKeys = [opts.current, home].filter(Boolean).map((p) => pathKey(p as string));
 
   const entries = dedupeDirectories(choices);
@@ -115,7 +124,7 @@ export function groupDirectories(
       ? {
           primary: nameByPath.get(pathKey(repoRoot)) ?? basename(repoRoot),
           worktree: true,
-          entry: { ...entry, detail: `worktree of ${basename(repoRoot)}` },
+          entry: { ...entry, detail: worktreeOf(basename(repoRoot)) },
         }
       : { primary: entry.name, worktree: false, entry };
     const key = pathKey(parent);

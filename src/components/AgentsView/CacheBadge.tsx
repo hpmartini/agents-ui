@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Timer } from 'lucide-react';
 import type { AgentCacheInfo } from '../../types';
 import { cacheCountdown, formatCountdown, formatTokens } from '../../utils/agentCache';
+import { useLabels } from '../../labels';
 
 /** Prompt-cache countdown, context fill and hits of one session; ticks every second while warm, hidden once expired */
 export const CacheBadge: React.FC<{
@@ -10,6 +11,7 @@ export const CacheBadge: React.FC<{
   context?: boolean;
 }> = ({ cache, context = true }) => {
   const [now, setNow] = useState(Date.now());
+  const t = useLabels().panels;
   const { remainingMs, expired, warning } = cacheCountdown(cache, now);
 
   useEffect(() => {
@@ -23,9 +25,9 @@ export const CacheBadge: React.FC<{
   const fill = Math.min(1, cache.cachedTokens / cache.contextWindow);
   const percent = Math.round(fill * 100);
   const title = [
-    `Prompt cache expires in ${formatCountdown(remainingMs)} (TTL ${cache.ttlMs / 60_000} min)`,
-    `Context: ${formatTokens(cache.cachedTokens)} / ${formatTokens(cache.contextWindow)} tokens (${percent}%)`,
-    `Cache hits: ${cache.hits} of ${cache.turns} turns, ${Math.round(cache.hitRatio * 100)}% of input tokens read from cache`,
+    t.cacheExpires(formatCountdown(remainingMs), cache.ttlMs / 60_000),
+    t.cacheContext(formatTokens(cache.cachedTokens), formatTokens(cache.contextWindow), percent),
+    t.cacheHitsTitle(cache.hits, cache.turns, Math.round(cache.hitRatio * 100)),
   ].join('\n');
 
   return (
@@ -42,7 +44,7 @@ export const CacheBadge: React.FC<{
           <span
             className="w-8 h-1 rounded-full bg-gray-700 overflow-hidden"
             role="meter"
-            aria-label="Context window fill"
+            aria-label={t.cacheFill}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={percent}
@@ -58,7 +60,7 @@ export const CacheBadge: React.FC<{
         </>
       )}
       <span className="text-gray-500">·</span>
-      <span>{cache.hits} hits</span>
+      <span>{t.cacheHits(cache.hits)}</span>
     </span>
   );
 };

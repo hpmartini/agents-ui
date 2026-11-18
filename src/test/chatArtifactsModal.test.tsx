@@ -24,8 +24,10 @@ const artifactsApi: NonNullable<AgentsTransport['artifacts']> = {
     mtime: 1,
   })),
 };
-const render = (ui: React.ReactElement, transport = testTransport({ artifacts: artifactsApi, files: { openFile } })) =>
-  renderWithAgents(ui, { transport });
+const render = (
+  ui: React.ReactElement,
+  transport = testTransport({ artifacts: artifactsApi, files: { openFile } })
+) => renderWithAgents(ui, { transport });
 
 beforeEach(() => openFile.mockClear());
 

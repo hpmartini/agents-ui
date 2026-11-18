@@ -1,37 +1,14 @@
-export const CI_LABELS = {
-    success: 'Passing',
-    failure: 'Failing',
-    pending: 'Running',
-    none: 'No checks',
-};
-export const MERGE_LABELS = {
-    ready: 'Ready to merge',
-    blocked: 'Blocked',
-    checking: 'Checking',
-    conflicts: 'Conflicts',
-};
-export const REVIEW_LABELS = {
-    approved: 'Approved',
-    changes: 'Changes requested',
-    required: 'Review required',
-    none: 'No review',
-};
-export const GROUP_LABELS = {
-    none: 'No grouping',
-    repo: 'Repository',
-    merge: 'Merge state',
-    ci: 'CI',
-    review: 'Review',
-    author: 'Author',
-    agent: 'Agent',
-};
-export const SORT_LABELS = {
-    updated: 'Last updated',
-    ready: 'Ready to merge first',
-    number: 'Number',
-    title: 'Title',
-    repo: 'Repository',
-};
+/**
+ * Filter, cluster and sort the open PRs of the /pulls view (#191). Pure; the state lives in
+ * the URL search params, so every value read from there is checked against the known options.
+ */
+import { shellEn } from '../labels/shell';
+// The option sets; their names in `en` (the view shows `ShellLabels.pulls` of its locale)
+export const CI_LABELS = shellEn.pulls.ci;
+export const MERGE_LABELS = shellEn.pulls.merge;
+export const REVIEW_LABELS = shellEn.pulls.review;
+export const GROUP_LABELS = shellEn.pulls.group;
+export const SORT_LABELS = shellEn.pulls.sort;
 export const DEFAULT_QUERY = {
     q: '',
     repo: null,
@@ -160,18 +137,19 @@ export function sortPulls(rows, sort, dir) {
     const sign = dir === 'asc' ? 1 : -1;
     return [...rows].sort((a, b) => sign * COMPARE[sort](a.pr, b.pr));
 }
-const NO_AUTHOR = 'No author';
-const NO_AGENT = 'No agent';
 /** Fixed order for the state clusters, alphabetical for the open-ended ones (empty last) */
 const ORDER = {
     merge: Object.keys(MERGE_LABELS),
     ci: ['failure', 'pending', 'success', 'none'],
     review: ['changes', 'required', 'approved', 'none'],
 };
-/** Clusters already sorted rows; a PR with several agents is listed under each of them */
-export function groupPulls(rows, group) {
+/**
+ * Clusters already sorted rows; a PR with several agents is listed under each of them. `labels`
+ * name the clusters.
+ */
+export function groupPulls(rows, group, labels = shellEn.pulls) {
     if (group === 'none')
-        return [{ key: 'all', label: 'All', rows }];
+        return [{ key: 'all', label: labels.all, rows }];
     const groups = new Map();
     const add = (key, label, row) => {
         const g = groups.get(key) ?? { key, label, rows: [] };
@@ -183,15 +161,15 @@ export function groupPulls(rows, group) {
         if (group === 'repo')
             add(pr.repoSlug, pr.repoSlug, row);
         else if (group === 'merge')
-            add(mergeKey(pr), MERGE_LABELS[mergeKey(pr)], row);
+            add(mergeKey(pr), labels.merge[mergeKey(pr)], row);
         else if (group === 'ci')
-            add(pr.ci, CI_LABELS[pr.ci], row);
+            add(pr.ci, labels.ci[pr.ci], row);
         else if (group === 'review')
-            add(reviewKey(pr), REVIEW_LABELS[reviewKey(pr)], row);
+            add(reviewKey(pr), labels.review[reviewKey(pr)], row);
         else if (group === 'author')
-            add(pr.author ?? '', pr.author ?? NO_AUTHOR, row);
+            add(pr.author ?? '', pr.author ?? labels.noAuthor, row);
         else if (agents.length === 0)
-            add('', NO_AGENT, row);
+            add('', labels.noAgent, row);
         else
             for (const a of agents)
                 add(a.id, a.name || a.id, row);
@@ -211,7 +189,7 @@ export function pullOptions(rows) {
     };
 }
 /** filter -> sort -> group, as the view shows it */
-export function queryPulls(rows, q) {
+export function queryPulls(rows, q, labels) {
     const shown = sortPulls(filterPulls(rows, q), q.sort, q.dir);
-    return { shown, groups: groupPulls(shown, q.group) };
+    return { shown, groups: groupPulls(shown, q.group, labels) };
 }

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { AgentGrouping } from '../types';
 import type { SessionGroup, GroupKey } from '../utils/agentSessions';
+import { shellEn } from '../labels/shell';
 
 /** Key of the synthetic group holding favorite agents (always first, not reorderable) */
 export const FAVORITES_GROUP_KEY = 'favorites';
@@ -188,7 +189,7 @@ export function withFavoriteSessions(
   return [
     {
       key: FAVORITES_GROUP_KEY as GroupKey,
-      title: 'Favorites',
+      title: shellEn.groupTitles[FAVORITES_GROUP_KEY],
       sessions: favorites,
       hidden: [],
     },

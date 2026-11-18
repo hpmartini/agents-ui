@@ -8,6 +8,7 @@ import { createContext, useContext, useMemo, type HTMLAttributes, type ReactNode
 import type { ITerminalOptions } from '@xterm/xterm';
 import type { AgentsTransport } from './transport';
 import type { AgentSession } from './types';
+import { LabelsContext, resolveLabels, type LabelOverrides, type Locale } from './labels';
 
 export interface ToastOptions {
   id?: string;
@@ -153,13 +154,25 @@ interface AgentsContextValue {
 
 const AgentsContext = createContext<AgentsContextValue | null>(null);
 
+/**
+ * Transport, host and texts for every agents-ui component below. `locale` (default `'en'`,
+ * Orkumo's wording) and `labels` (single texts replaced) apply below; without both, an outer
+ * provider's texts stay.
+ */
 export const AgentsProvider = ({
   transport,
   host,
+  locale,
+  labels,
   children,
-}: AgentsContextValue & { children: ReactNode }) => {
+}: AgentsContextValue & { locale?: Locale; labels?: LabelOverrides; children: ReactNode }) => {
   const value = useMemo(() => ({ transport, host }), [transport, host]);
-  return <AgentsContext.Provider value={value}>{children}</AgentsContext.Provider>;
+  const texts = useMemo(
+    () => (locale || labels ? resolveLabels(locale, labels) : null),
+    [locale, labels]
+  );
+  const tree = <AgentsContext.Provider value={value}>{children}</AgentsContext.Provider>;
+  return texts ? <LabelsContext.Provider value={texts}>{tree}</LabelsContext.Provider> : tree;
 };
 
 function useAgentsContext(): AgentsContextValue {

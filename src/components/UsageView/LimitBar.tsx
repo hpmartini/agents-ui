@@ -1,6 +1,7 @@
 import React from 'react';
 import type { UsageWindow } from './types';
 import { formatResetIn, limitStatus, type LimitStatus } from '../../utils/usage';
+import { useLabels } from '../../labels';
 
 const BAR_TONE: Record<LimitStatus, string> = {
   unknown: 'bg-gray-600',
@@ -34,13 +35,14 @@ interface LimitBarProps {
 export const LimitBar: React.FC<LimitBarProps> = ({
   label,
   window,
-  unknownText = 'Limit unbekannt',
+  unknownText,
   compact = false,
   ticks,
   marker,
   markerLabel,
   now = Date.now(),
 }) => {
+  const t = useLabels().terminal;
   const status = limitStatus(window);
   const pct = status === 'unknown' ? null : Math.min(100, Math.max(0, window!.usedPercent!));
   const height = compact ? 'h-1' : 'h-2';
@@ -52,7 +54,7 @@ export const LimitBar: React.FC<LimitBarProps> = ({
       >
         <span className="text-gray-400">{label}</span>
         <span className={`tabular-nums ${TEXT_TONE[status]}`}>
-          {pct == null ? unknownText : `${Math.round(pct)} %`}
+          {pct == null ? (unknownText ?? t.limitUnknown) : `${Math.round(pct)} %`}
         </span>
       </div>
       {pct == null ? (
@@ -63,7 +65,7 @@ export const LimitBar: React.FC<LimitBarProps> = ({
       ) : (
         <div
           role="progressbar"
-          aria-label={`${label} genutzt`}
+          aria-label={t.limitUsed(label)}
           aria-valuenow={Math.round(pct)}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -90,7 +92,7 @@ export const LimitBar: React.FC<LimitBarProps> = ({
       )}
       {!compact && window && (
         <div className="mt-1 text-[11px] text-gray-500 tabular-nums">
-          Reset {formatResetIn(window.resetsAt, now)}
+          {t.reset} {formatResetIn(window.resetsAt, now, t)}
         </div>
       )}
     </div>

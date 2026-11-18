@@ -63,8 +63,7 @@ export function paneHolding(
 ): string | null {
   if (!sessionId) return null;
   return (
-    panes.find((p) => openIds.has(p.id) && resumableSessionId(p, targets) === sessionId)?.id ??
-    null
+    panes.find((p) => openIds.has(p.id) && resumableSessionId(p, targets) === sessionId)?.id ?? null
   );
 }
 

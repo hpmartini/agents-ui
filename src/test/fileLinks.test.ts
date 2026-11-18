@@ -6,8 +6,7 @@ const paths = (text: string) => findFilePaths(text).map((m) => m.path);
 
 describe('findFilePaths', () => {
   it('finds the path from the issue screenshot', () => {
-    const p =
-      '/Users/anna/WEBSITES/invoices/2026-11-03_Invoice-Draft_Example-Client_Website.pdf';
+    const p = '/Users/anna/WEBSITES/invoices/2026-11-03_Invoice-Draft_Example-Client_Website.pdf';
     const text = `- Wo: ${p}`;
     const [m] = findFilePaths(text);
     expect(m.path).toBe(p);

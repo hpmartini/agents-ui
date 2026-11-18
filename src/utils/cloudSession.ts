@@ -6,6 +6,8 @@
  * Mirrored in server/services/agentService.js (parseCloudTarget) - keep both in sync.
  */
 
+import { panelsEn, type PanelsLabels } from '../labels/panels';
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SESSION_ID_RE = /^session_[A-Za-z0-9]{8,64}$/;
 
@@ -16,7 +18,10 @@ function isSessionId(value: string): boolean {
 }
 
 /** Extract the session id from a raw ID or a https://claude.ai/code/<id> URL. */
-export function parseCloudTarget(input: string): CloudTarget {
+export function parseCloudTarget(
+  input: string,
+  t: Pick<PanelsLabels, 'cloudInvalid' | 'cloudOnlyClaudeAi' | 'cloudNoId'> = panelsEn
+): CloudTarget {
   const raw = input.trim();
   if (isSessionId(raw)) return { ok: true, id: raw };
 
@@ -24,14 +29,14 @@ export function parseCloudTarget(input: string): CloudTarget {
   try {
     url = new URL(raw);
   } catch {
-    return { ok: false, error: 'Expected a session ID or a claude.ai/code URL' };
+    return { ok: false, error: t.cloudInvalid };
   }
   if (url.protocol !== 'https:' || url.hostname !== 'claude.ai' || url.username || url.password) {
-    return { ok: false, error: 'Only https://claude.ai/code/… URLs are allowed' };
+    return { ok: false, error: t.cloudOnlyClaudeAi };
   }
   const match = url.pathname.match(/^\/code\/([^/]+)\/?$/);
   if (!match || !isSessionId(match[1])) {
-    return { ok: false, error: 'URL does not contain a valid session ID' };
+    return { ok: false, error: t.cloudNoId };
   }
   return { ok: true, id: match[1] };
 }

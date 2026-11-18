@@ -15,6 +15,9 @@ export function orkumoTransport(overrides: Partial<AgentsTransport> = {}): Agent
     ...base,
     pty: {
       ...base.pty,
+      spawn: vi.fn(() => {
+        throw new Error('no PTY in tests');
+      }),
       shell: vi.fn(() => {
         throw new Error('no PTY in tests');
       }),

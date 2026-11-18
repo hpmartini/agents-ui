@@ -180,29 +180,25 @@ export function chatSuggestions(
     query.replace(/^agent-/i, ''),
     (a) => a.name,
     (a) => a.description
-  ).map(
-    (a): ChatSuggestion => ({
-      kind: 'agent',
-      label: `@agent-${a.name}`,
-      insert: `@agent-${a.name} `,
-      description: a.description,
-      hint: '',
-    })
-  );
+  ).map((a): ChatSuggestion => ({
+    kind: 'agent',
+    label: `@agent-${a.name}`,
+    insert: `@agent-${a.name} `,
+    description: a.description,
+    hint: '',
+  }));
   const files = rank(
     ctx.files,
     query,
     (f) => f,
     () => ''
-  ).map(
-    (f): ChatSuggestion => ({
-      kind: 'file',
-      label: `@${f}`,
-      insert: `@${f} `,
-      description: f,
-      hint: '',
-    })
-  );
+  ).map((f): ChatSuggestion => ({
+    kind: 'file',
+    label: `@${f}`,
+    insert: `@${f} `,
+    description: f,
+    hint: '',
+  }));
   // Agents are few, so they lead; otherwise thousands of path matches bury them
   return [...agents, ...files].slice(0, limit);
 }

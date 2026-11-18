@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { Code2, ExternalLink, FileText, FolderOpen, Files, Globe, Loader2, X } from 'lucide-react';
 import type { ChatArtifact, ChatArtifacts, ClaudeArtifact } from '../../../transport';
 import { useTransport } from '../../../host';
+import { useLabels } from '../../../labels';
+import type { TerminalLabels } from '../../../labels/terminal';
 import { useDialogA11y } from '../../CommandPalette/useDialogA11y';
 import { relativeTime } from '../../../utils/chatHistory';
 import { useOpenFile } from '../../../utils/openFile';
@@ -52,8 +54,6 @@ export function useChatArtifacts(chatId: string | null, refreshKey: string): Cha
   return artifacts;
 }
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-
 /** Pages the agent published or linked to; a page it only read is listed, not counted */
 const countedPages = (pages: ClaudeArtifact[]) => pages.filter((p) => p.source !== 'read').length;
 
@@ -64,17 +64,18 @@ export const ChatArtifactsButton: React.FC<{ artifacts: ChatArtifacts; onOpen: (
 }) => {
   const pages = countedPages(artifacts.pages);
   const files = artifacts.files.length;
+  const t = useLabels().terminal;
   if (pages === 0 && files === 0) return null;
   return (
     <button
       type="button"
       onClick={onOpen}
       className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded border border-gray-700 text-xs text-gray-300 hover:text-white hover:bg-gray-800 ${focusRing}`}
-      title="Claude artifacts (pages on claude.ai) and files this agent created or edited"
+      title={t.artifactsButtonTitle}
     >
       <Files size={13} aria-hidden className="text-gray-400" />
       <span className="tabular-nums text-gray-100">
-        {[pages > 0 && plural(pages, 'artifact'), files > 0 && plural(files, 'file')]
+        {[pages > 0 && t.artifactCount(pages), files > 0 && t.fileCount(files)]
           .filter(Boolean)
           .join(' · ')}
       </span>
@@ -82,10 +83,10 @@ export const ChatArtifactsButton: React.FC<{ artifacts: ChatArtifacts; onOpen: (
   );
 };
 
-const GROUPS: { label: string; test: (a: ChatArtifact) => boolean }[] = [
-  { label: 'Documents', test: (a) => a.kind === 'document' },
-  { label: 'Created', test: (a) => a.kind === 'file' && a.action === 'created' },
-  { label: 'Edited', test: (a) => a.kind === 'file' && a.action === 'edited' },
+const GROUPS: { label: (t: TerminalLabels) => string; test: (a: ChatArtifact) => boolean }[] = [
+  { label: (t) => t.groupDocuments, test: (a) => a.kind === 'document' },
+  { label: (t) => t.groupCreated, test: (a) => a.kind === 'file' && a.action === 'created' },
+  { label: (t) => t.groupEdited, test: (a) => a.kind === 'file' && a.action === 'edited' },
 ];
 
 function formatSize(bytes: number | null): string {
@@ -121,26 +122,25 @@ const CodePreview: React.FC<{ text: string }> = ({ text }) => {
 };
 
 type PreviewState =
-  | { state: 'loading' }
-  | { state: 'ready'; content: string }
-  | { state: 'error'; message: string };
+  { state: 'loading' } | { state: 'ready'; content: string } | { state: 'error'; message: string };
 
-const GONE: PreviewState = { state: 'error', message: 'The file no longer exists.' };
+const gone = (t: TerminalLabels): PreviewState => ({ state: 'error', message: t.fileGone });
 
 const Preview: React.FC<{ chatId: string; cwd: string; artifact: ChatArtifact }> = ({
   chatId,
   cwd,
   artifact,
 }) => {
+  const t = useLabels().terminal;
   const [preview, setPreview] = useState<PreviewState>(
-    artifact.exists ? { state: 'loading' } : GONE
+    artifact.exists ? { state: 'loading' } : gone(t)
   );
   const api = useTransport().artifacts;
   const openFile = useOpenFile();
   useEffect(() => {
     if (!api) return;
     if (!artifact.exists) {
-      setPreview(GONE);
+      setPreview(gone(t));
       return;
     }
     let cancelled = false;
@@ -151,33 +151,31 @@ const Preview: React.FC<{ chatId: string; cwd: string; artifact: ChatArtifact }>
       .then((d) => !cancelled && setPreview({ state: 'ready', content: d.content }))
       .catch(
         (e: Error) =>
-          !cancelled && setPreview({ state: 'error', message: e.message || 'Preview failed' })
+          !cancelled && setPreview({ state: 'error', message: e.message || t.previewFailed })
       );
     return () => {
       cancelled = true;
     };
-  }, [api, chatId, artifact.path, artifact.mtime, artifact.exists]);
+  }, [api, chatId, artifact.path, artifact.mtime, artifact.exists, t]);
 
   if (preview.state === 'loading')
     return (
       <div className="flex items-center justify-center h-full gap-2 text-sm text-gray-400">
         <Loader2 size={14} aria-hidden className="animate-spin motion-reduce:animate-none" />
-        Loading preview…
+        {t.loadingPreview}
       </div>
     );
   if (preview.state === 'error')
     return (
       <div className="flex flex-col items-center justify-center h-full gap-1 px-6 text-center">
         <p className="text-sm text-gray-300">{preview.message}</p>
-        {artifact.exists && openFile && (
-          <p className="text-xs text-gray-500">Open it in VS Code or reveal it in Finder above.</p>
-        )}
+        {artifact.exists && openFile && <p className="text-xs text-gray-500">{t.openElsewhere}</p>}
       </div>
     );
   if (!preview.content)
     return (
       <div className="flex items-center justify-center h-full text-sm text-gray-500">
-        Empty file
+        {t.emptyFile}
       </div>
     );
   return isMarkdown(artifact.path) ? (
@@ -201,32 +199,23 @@ interface Section {
   groups: { label: string; items: Entry[] }[];
 }
 
-const PAGE_SOURCE: Record<ClaudeArtifact['source'], string> = {
-  published: 'Published',
-  linked: 'Linked',
-  read: 'Read only',
-};
-
 /** Name of a page: its title, else label, else the artifact id */
 const pageName = (p: ClaudeArtifact) => p.title || p.label || p.url.split('/').pop() || p.url;
 
-/** Facts of a page as label/value rows; empty values are left out */
-function pageFacts(p: ClaudeArtifact, cwd: string): [string, string][] {
-  const facts: [string, string | null][] = [
-    ['Type', p.type],
-    ['Status', PAGE_SOURCE[p.source]],
-    ['Version', p.version != null ? String(p.version) : null],
-    ['Updated', p.updatedAt != null ? new Date(p.updatedAt).toLocaleString() : null],
-    ['Label', p.label],
-    ['Description', p.description],
-    ['Source', p.file && shownPath(p.file, cwd)],
-    ['URL', p.url],
+/** Facts of a page as label/value/monospace rows; empty values are left out */
+function pageFacts(p: ClaudeArtifact, cwd: string, t: TerminalLabels): [string, string, boolean][] {
+  const facts: [string, string | null, boolean][] = [
+    [t.factType, p.type, false],
+    [t.factStatus, t.pageSource(p.source), false],
+    [t.factVersion, p.version != null ? String(p.version) : null, false],
+    [t.factUpdated, p.updatedAt != null ? new Date(p.updatedAt).toLocaleString() : null, false],
+    [t.factLabel, p.label, false],
+    [t.factDescription, p.description, false],
+    [t.factSource, p.file && shownPath(p.file, cwd), true],
+    [t.factUrl, p.url, true],
   ];
-  return facts.filter((f): f is [string, string] => !!f[1]);
+  return facts.filter((f): f is [string, string, boolean] => !!f[1]);
 }
-
-/** Facts shown in monospace */
-const MONO_FACTS = new Set(['Source', 'URL']);
 
 /** The page's details; its source file is previewed when it is one of the listed files */
 const PageDetail: React.FC<{
@@ -237,14 +226,15 @@ const PageDetail: React.FC<{
 }> = ({ chatId, cwd, page, files }) => {
   const source = page.file ? files.find((f) => f.path === page.file) : undefined;
   const openFile = useOpenFile();
+  const t = useLabels().terminal;
   return (
     <>
       <div className="flex items-center gap-2 min-h-10 px-3 py-1.5 border-b border-gray-800 shrink-0">
         <div className="min-w-0 flex-1">
           <div className="text-sm text-gray-100 truncate">{pageName(page)}</div>
           <div className="text-[11px] text-gray-500 truncate" title={page.url}>
-            Claude artifact · {page.type}
-            {page.version != null && ` · version ${page.version}`}
+            {t.claudeArtifact(page.type)}
+            {page.version != null && t.artifactVersion(page.version)}
           </div>
         </div>
         <a
@@ -253,29 +243,27 @@ const PageDetail: React.FC<{
           rel="noreferrer noopener"
           className={`${actionBtn} !text-blue-300`}
         >
-          <ExternalLink size={13} aria-hidden /> Open on claude.ai
+          <ExternalLink size={13} aria-hidden /> {t.openOnClaude}
         </a>
         {openFile && (
           <button
             type="button"
             className={actionBtn}
             disabled={!page.file}
-            title={page.file ?? 'No local source known'}
+            title={page.file ?? t.noLocalSource}
             onClick={() => page.file && openFile(page.file, cwd, { editor: true })}
           >
-            <Code2 size={13} aria-hidden /> Open source
+            <Code2 size={13} aria-hidden /> {t.openSource}
           </button>
         )}
-        <CopyButton text={page.url} label="Copy URL" className="!text-xs !px-2 !py-1" />
+        <CopyButton text={page.url} label={t.copyUrl} className="!text-xs !px-2 !py-1" />
       </div>
       <div className="flex-1 min-h-0 overflow-auto thin-scrollbar bg-gray-950">
         <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 px-4 py-3 text-xs border-b border-gray-800">
-          {pageFacts(page, cwd).map(([k, v]) => (
+          {pageFacts(page, cwd, t).map(([k, v, mono]) => (
             <React.Fragment key={k}>
               <dt className="text-gray-500">{k}</dt>
-              <dd
-                className={`min-w-0 break-words text-gray-200 ${MONO_FACTS.has(k) ? 'font-mono' : ''}`}
-              >
+              <dd className={`min-w-0 break-words text-gray-200 ${mono ? 'font-mono' : ''}`}>
                 {v}
               </dd>
             </React.Fragment>
@@ -284,10 +272,7 @@ const PageDetail: React.FC<{
         {source ? (
           <Preview key={source.path} chatId={chatId} cwd={cwd} artifact={source} />
         ) : page.file ? (
-          <p className="px-4 py-3 text-xs text-gray-500">
-            The source was not written in this session, so it has no preview here
-            {openFile ? ': open it with “Open source”.' : '.'}
-          </p>
+          <p className="px-4 py-3 text-xs text-gray-500">{t.sourceNotWritten(!!openFile)}</p>
         ) : null}
       </div>
     </>
@@ -311,6 +296,7 @@ export const ChatArtifactsModal: React.FC<{
   const trapTab = useDialogA11y(true, dialogRef, () => listRef.current);
   const [artifacts, setArtifacts] = useState(initial);
   const api = useTransport().artifacts;
+  const t = useLabels().terminal;
   useEffect(() => setArtifacts(initial), [initial]);
   useEffect(() => {
     if (!api) return;
@@ -328,17 +314,20 @@ export const ChatArtifactsModal: React.FC<{
   const sections = useMemo((): Section[] => {
     const pages: Entry[] = artifacts.pages.map((page) => ({ key: `page:${page.url}`, page }));
     const files = GROUPS.map((g) => ({
-      label: g.label,
+      label: g.label(t),
       items: artifacts.files
         .filter(g.test)
         .map((file): Entry => ({ key: `file:${file.path}`, file })),
     })).filter((g) => g.items.length > 0);
     const all: Section[] = [
-      { label: 'Claude Artifacts', groups: pages.length ? [{ label: '', items: pages }] : [] },
-      { label: 'Files', groups: files },
+      {
+        label: t.sectionClaudeArtifacts,
+        groups: pages.length ? [{ label: '', items: pages }] : [],
+      },
+      { label: t.sectionFiles, groups: files },
     ];
     return all.filter((s) => s.groups.length > 0);
-  }, [artifacts]);
+  }, [artifacts, t]);
   const ordered = useMemo(
     () => sections.flatMap((s) => s.groups.flatMap((g) => g.items)),
     [sections]
@@ -366,8 +355,8 @@ export const ChatArtifactsModal: React.FC<{
 
   const optionId = (e: Entry) => `artifact-${ordered.indexOf(e)}`;
   const counts = [
-    plural(countedPages(artifacts.pages), 'artifact'),
-    plural(artifacts.files.length, 'file'),
+    t.artifactCount(countedPages(artifacts.pages)),
+    t.fileCount(artifacts.files.length),
   ].join(' · ');
 
   const row = (e: Entry) => {
@@ -376,19 +365,19 @@ export const ChatArtifactsModal: React.FC<{
     const sub = e.page
       ? [
           e.page.type,
-          e.page.source !== 'published' && PAGE_SOURCE[e.page.source],
+          e.page.source !== 'published' && t.pageSource(e.page.source),
           e.page.version != null && `v${e.page.version}`,
         ]
           .filter(Boolean)
           .join(' · ')
       : e.file.kind === 'document'
-        ? 'session document'
+        ? t.sessionDocument
         : shownPath(e.file.path, cwd).replace(/\/?[^/]*$/, '') || './';
     const time = e.page
-      ? relativeTime(e.page.updatedAt)
+      ? relativeTime(e.page.updatedAt, undefined, t.justNow)
       : e.file.exists
-        ? relativeTime(e.file.mtime)
-        : 'deleted';
+        ? relativeTime(e.file.mtime, undefined, t.justNow)
+        : t.deleted;
     const dim = e.file ? !e.file.exists : e.page.source === 'read';
     return (
       <div
@@ -451,18 +440,18 @@ export const ChatArtifactsModal: React.FC<{
         <div className="flex items-center gap-2 h-10 px-3 border-b border-gray-800 shrink-0 text-sm">
           <Files size={14} aria-hidden className="text-gray-400" />
           <h2 id="chat-artifacts-title" className="font-medium text-gray-100">
-            Artifacts
+            {t.artifacts}
           </h2>
           <span className="text-xs text-gray-500 truncate min-w-0">
-            {counts} from {title}
+            {t.countsFrom(counts, title)}
           </span>
           <span className="flex-1" />
           <button
             type="button"
             onClick={onClose}
             className={`p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 ${focusRing}`}
-            aria-label="Close"
-            title="Close (Esc)"
+            aria-label={t.close}
+            title={t.closeEsc}
           >
             <X size={16} />
           </button>
@@ -472,7 +461,7 @@ export const ChatArtifactsModal: React.FC<{
           <div
             ref={listRef}
             role="listbox"
-            aria-label="Artifacts"
+            aria-label={t.artifacts}
             tabIndex={0}
             aria-activedescendant={selected ? optionId(selected) : undefined}
             onKeyDown={(e) => {
@@ -489,7 +478,7 @@ export const ChatArtifactsModal: React.FC<{
             className={`min-h-0 overflow-y-auto thin-scrollbar border-r border-gray-800 py-1 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400`}
           >
             {sections.length === 0 && (
-              <p className="px-3 py-4 text-xs text-gray-500">No artifacts in this session yet.</p>
+              <p className="px-3 py-4 text-xs text-gray-500">{t.noArtifacts}</p>
             )}
             {sections.map((s) => (
               <div key={s.label} role="group" aria-label={s.label} className="mb-2">
@@ -523,7 +512,7 @@ export const ChatArtifactsModal: React.FC<{
               <FileDetail chatId={chatId} cwd={cwd} file={selected.file} />
             ) : (
               <div className="flex items-center justify-center h-full text-sm text-gray-500">
-                Nothing to preview
+                {t.nothingToPreview}
               </div>
             )}
           </div>
@@ -542,6 +531,7 @@ const FileDetail: React.FC<{ chatId: string; cwd: string; file: ChatArtifact }> 
   file,
 }) => {
   const openFile = useOpenFile();
+  const t = useLabels().terminal;
   return (
     <>
       <div className="flex items-center gap-2 min-h-10 px-3 py-1.5 border-b border-gray-800 shrink-0">
@@ -560,7 +550,7 @@ const FileDetail: React.FC<{ chatId: string; cwd: string; file: ChatArtifact }> 
               disabled={!file.exists}
               onClick={() => openFile(file.path, cwd, { editor: true })}
             >
-              <Code2 size={13} aria-hidden /> Open in VS Code
+              <Code2 size={13} aria-hidden /> {t.openInVsCode}
             </button>
             <button
               type="button"
@@ -568,11 +558,11 @@ const FileDetail: React.FC<{ chatId: string; cwd: string; file: ChatArtifact }> 
               disabled={!file.exists}
               onClick={() => openFile(file.path, cwd, { reveal: true })}
             >
-              <FolderOpen size={13} aria-hidden /> Reveal in Finder
+              <FolderOpen size={13} aria-hidden /> {t.revealInFinder}
             </button>
           </>
         )}
-        <CopyButton text={file.path} label="Copy path" className="!text-xs !px-2 !py-1" />
+        <CopyButton text={file.path} label={t.copyPath} className="!text-xs !px-2 !py-1" />
       </div>
       <div className="flex-1 min-h-0 overflow-auto thin-scrollbar bg-gray-950">
         <Preview key={file.path} chatId={chatId} cwd={cwd} artifact={file} />

@@ -13,12 +13,12 @@ export function recencyOf(time, now = Date.now()) {
     return time >= new Date(today).setDate(new Date(today).getDate() - 7) ? 'This week' : 'Older';
 }
 /** Short age for a rail row: "now", "5m", "3h", a weekday this week, else the date */
-export function relativeTime(time, now = Date.now()) {
+export function relativeTime(time, now = Date.now(), justNow = 'now') {
     if (time == null)
         return '';
     const minutes = Math.floor((now - time) / 60_000);
     if (minutes < 1)
-        return 'now';
+        return justNow;
     if (minutes < 60)
         return `${minutes}m`;
     if (time >= startOfDay(now))

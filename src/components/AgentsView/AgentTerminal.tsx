@@ -28,6 +28,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { useHost, useTransport } from '../../host';
+import { useLabels } from '../../labels';
 import type { AgentSession } from '../../types';
 import { attachTerminalKeys } from '../../utils/terminalKeys';
 import { stateGlyph } from '../../utils/agentSessions';
@@ -222,8 +223,22 @@ export const DEFAULT_TERMINAL_FONT =
   '"JetBrainsMono Nerd Font", "JetBrainsMono NF", "MesloLGS NF", "Hack Nerd Font", "FiraCode Nerd Font", "Symbols Nerd Font Mono", "JetBrains Mono", Menlo, Monaco, Consolas, monospace';
 
 const ANSI = [
-  'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
-  'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite',
+  'black',
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'magenta',
+  'cyan',
+  'white',
+  'brightBlack',
+  'brightRed',
+  'brightGreen',
+  'brightYellow',
+  'brightBlue',
+  'brightMagenta',
+  'brightCyan',
+  'brightWhite',
 ] as const;
 const kebab = (name: string) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 
@@ -505,6 +520,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
     }
   }, [terminalOptions, session.id]);
 
+  const labels = useLabels();
+  const t = labels.terminal;
   const ghostty = transport.ghostty;
   const openInGhostty = useCallback(async () => {
     try {
@@ -514,9 +531,9 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
         args: ['attach', session.id],
       });
     } catch (err) {
-      host.toast.error(`Open in Ghostty failed: ${err instanceof Error ? err.message : err}`);
+      host.toast.error(t.openInGhosttyFailed(String(err instanceof Error ? err.message : err)));
     }
-  }, [ghostty, host.toast, session.cwd, session.id]);
+  }, [ghostty, host.toast, session.cwd, session.id, t]);
 
   // (Re)connect the PTY whenever generation changes
   useEffect(() => {
@@ -539,20 +556,19 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
     }
     const size = { cwd: session.cwd, cols: terminal.cols, rows: terminal.rows };
     const openShell = transport.pty.shell;
-    if (shell && !openShell) {
-      terminal.write('\x1b[31mThis host cannot open shells\x1b[0m\r\n');
+    const spawn = transport.pty.spawn;
+    const args = session.ptyArgs;
+    if (shell ? !openShell : args && !spawn) {
+      terminal.write(`\x1b[31m${shell ? t.noShells : t.noSpawn}\x1b[0m\r\n`);
       update({ exited: true });
       return;
     }
     const ws =
       shell && openShell
         ? openShell(size)
-        : transport.pty.attach({
-            ...size,
-            id: session.id,
-            args: session.ptyArgs,
-            command: session.ptyCommand,
-          });
+        : args && spawn
+          ? spawn({ ...size, id: session.id, command: session.ptyCommand ?? 'claude', args })
+          : transport.pty.attach({ ...size, id: session.id });
     current.ws = ws;
     if (generation > 0) terminal.reset();
 
@@ -576,19 +592,17 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
             const cwd = safe(data.cwd ?? session.cwd);
             // the server falls back to $HOME when the folder is gone (e.g. a removed worktree)
             if (shell && data.cwd && data.cwd !== session.cwd.replace(/(.)\/+$/, '$1')) {
-              terminal.write(`\x1b[33m# ${safe(session.cwd)} not found\x1b[0m\r\n`);
+              terminal.write(`\x1b[33m# ${t.cwdNotFound(safe(session.cwd))}\x1b[0m\r\n`);
             }
             terminal.write(
               shell
-                ? `\x1b[2m# ${data.shell ?? 'shell'} in ${cwd} (PID ${data.pid})\x1b[0m\r\n`
-                : `\x1b[2m# ${data.reattached ? 'reattached: ' : ''}${session.ptyCommand ?? 'claude'} ${(session.ptyArgs ?? ['attach', session.id]).join(' ')} (PID ${data.pid})\x1b[0m\r\n`
+                ? `\x1b[2m# ${t.shellStarted(data.shell ?? 'shell', cwd, data.pid)}\x1b[0m\r\n`
+                : `\x1b[2m# ${data.reattached ? t.reattachedPrefix : ''}${session.ptyCommand ?? 'claude'} ${(session.ptyArgs ?? ['attach', session.id]).join(' ')} (PID ${data.pid})\x1b[0m\r\n`
             );
             break;
           }
           case 'exit':
-            terminal.write(
-              `\r\n\x1b[2m# ${shell ? 'shell exited' : 'detached'} (exit code ${data.exitCode})\x1b[0m\r\n`
-            );
+            terminal.write(`\r\n\x1b[2m# ${t.ptyExit(shell, data.exitCode)}\x1b[0m\r\n`);
             update({ connected: false, exited: true });
             if (!shell) scheduleReattach(current);
             break;
@@ -609,7 +623,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
       // 'exit' already scheduled one; a dropped socket (server restart, sleep) did not
       if (!shell && wasUp) scheduleReattach(current);
     };
-    ws.onerror = () => terminal.write('\x1b[31mWebSocket connection error\x1b[0m\r\n');
+    ws.onerror = () => terminal.write(`\x1b[31m${t.wsError}\x1b[0m\r\n`);
     // no cleanup: the socket belongs to the pane terminal, released with it
     // session.id / cwd are stable for the pane lifetime
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -646,14 +660,14 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
     }
   }, [visible, active, syncSize, session.id]);
 
-  const glyph = stateGlyph(session.displayState);
+  const glyph = stateGlyph(session.displayState, labels.shell.displayStates);
   const reconnect = () => setGeneration((g) => g + 1);
   if (pane) pane.reconnect = reconnect;
   const moveToTab = onMaximize
     ? [
         {
-          label: 'Move to own tab',
-          title: 'Move to its own tab',
+          label: t.moveToOwnTab,
+          title: t.moveToItsOwnTab,
           icon: <Maximize2 size={12} />,
           run: onMaximize,
         },
@@ -665,8 +679,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
       ? []
       : [
           {
-            label: 'Restart',
-            title: 'Start a new shell in this directory',
+            label: t.restart,
+            title: t.restartTitle,
             icon: <RefreshCw size={12} />,
             run: reconnect,
             showLabel: true,
@@ -676,13 +690,13 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
   ];
   const agentActions = [
     ...(onPeek
-      ? [{ label: 'Peek', title: 'Peek (recent output)', icon: <Eye size={12} />, run: onPeek }]
+      ? [{ label: t.peek, title: t.peekTitle, icon: <Eye size={12} />, run: onPeek }]
       : []),
     ...(onShowChat
       ? [
           {
-            label: 'UI view',
-            title: 'Show this agent in the UI view (same process, it keeps running)',
+            label: t.uiView,
+            title: t.uiViewTitle,
             icon: <MessageSquare size={12} />,
             run: onShowChat,
           },
@@ -690,8 +704,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
       : []),
     connected
       ? {
-          label: 'Detach',
-          title: 'Detach (Ctrl+Z) - the session keeps running',
+          label: t.detach,
+          title: t.detachTitle,
           icon: <LogOut size={12} />,
           run: () => {
             const current = paneTerminals.get(session.id);
@@ -700,8 +714,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
           },
         }
       : {
-          label: 'Reattach',
-          title: 'Reattach',
+          label: t.reattach,
+          title: t.reattach,
           icon: <RefreshCw size={12} />,
           run: () => reattachPane(session.id),
           showLabel: true,
@@ -714,8 +728,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
       ? []
       : [
           {
-            label: 'Open in Ghostty',
-            title: 'Open in Ghostty',
+            label: t.openInGhostty,
+            title: t.openInGhostty,
             icon: <SquareTerminal size={12} />,
             run: openInGhostty,
           },
@@ -767,7 +781,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
         <span
           className={`w-1.5 h-1.5 rounded-full shrink-0 ${connected ? 'bg-emerald-500' : 'bg-gray-600'}`}
           role="img"
-          aria-label={connected ? 'Connected' : 'Disconnected'}
+          aria-label={connected ? t.connected : t.disconnected}
         />
         {meta && (
           <div className="flex items-center gap-x-2 min-w-0 overflow-hidden ml-1 text-[11px] text-gray-400">
@@ -777,12 +791,12 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
         <div className="flex-1" />
         {focused ? (
           <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-300 text-gray-950 font-medium shrink-0">
-            <Keyboard size={11} aria-hidden="true" /> Typing here
+            <Keyboard size={11} aria-hidden="true" /> {t.typingHere}
           </span>
         ) : (
           active && (
             <span className="px-1.5 py-0.5 rounded border border-gray-600 text-gray-300 shrink-0">
-              Active
+              {t.active}
             </span>
           )
         )}
@@ -796,8 +810,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               className={`p-1.5 rounded text-gray-300 hover:text-white hover:bg-gray-800 ${paneBtnFocus}`}
-              title="Pane actions"
-              aria-label="Pane actions"
+              title={t.paneActions}
+              aria-label={t.paneActions}
             >
               <MoreHorizontal size={14} />
             </button>
@@ -843,8 +857,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
         <button
           onClick={onClose}
           className={`p-1.5 rounded text-gray-400 hover:text-red-300 hover:bg-gray-800 shrink-0 ${paneBtnFocus}`}
-          title={shell ? 'Close (ends the shell)' : 'Close (the agent keeps running)'}
-          aria-label={`Close ${session.name}`}
+          title={shell ? t.closeShellTitle : t.closeAgentTitle}
+          aria-label={t.closeNamed(session.name)}
         >
           <X size={12} />
         </button>
@@ -861,12 +875,12 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
         />
         {exited && (
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-1.5 bg-gray-900/95 border-t border-gray-800 text-xs text-gray-400">
-            <span>Detached. The session keeps running in the background.</span>
+            <span>{t.detachedNotice}</span>
             <button
               onClick={() => setGeneration((g) => g + 1)}
               className="flex items-center gap-1 px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white shrink-0"
             >
-              <RefreshCw size={12} /> Reattach
+              <RefreshCw size={12} /> {t.reattach}
             </button>
           </div>
         )}

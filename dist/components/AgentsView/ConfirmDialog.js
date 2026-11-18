@@ -1,5 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useRef } from 'react';
+import { useLabels } from '../../labels';
 import { useDialogA11y } from '../CommandPalette/useDialogA11y';
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400';
 /**
@@ -7,6 +8,7 @@ const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outli
  * choice has focus, so Enter does not confirm by accident.
  */
 export const ConfirmDialog = ({ title, body, confirm, onConfirm, onCancel }) => {
+    const t = useLabels().shell;
     const dialogRef = useRef(null);
     const cancelRef = useRef(null);
     const trapTab = useDialogA11y(true, dialogRef, () => cancelRef.current);
@@ -17,5 +19,5 @@ export const ConfirmDialog = ({ title, body, confirm, onConfirm, onCancel }) => 
                     e.stopPropagation();
                     onCancel();
                 }
-            }, onMouseDown: (e) => e.stopPropagation(), className: "w-full max-w-sm bg-gray-800 border border-gray-600 rounded-xl shadow-2xl p-4 text-sm", children: [_jsx("h2", { id: "agents-confirm-title", className: "font-semibold text-gray-50 mb-2", children: title }), _jsx("p", { id: "agents-confirm-body", className: "text-gray-300 break-words", children: body }), _jsxs("div", { className: "flex justify-end gap-2 mt-4 text-xs", children: [_jsx("button", { type: "button", ref: cancelRef, onClick: onCancel, className: `px-3 py-1.5 rounded-md text-gray-200 hover:bg-gray-700 ${FOCUS}`, children: "Cancel" }), _jsx("button", { type: "button", onClick: onConfirm, className: `px-3 py-1.5 rounded-md font-medium text-white bg-red-600 hover:bg-red-500 ${FOCUS}`, children: confirm })] })] }) }));
+            }, onMouseDown: (e) => e.stopPropagation(), className: "w-full max-w-sm bg-gray-800 border border-gray-600 rounded-xl shadow-2xl p-4 text-sm", children: [_jsx("h2", { id: "agents-confirm-title", className: "font-semibold text-gray-50 mb-2", children: title }), _jsx("p", { id: "agents-confirm-body", className: "text-gray-300 break-words", children: body }), _jsxs("div", { className: "flex justify-end gap-2 mt-4 text-xs", children: [_jsx("button", { type: "button", ref: cancelRef, onClick: onCancel, className: `px-3 py-1.5 rounded-md text-gray-200 hover:bg-gray-700 ${FOCUS}`, children: t.cancel }), _jsx("button", { type: "button", onClick: onConfirm, className: `px-3 py-1.5 rounded-md font-medium text-white bg-red-600 hover:bg-red-500 ${FOCUS}`, children: confirm })] })] }) }));
 };

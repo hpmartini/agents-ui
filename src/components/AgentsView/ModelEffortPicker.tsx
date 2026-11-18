@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Gauge } from 'lucide-react';
 import { useTransport } from '../../host';
+import { useLabels } from '../../labels';
 import { MODEL_SUGGESTIONS } from '../../utils/agentSessions';
 import {
   effortColumns,
@@ -48,6 +49,7 @@ export const ModelEffortPicker: React.FC<ModelEffortPickerProps> = ({
   currentEffort = null,
 }) => {
   const [open, setOpen] = useState(false);
+  const t = useLabels().panels;
   const current = [currentModel, currentEffort].filter(Boolean).join(' · ');
   return (
     <div className="relative">
@@ -58,14 +60,14 @@ export const ModelEffortPicker: React.FC<ModelEffortPickerProps> = ({
         aria-haspopup="dialog"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        title={title ?? 'Model and effort'}
+        title={title ?? t.modelEffort}
         className="flex items-center gap-1.5 max-w-[16rem] bg-gray-900 border border-gray-600 rounded-md px-1.5 py-1 text-xs text-gray-50 font-mono hover:border-gray-400 focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50"
       >
         <Gauge size={12} aria-hidden className="shrink-0 text-gray-400" />
         <span className="truncate">
           {model || effort || keepLabel === 'default'
-            ? pickLabel(model, effort, defaultModel)
-            : current || 'Model · effort'}
+            ? pickLabel(model, effort, defaultModel, t)
+            : current || t.modelEffortEmpty}
         </span>
         <ChevronDown size={12} aria-hidden className="shrink-0 text-gray-400" />
       </button>
@@ -111,6 +113,8 @@ const Matrix: React.FC<{
   onPick,
 }) => {
   const ref = usePopover(onClose, true);
+  const t = useLabels().panels;
+  const keepWord = t.keepWord(keepLabel);
   const [models, setModels] = useState<HarnessModel[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [filter, setFilter] = useState('');
@@ -150,8 +154,8 @@ const Matrix: React.FC<{
             type="button"
             onClick={() => onPick(id, level)}
             aria-pressed={selected}
-            aria-label={`${label} · ${level || `${keepLabel} effort`}${isCurrent ? ' (in use)' : ''}`}
-            title={`${label} · ${level || `${keepLabel} effort`}${isCurrent ? ' · in use now' : ''}`}
+            aria-label={`${label} · ${level || t.modelCellEffort(keepWord)}${isCurrent ? t.modelInUse : ''}`}
+            title={`${label} · ${level || t.modelCellEffort(keepWord)}${isCurrent ? t.modelInUseNow : ''}`}
             className={`h-6 w-full min-w-[2.5rem] rounded text-[11px] focus-visible:outline-2 focus-visible:outline-blue-400 ${
               selected
                 ? 'bg-blue-600 text-white'
@@ -172,7 +176,7 @@ const Matrix: React.FC<{
       ref={ref}
       tabIndex={-1}
       role="dialog"
-      aria-label="Model and effort"
+      aria-label={t.modelEffort}
       className={`absolute z-50 ${placement === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'} left-0 w-[min(40rem,calc(100vw-2rem))] rounded-lg border border-gray-600 bg-gray-900 shadow-2xl outline-none`}
     >
       <div className="p-2 border-b border-gray-700">
@@ -186,21 +190,21 @@ const Matrix: React.FC<{
             // One match: that model; otherwise the name as typed (any model the CLI knows)
             onPick(rows.length === 1 ? rows[0].id : typed, effort);
           }}
-          placeholder="Filter models · Enter uses a typed name"
-          aria-label="Filter models"
+          placeholder={t.modelFilter}
+          aria-label={t.modelFilterLabel}
           spellCheck={false}
           className="w-full bg-gray-950 border border-gray-600 rounded-md px-2 py-1 text-xs text-gray-50 placeholder-gray-500 font-mono outline-none focus:border-blue-400"
         />
       </div>
       <div className="max-h-[min(60vh,28rem)] overflow-auto">
         {models === null ? (
-          <p className="p-3 text-xs text-gray-400">Loading models…</p>
+          <p className="p-3 text-xs text-gray-400">{t.modelLoading}</p>
         ) : (
           <table className="w-full border-collapse text-xs">
             <thead className="sticky top-0 bg-gray-900">
               <tr>
-                <th className="px-2 py-1 text-left font-normal text-gray-500">Model</th>
-                <th className="px-1 py-1 font-normal text-gray-500">{keepLabel}</th>
+                <th className="px-2 py-1 text-left font-normal text-gray-500">{t.modelHeader}</th>
+                <th className="px-1 py-1 font-normal text-gray-500">{keepWord}</th>
                 {columns.map((c) => (
                   <th key={c} className="px-1 py-1 font-normal text-gray-300">
                     {c}
@@ -211,10 +215,10 @@ const Matrix: React.FC<{
             <tbody>
               {!typed && (
                 <tr className="border-t border-gray-800">
-                  <td className="px-2 py-1 text-gray-300 italic">{keepLabel}</td>
-                  {keepLabel === 'default' && cell('', '', true, 'Default model')}
+                  <td className="px-2 py-1 text-gray-300 italic">{keepWord}</td>
+                  {keepLabel === 'default' && cell('', '', true, t.modelDefault)}
                   {keepLabel !== 'default' && <td />}
-                  {columns.map((c) => cell('', c, true, `${keepLabel} model`))}
+                  {columns.map((c) => cell('', c, true, t.modelKeepModel(keepWord)))}
                 </tr>
               )}
               {rows.map((m, i) => (
@@ -232,7 +236,7 @@ const Matrix: React.FC<{
                   <tr className="border-t border-gray-800">
                     <td
                       className={`px-2 py-1 font-mono break-all ${m.id === currentRow ? 'text-emerald-200' : 'text-gray-100'}`}
-                      title={m.id === currentRow ? `${m.id} · in use now (${currentModel})` : m.id}
+                      title={m.id === currentRow ? t.modelRowInUse(m.id, currentModel ?? '') : m.id}
                     >
                       {m.label}
                     </td>
@@ -246,8 +250,8 @@ const Matrix: React.FC<{
         )}
         {models !== null && rows.length === 0 && (
           <p className="p-3 text-xs text-gray-400">
-            {typed ? `No listed model matches; Enter uses "${typed}".` : null}
-            {failed && !typed ? 'The CLI did not list its models; type a model name.' : null}
+            {typed ? t.modelNoMatch(typed) : null}
+            {failed && !typed ? t.modelNotListed : null}
           </p>
         )}
       </div>

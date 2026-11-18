@@ -34,6 +34,7 @@ import {
 } from '../../../utils/chatEvents';
 import { attachableFiles, promptWithAttachments } from '../../../utils/composer';
 import { useTransport } from '../../../host';
+import { useLabels } from '../../../labels';
 import type { ChatHistoryPage } from '../../../transport';
 import { ImageAttachments, imageDropHandlers } from '../../ImageAttachments';
 import { ChatIdContext, ChatItemView, UserMessage } from './ChatMessages';
@@ -143,9 +144,7 @@ function usePanePrompt(paneId: string, prompting: boolean): string | null {
 }
 
 type Action =
-  | { type: 'reset' }
-  | { type: 'event'; event: unknown }
-  | { type: 'older'; page: ChatHistoryPage };
+  { type: 'reset' } | { type: 'event'; event: unknown } | { type: 'older'; page: ChatHistoryPage };
 const reducer = (state: ChatState, action: Action): ChatState =>
   action.type === 'reset'
     ? initialChatState
@@ -211,6 +210,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 }) => {
   const [state, dispatch] = useReducer(reducer, initialChatState);
   const { chat, uploads } = useTransport();
+  const t = useLabels().terminal;
   const [chatId, setChatId] = useState<string | null>(null);
   // Bumped when the server forgot the view (restart, orphan timeout): opens it again
   const [generation, setGeneration] = useState(0);
@@ -420,7 +420,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     return () => window.clearTimeout(t);
   }, [sentFor]);
   const choices = prompt && !dialog ? extractNumberedChoices(prompt) : [];
-  const notConnected = 'The terminal is not connected: use Reattach above, then send again';
+  const notConnected = t.notConnected;
 
   // Model × effort of the running session: typed as its own commands, one after the other (a
   // second paste before the first Enter would land in the same line)
@@ -440,8 +440,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   // must not approve a different command
   const answerDialog = (answer: DialogAnswer) => {
     const now = parseAgentDialog(paneScreen(pane.id, PROMPT_LINES));
-    if (!now || JSON.stringify(now) !== dialogId)
-      return setError('The question on the agent’s screen changed: check it and answer again');
+    if (!now || JSON.stringify(now) !== dialogId) return setError(t.questionChanged);
     if (!pressKeys(pane.id, dialogKeys(now, answer))) return setError(notConnected);
     setError(null);
     setSentFor(dialogId);
@@ -468,7 +467,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       setImages([]);
       stickToBottom.current = true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Sending failed');
+      setError(e instanceof Error ? e.message : t.sendingFailed);
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -481,12 +480,12 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   };
 
   const status = !connected
-    ? 'terminal disconnected'
+    ? t.statusDisconnected
     : prompting
-      ? 'needs input'
+      ? t.statusNeedsInput
       : busy
-        ? 'working…'
-        : 'ready';
+        ? t.statusWorking
+        : t.statusReady;
 
   const view = (
     <div
@@ -536,13 +535,13 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             type="button"
             onClick={() => {
               setError(null);
-              if (!reattachPane(pane.id)) setError('No terminal to reattach: reopen the agent');
+              if (!reattachPane(pane.id)) setError(t.noTerminalToReattach);
             }}
             className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] text-amber-100 bg-amber-500/15 border border-amber-400/40 hover:bg-amber-500/25 focus-visible:outline-2 focus-visible:outline-blue-400"
-            title="Reattach the terminal behind this view (the session keeps running)"
+            title={t.reattachTitle}
           >
             <RefreshCw size={11} aria-hidden />
-            Reattach
+            {t.reattach}
           </button>
         )}
         {meta && (
@@ -556,10 +555,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           onClick={onToggleSteps}
           onMouseDown={keepFocus}
           className={`${iconBtn} ${showSteps ? 'text-blue-300' : ''}`}
-          title={
-            showSteps ? 'Hide thinking and tool calls' : 'Show thinking and tool calls in the chat'
-          }
-          aria-label="Show thinking and tool calls"
+          title={showSteps ? t.hideStepsTitle : t.showStepsTitle}
+          aria-label={t.showSteps}
           aria-pressed={showSteps}
         >
           <ListTree size={13} />
@@ -570,8 +567,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           onMouseDown={keepFocus}
           disabled={!sessionId}
           className={`${iconBtn} ${promptsOnly ? 'text-blue-300' : ''}`}
-          title={promptsOnly ? 'Show the answers again' : 'Show only my prompts (hide the answers)'}
-          aria-label="Show only my prompts"
+          title={promptsOnly ? t.showAnswersTitle : t.promptsOnlyTitle}
+          aria-label={t.promptsOnly}
           aria-pressed={promptsOnly}
         >
           <MessagesSquare size={13} />
@@ -582,8 +579,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             onClick={stopTurn}
             onMouseDown={keepFocus}
             className={iconBtn}
-            title="Stop this turn (Esc)"
-            aria-label="Stop this turn"
+            title={t.stopTurnTitle}
+            aria-label={t.stopTurn}
           >
             <Square size={13} />
           </button>
@@ -593,8 +590,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           onClick={onShowTerminal}
           onMouseDown={keepFocus}
           className={iconBtn}
-          title="Terminal view (same process, it keeps running)"
-          aria-label="Terminal view"
+          title={t.terminalViewTitle}
+          aria-label={t.terminalView}
         >
           <SquareTerminal size={14} />
         </button>
@@ -604,8 +601,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             onClick={onMaximize}
             onMouseDown={keepFocus}
             className={iconBtn}
-            title="Own tab"
-            aria-label="Move to its own tab"
+            title={t.ownTab}
+            aria-label={t.moveToItsOwnTab}
           >
             <Maximize2 size={13} />
           </button>
@@ -615,8 +612,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           onClick={onClose}
           onMouseDown={keepFocus}
           className={iconBtn}
-          title="Close (the agent keeps running)"
-          aria-label={`Close ${pane.name}`}
+          title={t.closeAgentTitle}
+          aria-label={t.closeNamed(pane.name)}
         >
           <X size={14} />
         </button>
@@ -636,8 +633,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               aria-hidden
               className={`transition-transform ${startsOpen ? 'rotate-90' : ''}`}
             />
-            {starts.length === 1 ? 'Start prompt' : `${starts.length} start prompts`}
-            <span className="text-gray-600">(session start, after compaction or /clear)</span>
+            {t.startPrompts(starts.length)}
+            <span className="text-gray-600">{t.startPromptsHint}</span>
           </button>
           {startsOpen && (
             <ol className="max-h-40 overflow-y-auto pb-1">
@@ -662,7 +659,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       <div
         ref={listRef}
         role="log"
-        aria-label={`Chat ${pane.name}`}
+        aria-label={t.chatLog(pane.name)}
         className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2"
         onScroll={(e) => {
           const el = e.currentTarget;
@@ -678,23 +675,21 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           {state.older?.more && (
             <div className="flex justify-center py-2" role="status">
               {loadingOlder ? (
-                <span className="text-xs text-gray-500">Loading earlier messages…</span>
+                <span className="text-xs text-gray-500">{t.loadingEarlier}</span>
               ) : (
                 <button
                   type="button"
                   onClick={loadOlder}
                   className="text-xs text-gray-400 hover:text-gray-200 underline-offset-2 hover:underline"
                 >
-                  Load earlier messages
+                  {t.loadEarlier}
                 </button>
               )}
             </div>
           )}
           {state.messages.length === 0 && (
             <div className="h-full flex items-center justify-center text-sm text-gray-500">
-              {sessionId
-                ? `Ask ${harnessName} anything. Markdown works${uploads ? '; paste or drop images' : ''}.`
-                : `Waiting for ${harnessName} to report its session; the terminal view works meanwhile.`}
+              {sessionId ? t.emptyChat(harnessName, !!uploads) : t.waitingForSession(harnessName)}
             </div>
           )}
           <ChatFileContext.Provider value={pane.cwd}>
@@ -733,13 +728,13 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       <div className="shrink-0 border-t border-gray-800 p-2">
         {recap && (
           <section
-            aria-label="Recap"
+            aria-label={t.recap}
             data-chat-recap
             className="mb-2 flex gap-2 rounded-md border border-gray-700/70 bg-gray-900/70 px-3 py-2 text-sm text-gray-300"
           >
             <History size={14} aria-hidden className="mt-0.5 shrink-0 text-gray-500" />
             <p className="max-h-24 min-w-0 overflow-y-auto whitespace-pre-wrap">
-              <span className="text-gray-500">Recap: </span>
+              <span className="text-gray-500">{t.recapPrefix}</span>
               {recap.text}
             </p>
           </section>
@@ -757,9 +752,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             role="status"
             className="mb-2 rounded-md border border-amber-400/40 bg-amber-500/10 p-2"
           >
-            <div className="text-xs font-medium text-amber-200">
-              The agent is asking: pick an answer or type it below
-            </div>
+            <div className="text-xs font-medium text-amber-200">{t.agentAskingPrompt}</div>
             <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-gray-200 font-mono">
               {prompt}
             </pre>
@@ -817,10 +810,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             onClick={submit}
             disabled={sending || !connected}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
-            aria-label="Send message"
+            aria-label={t.sendMessage}
           >
             <Send size={13} aria-hidden />
-            <span className="hidden sm:inline">Send</span>
+            <span className="hidden sm:inline">{t.send}</span>
           </button>
         </div>
         {uploads && (
@@ -844,7 +837,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                       harness={harness}
                       model=""
                       effort=""
-                      keepLabel="current"
+                      keepLabel={t.keepCurrent}
                       currentModel={state.model}
                       currentEffort={state.effort}
                       placement="up"
@@ -852,8 +845,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                       onPick={switchModel}
                       title={
                         busy
-                          ? 'Switch model and effort once the agent is idle'
-                          : `Switch model and effort of this session (${harness === 'omp' ? '/switch, /effort' : '/model, /effort'})`
+                          ? t.switchModelBusy
+                          : t.switchModel(
+                              harness === 'omp' ? '/switch, /effort' : '/model, /effort'
+                            )
                       }
                     />
                   )

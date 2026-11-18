@@ -1,3 +1,5 @@
+import { panelsEn, type PanelsLabels } from '../labels/panels';
+
 /** Model × effort picker: one row per model, one column per effort level any model takes */
 
 export interface HarnessModel {
@@ -60,5 +62,9 @@ export const isCurrentModel = (id: string, current: string | null | undefined): 
       .split(/[-/:.]/)
       .includes(id.toLowerCase()));
 
-export const pickLabel = (model: string, effort: string, defaultModel?: string | null) =>
-  `${model || (defaultModel ? `default (${defaultModel})` : 'default')}${effort ? ` · ${effort}` : ''}`;
+export const pickLabel = (
+  model: string,
+  effort: string,
+  defaultModel?: string | null,
+  t: Pick<PanelsLabels, 'pickDefault'> = panelsEn
+) => `${model || t.pickDefault(defaultModel)}${effort ? ` · ${effort}` : ''}`;

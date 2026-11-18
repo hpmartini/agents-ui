@@ -5,7 +5,11 @@ import { AgentsView, type AgentsPrefill } from '../components/AgentsView/AgentsV
 import { STORAGE_KEY as RAIL_KEY } from '../hooks/useRailPreferences';
 import { STORAGE_KEY as WORKSPACE_KEY } from '../hooks/useAgentWorkspace';
 import { summarizeSessions } from '../utils/agentSessions';
-import { DEFAULT_AGENT_VIEW_SETTINGS, type AgentDispatchRequest, type AgentSession } from '../types';
+import {
+  DEFAULT_AGENT_VIEW_SETTINGS,
+  type AgentDispatchRequest,
+  type AgentSession,
+} from '../types';
 import { renderWithAgents } from './agents';
 import { nav, orkumoHost, orkumoTransport } from './agentsView';
 

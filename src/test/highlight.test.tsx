@@ -77,9 +77,7 @@ describe('highlight (#19 AK-8)', () => {
       const started = window.performance.now();
       const tokens = highlight(code, lang);
       expect(tokens.map((t) => t.text).join('')).toBe(code);
-      expect(window.performance.now() - started, `${lang}: ${code.slice(0, 3)}…`).toBeLessThan(
-        200
-      );
+      expect(window.performance.now() - started, `${lang}: ${code.slice(0, 3)}…`).toBeLessThan(200);
     }
   });
 

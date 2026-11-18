@@ -6,10 +6,18 @@ import { jsx as _jsx } from "react/jsx-runtime";
  * Nothing in the package imports a router, a toast library or Electron globals.
  */
 import { createContext, useContext, useMemo } from 'react';
+import { LabelsContext, resolveLabels } from './labels';
 const AgentsContext = createContext(null);
-export const AgentsProvider = ({ transport, host, children, }) => {
+/**
+ * Transport, host and texts for every agents-ui component below. `locale` (default `'en'`,
+ * Orkumo's wording) and `labels` (single texts replaced) apply below; without both, an outer
+ * provider's texts stay.
+ */
+export const AgentsProvider = ({ transport, host, locale, labels, children, }) => {
     const value = useMemo(() => ({ transport, host }), [transport, host]);
-    return _jsx(AgentsContext.Provider, { value: value, children: children });
+    const texts = useMemo(() => (locale || labels ? resolveLabels(locale, labels) : null), [locale, labels]);
+    const tree = _jsx(AgentsContext.Provider, { value: value, children: children });
+    return texts ? _jsx(LabelsContext.Provider, { value: texts, children: tree }) : tree;
 };
 function useAgentsContext() {
     const value = useContext(AgentsContext);

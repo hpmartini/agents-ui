@@ -1,3 +1,4 @@
+import { type PanelsLabels } from '../labels/panels';
 /** Model × effort picker: one row per model, one column per effort level any model takes */
 export interface HarnessModel {
     id: string;
@@ -19,4 +20,4 @@ export declare function switchCommands(harness: 'claude' | 'omp', model: string,
 /** Button text: `opus · high`, `default` for what the CLI picks itself */
 /** Row `id` names the running `current` model: same id, or an alias part of it (opus ⊂ claude-opus-5-5) */
 export declare const isCurrentModel: (id: string, current: string | null | undefined) => boolean;
-export declare const pickLabel: (model: string, effort: string, defaultModel?: string | null) => string;
+export declare const pickLabel: (model: string, effort: string, defaultModel?: string | null, t?: Pick<PanelsLabels, "pickDefault">) => string;

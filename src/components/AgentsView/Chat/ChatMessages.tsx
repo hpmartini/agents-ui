@@ -21,6 +21,8 @@ import {
 } from '../../../utils/chatEvents';
 import { splitImages } from '../../../utils/chatComposer';
 import { useTransport } from '../../../host';
+import { useLabels } from '../../../labels';
+import type { TerminalLabels } from '../../../labels/terminal';
 import { ViewActionsContext } from '../../../viewActions';
 import { ChatMarkdown, CopyButton } from './ChatMarkdown';
 
@@ -74,16 +76,18 @@ export const ChatIdContext = React.createContext<string | null>(null);
 const ResultImages: React.FC<{ refs: string[] }> = ({ refs }) => {
   const chatId = React.useContext(ChatIdContext);
   const chat = useTransport().chat;
-  if (!chatId || !chat) return null;
+  const t = useLabels().terminal;
+  const imageUrl = chat?.chatImageUrl;
+  if (!chatId || !imageUrl) return null;
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5">
       {refs.map((ref) => {
-        const url = chat.chatImageUrl(chatId, ref);
+        const url = imageUrl(chatId, ref);
         return (
-          <a key={ref} href={url} target="_blank" rel="noreferrer" title="Open image">
+          <a key={ref} href={url} target="_blank" rel="noreferrer" title={t.openImage}>
             <img
               src={url}
-              alt="Tool result image"
+              alt={t.toolResultImage}
               loading="lazy"
               className="h-32 w-48 rounded border border-gray-800 bg-gray-900 object-contain hover:opacity-90"
             />
@@ -97,6 +101,7 @@ const ResultImages: React.FC<{ refs: string[] }> = ({ refs }) => {
 const ToolBlock: React.FC<{ block: Extract<ChatBlock, { type: 'tool' }> }> = ({ block }) => {
   const diff = toolDiff(block.name, block.input);
   const pending = block.result === undefined;
+  const t = useLabels().terminal;
   return (
     <Collapsible
       tone={block.isError ? 'border-red-800/70' : 'border-gray-800'}
@@ -108,7 +113,13 @@ const ToolBlock: React.FC<{ block: Extract<ChatBlock, { type: 'tool' }> }> = ({ 
             {toolSummary(block.input)}
           </span>
           <span className="ml-auto shrink-0 text-[11px] text-gray-500">
-            {pending ? 'running…' : block.isError ? 'error' : diff ? `${diff.length} lines` : ''}
+            {pending
+              ? t.toolRunning
+              : block.isError
+                ? t.toolError
+                : diff
+                  ? t.diffLines(diff.length)
+                  : ''}
           </span>
         </>
       }
@@ -124,7 +135,7 @@ const ToolBlock: React.FC<{ block: Extract<ChatBlock, { type: 'tool' }> }> = ({ 
         <pre
           className={`mt-1.5 max-h-64 overflow-auto rounded p-2 text-xs font-mono whitespace-pre-wrap ${block.isError ? 'bg-red-950/40 text-red-200' : 'bg-gray-950 text-gray-400'}`}
         >
-          {block.result || '(no output)'}
+          {block.result || t.noOutput}
         </pre>
       )}
       {block.images && <ResultImages refs={block.images} />}
@@ -133,6 +144,7 @@ const ToolBlock: React.FC<{ block: Extract<ChatBlock, { type: 'tool' }> }> = ({ 
 };
 
 export const AssistantBlock: React.FC<{ block: ChatBlock }> = ({ block }) => {
+  const t = useLabels().terminal;
   if (!block) return null;
   if (block.type === 'text') return block.text ? <ChatMarkdown text={block.text} /> : null;
   if (block.type === 'thinking')
@@ -140,12 +152,12 @@ export const AssistantBlock: React.FC<{ block: ChatBlock }> = ({ block }) => {
       <Collapsible
         summary={
           <>
-            <Brain size={12} aria-hidden className="text-purple-300" /> Thinking
+            <Brain size={12} aria-hidden className="text-purple-300" /> {t.thinking}
           </>
         }
       >
         <div className="text-xs text-gray-400 whitespace-pre-wrap">
-          {block.text || '(not shown by the CLI)'}
+          {block.text || t.thinkingHidden}
         </div>
       </Collapsible>
     );
@@ -160,18 +172,19 @@ const AgentMessage: React.FC<{ id: string | null; name: string | null; body: str
   body,
 }) => {
   const actions = React.useContext(ViewActionsContext);
-  const label = name || id || 'unknown agent';
+  const t = useLabels().terminal;
+  const label = name || id || t.unknownAgent;
   return (
     <div className="flex flex-col items-start my-3" data-agent-message>
       <div className="max-w-[85%] rounded-lg border border-violet-800/60 bg-violet-950/40 px-3 py-2 text-sm text-gray-100">
         <div className="mb-1 flex items-center gap-1.5 text-xs text-violet-300">
           <Bot size={12} aria-hidden />
-          <span>Message from</span>
+          <span>{t.messageFrom}</span>
           {id && actions ? (
             <button
               type="button"
               onClick={() => actions.openAgent(id)}
-              title={`Open agent ${id}`}
+              title={t.openAgent(id)}
               className="font-medium text-violet-200 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-blue-400"
             >
               {label}
@@ -195,6 +208,7 @@ export const UserMessage: React.FC<{ text: string; queued?: boolean }> = ({ text
 const OwnMessage: React.FC<{ text: string; queued?: boolean }> = ({ text, queued }) => {
   const { text: body, images } = splitImages(text);
   const uploads = useTransport().uploads;
+  const t = useLabels().terminal;
   const previews = images.map((p) => ({ path: p, url: uploads?.agentImageUrl(p) ?? null }));
   return (
     <div className="flex flex-col items-end my-3" data-queued={queued || undefined}>
@@ -213,14 +227,14 @@ const OwnMessage: React.FC<{ text: string; queued?: boolean }> = ({ text, queued
                 <a key={path} href={url} target="_blank" rel="noreferrer" title={path}>
                   <img
                     src={url}
-                    alt="Attached image"
+                    alt={t.attachedImage}
                     loading="lazy"
                     className="h-20 max-w-[10rem] rounded border border-blue-800/60 object-cover hover:opacity-90"
                   />
                 </a>
               ) : (
                 <span key={path} className="text-xs text-blue-200/80 font-mono">
-                  [Image: {path}]
+                  {t.imageRef(path)}
                 </span>
               )
             )}
@@ -229,7 +243,7 @@ const OwnMessage: React.FC<{ text: string; queued?: boolean }> = ({ text, queued
       </div>
       {queued && (
         <span className="mt-1 flex items-center gap-1 text-[11px] text-blue-300/80">
-          <Clock size={11} aria-hidden /> sent · waits for the current turn
+          <Clock size={11} aria-hidden /> {t.queuedNote}
         </span>
       )}
     </div>
@@ -245,29 +259,34 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(min / 60)} h ${min % 60} min`;
 }
 
-function resultLabel(result: ResultMessage): string {
-  if (result.ok) return 'Done';
-  return result.subtype === 'error_during_execution' ? 'Interrupted' : `Error (${result.subtype})`;
+function resultLabel(result: ResultMessage, t: TerminalLabels): string {
+  if (result.ok) return t.resultDone;
+  return result.subtype === 'error_during_execution'
+    ? t.resultInterrupted
+    : t.resultError(result.subtype);
 }
 
-const ResultMark: React.FC<{ result: ResultMessage }> = ({ result }) => (
-  <>
-    {result.ok ? (
-      <CheckCircle2 size={12} aria-hidden className="text-emerald-500" />
-    ) : (
-      <XCircle size={12} aria-hidden className="text-red-400" />
-    )}
-    <span className={result.ok ? 'text-gray-400' : 'text-red-300'}>{resultLabel(result)}</span>
-    {result.durationMs !== null && (
-      <span className="tabular-nums">· {formatDuration(result.durationMs)}</span>
-    )}
-  </>
-);
+const ResultMark: React.FC<{ result: ResultMessage }> = ({ result }) => {
+  const t = useLabels().terminal;
+  return (
+    <>
+      {result.ok ? (
+        <CheckCircle2 size={12} aria-hidden className="text-emerald-500" />
+      ) : (
+        <XCircle size={12} aria-hidden className="text-red-400" />
+      )}
+      <span className={result.ok ? 'text-gray-400' : 'text-red-300'}>{resultLabel(result, t)}</span>
+      {result.durationMs !== null && (
+        <span className="tabular-nums">· {formatDuration(result.durationMs)}</span>
+      )}
+    </>
+  );
+};
 
 const Working: React.FC = () => (
   <span className="flex items-center gap-1.5 text-blue-300" role="status">
     <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse motion-reduce:animate-none" />
-    Working…
+    {useLabels().terminal.working}
   </span>
 );
 
@@ -289,6 +308,7 @@ interface AnswerCardProps {
  * not written yet.
  */
 const AnswerCard: React.FC<AnswerCardProps> = ({ answer, showSteps, live, harness, model }) => {
+  const t = useLabels().terminal;
   const parts = answer?.parts ?? [];
   const blocks = parts.flatMap((m) => m.blocks).filter(Boolean);
   const visible = showSteps ? blocks : blocks.filter((b) => b.type === 'text');
@@ -305,7 +325,7 @@ const AnswerCard: React.FC<AnswerCardProps> = ({ answer, showSteps, live, harnes
   return (
     <article
       className="my-3 rounded-lg border border-gray-800 bg-gray-900/40"
-      aria-label={`Answer from ${harness}`}
+      aria-label={t.answerFrom(harness)}
       aria-busy={working || undefined}
     >
       <header
@@ -316,8 +336,8 @@ const AnswerCard: React.FC<AnswerCardProps> = ({ answer, showSteps, live, harnes
         {shownModel && <span className="truncate font-mono">{shownModel}</span>}
         <span className="flex-1" />
         {!showSteps && steps > 0 && (
-          <span className="shrink-0" title="Tool calls of this answer (show steps to see them)">
-            {steps} {steps === 1 ? 'step' : 'steps'}
+          <span className="shrink-0" title={t.answerStepsTitle}>
+            {t.answerSteps(steps)}
           </span>
         )}
       </header>
@@ -334,7 +354,7 @@ const AnswerCard: React.FC<AnswerCardProps> = ({ answer, showSteps, live, harnes
         >
           {working ? <Working /> : result ? <ResultMark result={result} /> : null}
           <span className="flex-1" />
-          {text && !working && <CopyButton text={text} label="Copy answer" />}
+          {text && !working && <CopyButton text={text} label={t.copyAnswer} />}
         </footer>
       )}
     </article>
@@ -381,6 +401,7 @@ export const ChatItemView: React.FC<{
 };
 
 const PlainItem: React.FC<{ item: Exclude<ChatItem, ChatAnswer> }> = React.memo(({ item }) => {
+  const t = useLabels().terminal;
   switch (item.kind) {
     case 'user':
       return <UserMessage text={item.text} />;
@@ -389,7 +410,7 @@ const PlainItem: React.FC<{ item: Exclude<ChatItem, ChatAnswer> }> = React.memo(
         <div className="my-3 flex gap-2 rounded-md border border-gray-800 bg-gray-900/60 px-3 py-2 text-sm text-gray-300">
           <History size={14} aria-hidden className="mt-0.5 shrink-0 text-gray-500" />
           <div>
-            <span className="text-gray-500">recap: </span>
+            <span className="text-gray-500">{t.recapInline}</span>
             {item.text}
           </div>
         </div>

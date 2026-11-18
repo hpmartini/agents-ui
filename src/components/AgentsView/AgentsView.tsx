@@ -108,6 +108,7 @@ import { AgentWorkspace } from './AgentWorkspace';
 import { SessionLinks } from './SessionLinks';
 import { ResumePicker } from './ResumePicker';
 import { CopyWarningDialog } from './CopyWarningDialog';
+import { useLabels } from '../../labels';
 import {
   collapseCopies,
   openPlan,
@@ -282,6 +283,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   className = '',
 }) => {
   const host = useHost();
+  const t = useLabels().shell;
   const {
     toast,
     openCode,
@@ -308,6 +310,10 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     history,
   } = transport;
   const targets = transport.targets ?? LOCAL_TARGETS;
+  // The transport can start a terminal session itself (`pty.spawn`): interactive claude, other
+  // harnesses, `--resume` in a terminal, cloud sessions, agent and chat starts that attach. Without
+  // it (MAPLE) the view only dispatches Claude Code in the background.
+  const canSpawn = !!transport.pty.spawn;
   // Peek and the main agent dialog (a peek) read the session's recent output
   const peekAvailable = !!transport.logs;
   const canShell = !!transport.pty.shell;
@@ -380,7 +386,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   // Harness of the next agent (#195), preset from the default on every open
   // null follows the default harness, also when the settings arrive after the composer opened
   const [pickedHarness, setComposerHarness] = useState<AgentHarness | null>(null);
-  const composerHarness = pickedHarness ?? settings.dispatch.harness;
+  // Other harnesses only run in a terminal this view starts
+  const composerHarness = canSpawn ? (pickedHarness ?? settings.dispatch.harness) : 'claude';
   const [harnessInstalled, setHarnessInstalled] = useState<Record<string, boolean | null>>({});
   useEffect(() => {
     discovery
@@ -638,7 +645,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           sort.key === 'manual'
         ),
         settings.orchestrators
-      ),
+        // Built-in groups carry their `en` title: the locale's replaces it
+      ).map((g) => (t.groupTitles[g.key] ? { ...g, title: t.groupTitles[g.key] } : g)),
     [
       shownSessions,
       filterActive,
@@ -651,6 +659,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       apps,
       arrange,
       rail.fixedProjects,
+      t,
     ]
   );
   // Session of the active workspace tab: marked and revealed in the rail
@@ -715,24 +724,30 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
 
   // Start directory of new tasks (settings `taskCwd`, `~` = home); unset: the rail selection decides
   const taskCwd = settings.taskCwd?.replace(/^~(?=\/|$)/, homeDir ?? '~') || null;
-  const openComposer = useCallback((mode: 'task' | 'agent' | 'chat', cwd: string | null = null) => {
-    setComposerMode(mode);
-    setOpenCwd(cwd);
-    setPickedCwd(null);
-    setComposerHarness(null);
-    setComposerModel('');
-    setComposerEffort('');
-    setComposerOpen(true);
-  }, []);
+  const openComposer = useCallback(
+    (mode: 'task' | 'agent' | 'chat', cwd: string | null = null) => {
+      // Agent and chat start a session and attach it right away: a terminal this view starts
+      setComposerMode(canSpawn ? mode : 'task');
+      setOpenCwd(cwd);
+      setPickedCwd(null);
+      setComposerHarness(null);
+      setComposerModel('');
+      setComposerEffort('');
+      setComposerOpen(true);
+    },
+    [canSpawn]
+  );
   // Quick window (#251): its prompt opens the chat composer here, ready to send, without a project
   useEffect(
     () =>
-      onQuickPrompt?.((text) => {
-        onOpenView();
-        setInput(text);
-        openComposer('chat', chatsDir);
-      }),
-    [onQuickPrompt, onOpenView, openComposer, chatsDir]
+      canSpawn
+        ? onQuickPrompt?.((text) => {
+            onOpenView();
+            setInput(text);
+            openComposer('chat', chatsDir);
+          })
+        : undefined,
+    [canSpawn, onQuickPrompt, onOpenView, openComposer, chatsDir]
   );
   // What the composer shows is what every start path uses
   const composerCwd = composerStartCwd(composerMode, {
@@ -806,9 +821,9 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   // Window title, through the host
   useEffect(() => {
     if (!active || !onAttention) return;
-    onAttention(documentTitle(counts.awaitingInput));
+    onAttention(documentTitle(counts.awaitingInput, t.documentTitle));
     return () => onAttention(null);
-  }, [active, counts.awaitingInput, onAttention]);
+  }, [active, counts.awaitingInput, onAttention, t]);
 
   // Discovery data (subagents, repos, slash commands) follows the scope
   useEffect(() => {
@@ -899,11 +914,13 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const [quickPane, setQuickPane] = useState<string | null>(null);
   useEffect(
     () =>
-      onQuickChat?.((paneId) => {
-        onOpenView();
-        setQuickPane(paneId);
-      }),
-    [onQuickChat, onOpenView]
+      canSpawn
+        ? onQuickChat?.((paneId) => {
+            onOpenView();
+            setQuickPane(paneId);
+          })
+        : undefined,
+    [canSpawn, onQuickChat, onOpenView]
   );
   const quickPaneListed = !!quickPane && paneStandIns.some((s) => s.id === quickPane);
   useEffect(() => {
@@ -915,10 +932,10 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     }
     const timer = setTimeout(() => {
       setQuickPane(null);
-      showHint('The quick window agent did not show up here', 'error');
+      showHint(t.quickAgentMissing, 'error');
     }, 20000);
     return () => clearTimeout(timer);
-  }, [quickPane, quickPaneListed, attach, showHint]);
+  }, [quickPane, quickPaneListed, attach, showHint, t]);
 
   // "New orchestrator": the server starts the default harness as an agent pane in the
   // orchestrator workspace; it is marked right away and opened once the list names its pane
@@ -935,10 +952,10 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     }
     const timer = setTimeout(() => {
       setOrchestratorPane(null);
-      showHint('The orchestrator runs but is not listed yet: open it from the rail', 'error');
+      showHint(t.orchestratorNotListed, 'error');
     }, 30000);
     return () => clearTimeout(timer);
-  }, [orchestratorPane, orchestratorPaneListed, attach, showHint]);
+  }, [orchestratorPane, orchestratorPaneListed, attach, showHint, t]);
   // Roles (<workspace>/roles/*.md): loaded on mount and whenever the "New" menu opens
   const [orchestratorRoles, setOrchestratorRoles] = useState<OrchestratorRole[]>([]);
   const loadOrchestratorRoles = useCallback(() => {
@@ -952,7 +969,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     async (role?: string) => {
       if (!orchestrator || startingOrchestrator) return;
       setStartingOrchestrator(true);
-      showHint(`Starting ${role ?? 'an orchestrator'}…`, 'info');
+      showHint(t.startingOrchestrator(role), 'info');
       try {
         const agent = await orchestrator.startOrchestrator(role);
         await updateSettings({
@@ -965,7 +982,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         refresh();
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        showHint(`Orchestrator did not start: ${message}`, 'error', 8000);
+        showHint(t.orchestratorFailed(message), 'error', 8000);
       } finally {
         setStartingOrchestrator(false);
       }
@@ -974,6 +991,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       orchestrator,
       startingOrchestrator,
       showHint,
+      t,
       updateSettings,
       settings.orchestrators,
       settings.orchestratorRoles,
@@ -990,9 +1008,9 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           agents.map((a) => agentFolder(a, contexts[a.id])).find(Boolean) ??
           (await (fetchRepoPath?.(pr.repoSlug) ?? Promise.resolve(null)).catch(() => null));
         if (folder) openCode(folder);
-        else toast.error(`No local checkout of ${pr.repoSlug}`);
+        else toast.error(t.noLocalCheckout(pr.repoSlug));
       }),
-    [contexts, openCode, fetchRepoPath, toast]
+    [contexts, openCode, fetchRepoPath, toast, t]
   );
   // Read by the host's /pulls route (ConnectedPullRequestsPage)
   const pullsData = useMemo<PullRequestsPageProps>(
@@ -1040,7 +1058,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       if (row && !row.app && pending !== activeSessionId) return;
       // not listed (or a claude.ai session): it never becomes active, stop waiting for it
       awaiting.current = null;
-      if (!row) showHint(`Agent ${pending} not found`, 'error');
+      if (!row) showHint(t.agentNotFound(pending), 'error');
     }
     if (lastReported.current === undefined && activeSessionId === null) {
       lastReported.current = null;
@@ -1049,7 +1067,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     if (activeSessionId === lastReported.current) return;
     lastReported.current = activeSessionId;
     reportSelection.current?.(activeSessionId);
-  }, [activeSessionId, loading, sessions, showHint]);
+  }, [activeSessionId, loading, sessions, showHint, t]);
 
   // Board "Agent starten" / chat history "Continue" and "New chat" (#280, #19): composer prefill
   // from the host (Orkumo: router state, which external links cannot set). `place: 'chats'` = no
@@ -1082,7 +1100,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         kind: 'interactive',
         cwd: targetCwd || '',
         startedAt: Date.now(),
-        name: target ? `Cloud ${target.slice(-8)}` : 'Cloud-Sessions',
+        name: target ? `Cloud ${target.slice(-8)}` : t.cloudSessions,
         state: null,
         ptyArgs: args,
         pinned: false,
@@ -1094,7 +1112,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       setCloudSessions((prev) => [...prev, session]);
       attach(id);
     },
-    [cloud, targetCwd, attach, targets]
+    [cloud, targetCwd, attach, targets, t]
   );
 
   /**
@@ -1153,10 +1171,10 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const toggleGroup = useCallback(
     (group: SessionGroup) => {
       // Quick filters force all groups open, so a toggle would change nothing visible
-      if (filterActive) showHint('Clear the filters to collapse groups', 'info');
+      if (filterActive) showHint(t.clearFiltersToCollapse, 'info');
       else toggleCollapsed(group.key);
     },
-    [toggleCollapsed, filterActive, showHint]
+    [toggleCollapsed, filterActive, showHint, t]
   );
 
   /** The view a newly opened pane of `session` starts in: the UI view if preferred and readable */
@@ -1253,12 +1271,13 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         // ends that process and resumes the session here (a second process would write in parallel)
         const elsewhere = session.ptyArgs && session.pid != null && !session.paneId;
         if (!elsewhere) return attachIn(session.id, view);
+        if (!canSpawn) return showHint(t.interactiveOwnTerminal, 'info');
         return guardCopy(
           session,
           () =>
             void agentsApi.stopAgent(session.id).then(
               () => attachIn(session.id, view),
-              (err) => showHint(`Takeover failed: ${err.message}`, 'error', 6000)
+              (err) => showHint(t.takeoverFailed(err.message), 'error', 6000)
             ),
           true
         );
@@ -1268,7 +1287,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       if (plan.type === 'reattach') return attachIn(plan.paneId, view);
       // Interactive and remote-control sessions keep their transcript locally: continue it here
       const { sessionId } = plan;
-      if (sessionId)
+      if (sessionId && canSpawn)
         guardCopy(resumeMakesCopy(session) ? session : null, () =>
           openInteractiveClaude(
             session.cwd,
@@ -1279,13 +1298,15 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
             view
           )
         );
-      else showHint('Interactive sessions run in their own terminal', 'info');
+      else showHint(t.interactiveOwnTerminal, 'info');
     },
     [
       agentsApi,
+      canSpawn,
       targets,
       attachIn,
       showHint,
+      t,
       openInteractiveClaude,
       preferredView,
       allPanes,
@@ -1323,7 +1344,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     ) => {
       const cwd = extra.cwd || targetCwd;
       if (!cwd) {
-        showHint('Pick a directory first', 'error');
+        showHint(t.pickDirectory, 'error');
         return;
       }
       setDispatching(true);
@@ -1341,22 +1362,18 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         setSelectedKey(result.id);
         showHint(
           result.alreadyRunning
-            ? `Started a copy: ${result.id}`
-            : `Started ${result.name || result.id}`,
+            ? t.startedCopy(result.id)
+            : t.startedNamed(result.name || result.id),
           'success'
         );
         refresh();
-        if (attachAfter) attachIn(result.id, view);
+        if (attachAfter && canSpawn) attachIn(result.id, view);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Dispatch failed';
-        if (isUntrustedWorkspaceError(message)) {
+        const message = err instanceof Error ? err.message : t.dispatchFailed;
+        if (canSpawn && isUntrustedWorkspaceError(message)) {
           // Input stays in the composer so the user can retry once the folder is trusted
           openInteractiveClaude(cwd, `claude · ${cwd.split(/[\\/]/).filter(Boolean).pop() || cwd}`);
-          showHint(
-            'Folder not trusted yet: accept the trust prompt in the terminal, then start the agent again',
-            'info',
-            10000
-          );
+          showHint(t.folderNotTrusted, 'info', 10000);
           return;
         }
         showHint(message, 'error', 6000);
@@ -1364,7 +1381,17 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         setDispatching(false);
       }
     },
-    [agentsApi, targetCwd, settings.dispatch, showHint, refresh, attachIn, openInteractiveClaude]
+    [
+      agentsApi,
+      targetCwd,
+      settings.dispatch,
+      showHint,
+      refresh,
+      attachIn,
+      openInteractiveClaude,
+      t,
+      canSpawn,
+    ]
   );
 
   const handleCommand = useCallback(
@@ -1378,7 +1405,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
             });
           } else if (history) {
             setResumePicker({ open: true, query: args });
-          } else showHint('Give the session id: /resume <id>', 'error');
+          } else showHint(t.giveSessionId, 'error');
           return;
         }
         case 'model': {
@@ -1386,7 +1413,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           await updateSettings({ dispatch: { ...settings.dispatch, model } });
           setInput('');
           setComposerOpen(false);
-          showHint(model ? `Dispatch model: ${model}` : 'Dispatch model: default', 'success');
+          showHint(t.dispatchModel(model), 'success');
           return;
         }
         case 'effort': {
@@ -1394,20 +1421,20 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           await updateSettings({ dispatch: { ...settings.dispatch, effort } });
           setInput('');
           setComposerOpen(false);
-          showHint(effort ? `Dispatch effort: ${effort}` : 'Dispatch effort: default', 'success');
+          showHint(t.dispatchEffort(effort), 'success');
           return;
         }
         case 'bg':
         case 'background':
         case 'fork':
-          showHint(`/${command} works inside an attached session`, 'info');
+          showHint(t.commandInsideSession(command), 'info');
           return;
         default:
           // Skills / custom commands are sent as the prompt
           await doDispatch({ prompt: raw.trim() }, attachAfter);
       }
     },
-    [doDispatch, updateSettings, settings.dispatch, showHint, guardCopy, sessions, history]
+    [doDispatch, updateSettings, settings.dispatch, showHint, guardCopy, sessions, history, t]
   );
 
   /** Stores the composer attachments on the server; null when an upload failed (hint shown) */
@@ -1417,12 +1444,12 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     try {
       return await Promise.all(composerImages.map(uploads.uploadAttachment));
     } catch (err) {
-      showHint(err instanceof Error ? err.message : 'Upload failed', 'error', 6000);
+      showHint(err instanceof Error ? err.message : t.uploadFailed, 'error', 6000);
       return null;
     } finally {
       setDispatching(false);
     }
-  }, [composerImages, showHint, uploads]);
+  }, [composerImages, showHint, uploads, t]);
 
   const handleSubmit = useCallback(
     async ({ attach: attachAfter }: { attach: boolean }) => {
@@ -1432,11 +1459,11 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       if (chat) {
         const harness = composerHarness;
         if (harnessInstalled[harness] === false) {
-          showHint(`${harnessLabel(harness)} is not installed on this machine`, 'error');
+          showHint(t.harnessNotInstalled(harnessLabel(harness)), 'error');
           return;
         }
         if (!composerCwd) {
-          showHint('Pick a project directory first', 'error');
+          showHint(t.pickProjectDirectory, 'error');
           return;
         }
         const cwd = composerCwd;
@@ -1459,38 +1486,33 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                 );
             });
           } else if (harness === 'claude') setResumePicker({ open: true, query: '', chat: true });
-          else showHint(`${harnessLabel(harness)}: give the session id, /resume <id>`, 'error');
+          else showHint(t.harnessGiveSessionId(harnessLabel(harness)), 'error');
           return;
         }
         if (input.trim() === '/continue') {
           if (harness === 'claude')
             openInteractiveClaude(cwd, name, ['--continue'], 'claude', undefined, view);
-          else showHint('/continue is Claude Code only: use /resume <id>', 'error');
+          else showHint(t.continueClaudeOnly, 'error');
           return;
         }
-        if (view === 'terminal')
-          showHint(`${harnessLabel(harness)} has no UI view yet: it opens in the terminal`, 'info');
+        if (view === 'terminal') showHint(t.harnessNoUiView(harnessLabel(harness)), 'info');
       }
       if (composerHarness !== 'claude') {
         // Other harnesses (#195) run interactively in a terminal pane; the server checks the args
         const cwd = composerCwd;
         if (!cwd) {
-          showHint('Pick a project directory first', 'error');
+          showHint(t.pickProjectDirectory, 'error');
           return;
         }
         if (harnessInstalled[composerHarness] === false) {
-          showHint(`${harnessLabel(composerHarness)} is not installed on this machine`, 'error');
+          showHint(t.harnessNotInstalled(harnessLabel(composerHarness)), 'error');
           return;
         }
         const stored = await uploadComposerImages();
         if (!stored) return;
         const prompt = promptWithAttachments(input, stored).trim();
         if (prompt && composerHarness === 'opencode') {
-          showHint(
-            'OpenCode takes no start prompt: leave it empty and type in the terminal',
-            'error',
-            8000
-          );
+          showHint(t.openCodeNoPrompt, 'error', 8000);
           return;
         }
         // A model picked for this agent or chat (#19 AK-2) goes as `--model` where the CLI takes it
@@ -1515,11 +1537,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         // The CLI refuses `--bg` in ~ (trusted one session at a time): run it interactively there
         if (homeDir && composerCwd === homeDir) {
           if (input.trim() || composerImages.length > 0) {
-            showHint(
-              'In ~ Claude Code only runs interactively: start without prompt and type it in the terminal, or pick a project folder',
-              'error',
-              8000
-            );
+            showHint(t.homeInteractiveOnly, 'error', 8000);
             return;
           }
           openInteractiveClaude(homeDir, 'claude · ~', [], 'claude', undefined, view);
@@ -1545,7 +1563,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       const parsed = parseDispatchInput(input, { subagents, repos });
       switch (parsed.kind) {
         case 'empty':
-          showHint('Describe the task first', 'error');
+          showHint(t.describeTask, 'error');
           return;
         case 'filter':
           // The list filter follows `input`; keep it and let the user see the narrowed list
@@ -1560,7 +1578,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
             )
           );
           if (!match) {
-            showHint('No session is working on that PR', 'error');
+            showHint(t.noSessionOnPr, 'error');
             return;
           }
           setSelectedKey(match.id);
@@ -1570,7 +1588,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           return;
         }
         case 'too-short':
-          showHint('Too short — describe the task', 'error');
+          showHint(t.tooShort, 'error');
           return;
         case 'command':
           await handleCommand(parsed.command, parsed.args, parsed.raw, attachAfter);
@@ -1611,6 +1629,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       repos,
       sessions,
       showHint,
+      t,
       attach,
       handleCommand,
       doDispatch,
@@ -1625,8 +1644,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const openedChat = useRef<unknown>(null);
   useEffect(() => {
     const chat = prefill?.openChat as
-      | { harness?: unknown; sessionId?: unknown; cwd?: unknown; title?: unknown }
-      | undefined;
+      { harness?: unknown; sessionId?: unknown; cwd?: unknown; title?: unknown } | undefined;
     if (!chat || typeof chat !== 'object' || loading || openedChat.current === chat) return;
     openedChat.current = chat;
     onPrefillConsumed?.();
@@ -1640,7 +1658,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     const name = typeof chat.title === 'string' && chat.title ? chat.title.slice(0, 80) : harness;
     guardCopy(transcriptHolder(sessions, id), () => {
       if (harness === 'claude') void doDispatch({ resume: id, cwd }, true, view);
-      else
+      else if (canSpawn)
         openInteractiveClaude(cwd, name, terminalResumeArgs(harness, id), harness, undefined, view);
     });
   }, [
@@ -1652,21 +1670,22 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     guardCopy,
     doDispatch,
     openInteractiveClaude,
+    canSpawn,
   ]);
 
   const handleRename = useCallback(
     async (session: AgentSession) => {
       if (!manage || session.kind !== 'background') return;
-      const name = window.prompt('Rename session:', session.name);
+      const name = window.prompt(t.renamePrompt, session.name);
       if (!name || !name.trim() || name.trim() === session.name) return;
       try {
         await manage.renameAgent(session.id, name.trim());
         refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Rename failed');
+        toast.error(err instanceof Error ? err.message : t.renameFailed);
       }
     },
-    [manage, refresh, toast]
+    [manage, refresh, toast, t]
   );
 
   const handlePin = useCallback(
@@ -1674,13 +1693,13 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       if (!manage || session.kind !== 'background') return;
       try {
         await manage.pinAgent(session.id, !session.pinned);
-        showHint(session.pinned ? 'Unpinned' : 'Pinned — kept running while idle', 'success');
+        showHint(session.pinned ? t.unpinned : t.pinnedHint, 'success');
         refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Pin failed');
+        toast.error(err instanceof Error ? err.message : t.pinFailed);
       }
     },
-    [manage, refresh, showHint, toast]
+    [manage, refresh, showHint, toast, t]
   );
 
   const removeSession = useCallback(
@@ -1694,13 +1713,13 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         if (!result.removed) {
           if (
             result.hints?.discardUnpushed &&
-            window.confirm(`${result.message}\n\nDiscard the unpushed commits and delete anyway?`)
+            window.confirm(t.discardUnpushedConfirm(result.message))
           ) {
             return removeSession(session, { discardUnpushed: result.hints.discardUnpushed });
           }
           if (
             result.hints?.forceRemoveWorktree &&
-            window.confirm(`${result.message}\n\nForce-remove the worktree directory and delete?`)
+            window.confirm(t.forceRemoveWorktreeConfirm(result.message))
           ) {
             return removeSession(session, {
               forceRemoveWorktree: result.hints.forceRemoveWorktree,
@@ -1709,20 +1728,21 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           toast.error(result.message, { duration: 8000 });
           return;
         }
-        toast.success(`Deleted ${session.name}`);
+        toast.success(t.deleted(session.name));
         dropPane(session.paneId ?? session.id);
         if (peekId === session.id) setPeekId(null);
         refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Delete failed');
+        toast.error(err instanceof Error ? err.message : t.deleteFailed);
       }
     },
-    [manage, dropPane, peekId, refresh, toast]
+    [manage, dropPane, peekId, refresh, toast, t]
   );
 
   const deleteSession = useCallback(
-    (session: AgentSession) => confirmDelete(session.name, () => removeSession(session)),
-    [removeSession]
+    (session: AgentSession) =>
+      confirmDelete(session.name, () => removeSession(session), undefined, t.confirmDeleteSession),
+    [removeSession, t]
   );
 
   const handleStopOrDelete = useCallback(
@@ -1733,7 +1753,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           (s) => s.kind === 'background' || isOmpStoreSession(s)
         );
         if (list.length === 0) return;
-        if (!window.confirm(`Delete all ${list.length} sessions in "${item.group.title}"?`)) return;
+        if (!window.confirm(t.deleteAllInGroup(list.length, item.group.title))) return;
         for (const session of list) await removeSession(session);
         return;
       }
@@ -1741,7 +1761,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       if (item.session.kind !== 'background' && !isOmpStoreSession(item.session)) return;
       await deleteSession(item.session);
     },
-    [manage, deleteSession, removeSession]
+    [manage, deleteSession, removeSession, t]
   );
 
   const handleReorder = useCallback(
@@ -1784,10 +1804,21 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         await manage.reorderAgents(ids);
         refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Reorder failed');
+        toast.error(err instanceof Error ? err.message : t.reorderFailed);
       }
     },
-    [manage, selectedItem, items, favoriteGroups, moveGroup, moveSession, sort.key, refresh, toast]
+    [
+      manage,
+      selectedItem,
+      items,
+      favoriteGroups,
+      moveGroup,
+      moveSession,
+      sort.key,
+      refresh,
+      toast,
+      t,
+    ]
   );
 
   const handleReply = useCallback(
@@ -1809,11 +1840,11 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     try {
       const json = await manage.fetchAgentsRawJson({ cwd: settings.scopeCwd, all: true });
       await navigator.clipboard.writeText(json);
-      toast.success('claude agents --json copied to clipboard');
+      toast.success(t.jsonCopied);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Copy failed');
+      toast.error(err instanceof Error ? err.message : t.copyFailed);
     }
-  }, [manage, settings.scopeCwd, toast]);
+  }, [manage, settings.scopeCwd, toast, t]);
 
   const attachNth = useCallback(
     (n: number) => {
@@ -1920,7 +1951,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           onExit();
         } else {
           ctrlCRef.current = nowMs;
-          showHint('Press Ctrl+C again to leave the agents view', 'info', 1200);
+          showHint(t.ctrlCAgain, 'info', 1200);
         }
         return;
       }
@@ -2033,6 +2064,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     attach,
     onExit,
     showHint,
+    t,
   ]);
 
   // ---------------------------------------------------------------------
@@ -2056,17 +2088,13 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       try {
         const { briefing, dir } = await orchestrator.fetchOrchestratorWorkspace();
         if (!(await briefSession(messaging, session, briefing))) {
-          showHint(
-            `Marked as orchestrator. It runs outside Orkumo: point it to ${dir}/AGENTS.md yourself`,
-            'info',
-            8000
-          );
+          showHint(t.markedOutside(dir), 'info', 8000);
           return;
         }
-        toast.success('Marked as orchestrator and briefed');
+        toast.success(t.markedBriefed);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        toast.error(`Marked as orchestrator, but the briefing did not arrive: ${message}`);
+        toast.error(t.markedBriefingFailed(message));
       }
     },
     [
@@ -2076,6 +2104,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       settings.orchestratorRoles,
       updateSettings,
       showHint,
+      t,
       toast,
     ]
   );
@@ -2091,19 +2120,14 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       });
       try {
         if (await briefSession(messaging, session, role.briefing))
-          toast.success(`Role ${role.id} assigned`);
-        else
-          showHint(
-            `Role assigned. It runs outside Orkumo: point it to roles/${role.id}.md yourself`,
-            'info',
-            8000
-          );
+          toast.success(t.roleAssigned(role.id));
+        else showHint(t.roleAssignedOutside(role.id), 'info', 8000);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        toast.error(`Role assigned, but the briefing did not arrive: ${message}`);
+        toast.error(t.roleBriefingFailed(message));
       }
     },
-    [messaging, settings.orchestratorRoles, updateSettings, showHint, toast]
+    [messaging, settings.orchestratorRoles, updateSettings, showHint, toast, t]
   );
 
   const scopedModes = useMemo(
@@ -2141,24 +2165,24 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           .catch((err) => toast.error(err.message));
       };
       return [
-        { id: 'attach', label: 'Attach in tab', disabled: !bg, onSelect: () => attach(session.id) },
+        { id: 'attach', label: t.attachInTab, disabled: !bg, onSelect: () => attach(session.id) },
         ...(appUrl
           ? [
               {
                 id: 'claude-app',
-                label: 'Open on claude.ai',
+                label: t.openOnClaudeAi,
                 onSelect: () => openInSystemBrowser(appUrl),
               },
             ]
           : []),
         ...(peekAvailable
-          ? [{ id: 'peek', label: 'Peek / reply', onSelect: () => togglePeek(session) }]
+          ? [{ id: 'peek', label: t.peekReply, onSelect: () => togglePeek(session) }]
           : []),
         ...(openCode
           ? [
               {
                 id: 'code',
-                label: 'Open in Code',
+                label: t.openInCode,
                 disabled: !agentFolder(session, contexts[session.id]),
                 onSelect: () => {
                   const folder = agentFolder(session, contexts[session.id]);
@@ -2172,9 +2196,10 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
               {
                 // #207: plain shell in the agent's folder (worktree); a peer agent's folder is on its host (#220)
                 id: 'terminal',
-                label: 'Open terminal here',
+                label: t.openTerminalHere,
                 disabled:
-                  targets.targetOf(session.id) !== '' || !agentFolder(session, contexts[session.id]),
+                  targets.targetOf(session.id) !== '' ||
+                  !agentFolder(session, contexts[session.id]),
                 onSelect: () => {
                   const folder = agentFolder(session, contexts[session.id]);
                   if (folder && targets.targetOf(session.id) === '') openShell(folder);
@@ -2186,7 +2211,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           ? [
               {
                 id: 'board',
-                label: 'Show on Board',
+                label: t.showOnBoard,
                 disabled: !contexts[session.id]?.repo?.slug,
                 onSelect: () => {
                   const slug = contexts[session.id]?.repo?.slug;
@@ -2197,7 +2222,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           : []),
         ...scopedModes.map((m) => ({
           id: `mode:${m.id}`,
-          label: `Show ${m.label}`,
+          label: t.showMode(m.label),
           icon: m.icon,
           // Only agents started for a board issue have something to show in a scoped mode
           disabled: !contexts[session.id]?.repo?.slug || !issuesByAgent?.get(session.id)?.length,
@@ -2210,13 +2235,13 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           ? [
               {
                 id: 'pin',
-                label: session.pinned ? 'Unpin' : 'Pin (keep running while idle)',
+                label: session.pinned ? t.unpin : t.pin,
                 disabled: !bg,
                 onSelect: () => handlePin(session),
               },
               {
                 id: 'rename',
-                label: 'Rename',
+                label: t.rename,
                 disabled: !bg,
                 onSelect: () => handleRename(session),
               },
@@ -2227,7 +2252,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           ? [
               {
                 id: 'stop',
-                label: 'Stop',
+                label: t.stop,
                 disabled: omp ? session.pid == null : !heldPane && (!bg || !alive),
                 onSelect: () => (confirmStop ? setConfirmingStop({ session, run: stop }) : stop()),
               },
@@ -2237,7 +2262,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           ? [
               {
                 id: 'respawn',
-                label: 'Respawn (restart)',
+                label: t.respawn,
                 disabled: !bg,
                 onSelect: () =>
                   manage
@@ -2252,8 +2277,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
               {
                 id: 'orchestrator',
                 label: isOrchestrator(session, settings.orchestrators)
-                  ? 'Remove orchestrator mark'
-                  : 'Mark as orchestrator',
+                  ? t.unmarkOrchestrator
+                  : t.markOrchestrator,
                 disabled: session.kind === 'app',
                 onSelect: () => void toggleOrchestrator(session),
               },
@@ -2261,24 +2286,24 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           : []),
         ...(isOrchestrator(session, settings.orchestrators) ? orchestratorRoles : []).map((r) => ({
           id: `role:${r.id}`,
-          label: `Role: ${r.id}`,
+          label: t.roleNamed(r.id),
           icon: Network,
           disabled: orchestratorRole(session, settings.orchestratorRoles) === r.id,
           onSelect: () => void assignRole(session, r),
         })),
         {
           id: 'copy-id',
-          label: 'Copy session id',
+          label: t.copySessionId,
           onSelect: () => {
             navigator.clipboard?.writeText(session.sessionId || session.id);
-            toast.success('Copied');
+            toast.success(t.copied);
           },
         },
         ...(manage
           ? [
               {
                 id: 'delete',
-                label: 'Delete',
+                label: t.delete,
                 danger: true,
                 disabled: !bg && !omp,
                 onSelect: () => deleteSession(session),
@@ -2294,6 +2319,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       orchestrator,
       targets,
       toast,
+      t,
       peekAvailable,
       canShell,
       openCode,
@@ -2325,7 +2351,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     (group: SessionGroup): AgentRowAction[] => [
       {
         id: 'toggle',
-        label: collapsed.has(group.key) ? 'Expand' : 'Collapse',
+        label: collapsed.has(group.key) ? t.expand : t.collapse,
         onSelect: () => toggleGroup(group),
       },
       ...(group.appId
@@ -2334,7 +2360,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
               ? [
                   {
                     id: 'open-project',
-                    label: 'Open project',
+                    label: t.openProject,
                     onSelect: () => openProject(group.appId!),
                   },
                 ]
@@ -2343,7 +2369,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
               ? [
                   {
                     id: 'project-settings',
-                    label: 'Project settings…',
+                    label: t.projectSettings,
                     onSelect: () => openProjectSettings(group.appId!),
                   },
                 ]
@@ -2354,7 +2380,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         ? [
             {
               id: 'fixed-project',
-              label: group.fixed ? 'Remove fixed project' : 'Keep as fixed project',
+              label: group.fixed ? t.removeFixedProject : t.keepFixedProject,
               // Several stored directories can mean this project (worktree, subfolder of an app)
               onSelect: () =>
                 (group.fixed
@@ -2371,13 +2397,13 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       ...(group.cwd
         ? [
             ...(openCode
-              ? [{ id: 'view-code', label: 'View Code', onSelect: () => openCode(group.cwd!) }]
+              ? [{ id: 'view-code', label: t.viewCode, onSelect: () => openCode(group.cwd!) }]
               : []),
             ...(canShell
               ? [
                   {
                     id: 'open-terminal',
-                    label: 'Open terminal here',
+                    label: t.openTerminalHere,
                     onSelect: () => openShell(group.cwd!),
                   },
                 ]
@@ -2390,14 +2416,14 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
               ? [
                   {
                     id: 'view-board',
-                    label: 'View Board',
+                    label: t.viewBoard,
                     onSelect: () => openBoard(groupRepoSlug(group, contexts)!),
                   },
                 ]
               : []),
             ...scopedModes.map((m) => ({
               id: `mode:${m.id}`,
-              label: `View ${m.label}`,
+              label: t.viewMode(m.label),
               icon: m.icon,
               onSelect: () => openMode?.(m.id, groupRepoSlug(group, contexts)!),
             })),
@@ -2407,7 +2433,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         ? [
             {
               id: 'new-issue',
-              label: groupRepoSlug(group, contexts) ? 'New issue' : 'New issue (no GitHub repo)',
+              label: groupRepoSlug(group, contexts) ? t.newIssue : t.newIssueNoRepo,
               disabled: !groupRepoSlug(group, contexts),
               onSelect: () => openIssueDialog(groupRepoSlug(group, contexts)),
             },
@@ -2417,21 +2443,26 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         ? [
             {
               id: 'dispatch-here',
-              label: 'Dispatch into this directory',
+              label: t.dispatchHere,
               onSelect: () => pickDispatchCwd(group.cwd || null),
             },
-            {
-              id: 'new-agent',
-              label: 'New agent here',
-              onSelect: () => openComposer('agent', group.cwd || null),
-            },
+            // A new agent attaches right away: a terminal this view starts
+            ...(canSpawn
+              ? [
+                  {
+                    id: 'new-agent',
+                    label: t.newAgentHere,
+                    onSelect: () => openComposer('agent', group.cwd || null),
+                  },
+                ]
+              : []),
           ]
         : []),
       ...(manage
         ? [
             {
               id: 'delete-all',
-              label: 'Delete all sessions in group',
+              label: t.deleteAllInGroupAction,
               danger: true,
               onSelect: () => handleStopOrDelete({ type: 'group', group }),
             },
@@ -2440,6 +2471,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     ],
     [
       collapsed,
+      t,
+      canSpawn,
       toggleGroup,
       settings.grouping,
       rail.fixedProjects,
@@ -2491,8 +2524,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const paletteCommands = useMemo<PaletteCommand[]>(() => {
     const newTask: PaletteCommand = {
       id: 'agents.new-task',
-      title: 'New agent task',
-      group: 'Agents',
+      title: t.newAgentTask,
+      group: t.paletteGroups.agents,
       scope: 'command',
       keywords: 'dispatch compose prompt session create',
       shortcut: 'N',
@@ -2510,8 +2543,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       ? [
           {
             id: 'agents.main-agent',
-            title: 'Main agent',
-            group: 'Agents',
+            title: t.mainAgent,
+            group: t.paletteGroups.agents,
             scope: 'command',
             keywords: 'orchestrator main chef hauptagent',
             run: () => setMainAgentOpen(true),
@@ -2533,9 +2566,15 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     // A fixed project is one of the host's projects
     if (apps.length > 0)
       list.push(
-        cmd('fixed-project.add', 'Add fixed project…', 'Rail', () => setPickFixedOpen(true), {
-          keywords: 'projekt festlegen pflegen pin directory',
-        })
+        cmd(
+          'fixed-project.add',
+          t.addFixedProject,
+          t.paletteGroups.rail,
+          () => setPickFixedOpen(true),
+          {
+            keywords: 'projekt festlegen pflegen pin directory',
+          }
+        )
       );
     if (selectedSession) {
       for (const action of rowActions(selectedSession)) {
@@ -2544,7 +2583,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           cmd(
             `selected.${action.id}`,
             `${action.label}: ${selectedSession.name}`,
-            'Selected agent',
+            t.paletteGroups.selected,
             action.onSelect
           )
         );
@@ -2553,15 +2592,18 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     for (const mode of ['project', 'state', 'directory', 'none'] as const) {
       if (mode === settings.grouping) continue;
       list.push(
-        cmd(`group.${mode}`, `Group agents by ${mode === 'state' ? 'status' : mode}`, 'Rail', () =>
+        cmd(`group.${mode}`, t.groupByCommand(mode), t.paletteGroups.rail, () =>
           updateSettings({ grouping: mode })
         )
       );
     }
     for (const option of SORT_OPTIONS) {
       list.push(
-        cmd(`sort.${option.key}`, `Sort agents by ${option.label.toLowerCase()}`, 'Rail', () =>
-          setSort({ key: option.key, dir: option.dir })
+        cmd(
+          `sort.${option.key}`,
+          t.sortByCommand(t.sortOptions[option.key]),
+          t.paletteGroups.rail,
+          () => setSort({ key: option.key, dir: option.dir })
         )
       );
     }
@@ -2570,23 +2612,23 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       list.push(
         cmd(
           `filter.${filterOption.key}`,
-          `${on ? 'Remove' : 'Add'} filter: ${filterOption.label}`,
-          'Rail',
+          t.filterCommand(on, t.quickFilters[filterOption.key].label),
+          t.paletteGroups.rail,
           () => toggleQuickFilter(filterOption.key),
-          { keywords: filterOption.title }
+          { keywords: t.quickFilters[filterOption.key].title }
         )
       );
     }
     // A quick filter keeps every group open, like the disabled header buttons
     if (!filterActive) {
       list.push(
-        cmd('groups.collapse', 'Collapse all groups', 'Rail', collapseAllGroups),
-        cmd('groups.expand', 'Expand all groups', 'Rail', expandAllGroups)
+        cmd('groups.collapse', t.collapseAllGroups, t.paletteGroups.rail, collapseAllGroups),
+        cmd('groups.expand', t.expandAllGroups, t.paletteGroups.rail, expandAllGroups)
       );
     }
     if (filterActive || filter) {
       list.push(
-        cmd('filter.clear', 'Clear all filters', 'Rail', () => {
+        cmd('filter.clear', t.clearFilters, t.paletteGroups.rail, () => {
           setQuickFilters(new Set());
           setLinkFilter(new Set());
           setTextQuery('');
@@ -2599,7 +2641,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       for (const layout of ['columns', 'rows', 'grid'] as const) {
         if (layout === activeTab.layout) continue;
         list.push(
-          cmd(`layout.${layout}`, `Split layout: ${layout}`, 'Workspace', () =>
+          cmd(`layout.${layout}`, t.splitLayout(layout), t.paletteGroups.workspace, () =>
             workspaceActions.setLayout(activeTab.id, layout)
           )
         );
@@ -2607,39 +2649,43 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     }
     if (activeTab) {
       list.push(
-        cmd('tab.close', 'Close current tab', 'Workspace', () =>
+        cmd('tab.close', t.closeTab, t.paletteGroups.workspace, () =>
           workspaceActions.closeTab(activeTab.id)
         )
       );
     }
     if (transport.contexts)
       list.push(
-        cmd('panel.prs', 'Show pull requests', 'Panels', () => {
+        cmd('panel.prs', t.showPullRequestsCommand, t.paletteGroups.panels, () => {
           setPrRepo(null);
           setPanel('prs');
         })
       );
     if (openPulls)
       list.push(
-        cmd('panel.prs-full', 'Open pull requests (full view)', 'Panels', () => openPulls())
+        cmd('panel.prs-full', t.openPullsFullCommand, t.paletteGroups.panels, () => openPulls())
       );
     if (transport.contexts)
-      list.push(cmd('panel.servers', 'Show running servers', 'Panels', () => setPanel('servers')));
+      list.push(
+        cmd('panel.servers', t.showServersCommand, t.paletteGroups.panels, () =>
+          setPanel('servers')
+        )
+      );
     list.push(
-      cmd('settings', 'Dispatch defaults and settings', 'Agents', () => setShowSettings(true)),
-      cmd('shortcuts', 'Show keyboard shortcuts', 'Agents', () => setShowHelp(true), {
+      cmd('settings', t.settingsCommand, t.paletteGroups.agents, () => setShowSettings(true)),
+      cmd('shortcuts', t.shortcutsCommand, t.paletteGroups.agents, () => setShowHelp(true), {
         shortcut: '?',
       }),
-      cmd('refresh', 'Refresh agent list', 'Agents', refresh),
+      cmd('refresh', t.refreshCommand, t.paletteGroups.agents, refresh),
       cmd(
         'interactive',
-        showInteractive ? 'Hide interactive sessions' : 'Show interactive sessions',
-        'Agents',
+        showInteractive ? t.hideInteractive : t.showInteractive,
+        t.paletteGroups.agents,
         toggleInteractive
       )
     );
-    if (manage) list.push(cmd('copy-json', 'Copy claude agents --json', 'Agents', copyJson));
-    if (onExit) list.push(cmd('exit', 'Leave agents view', 'Agents', onExit));
+    if (manage) list.push(cmd('copy-json', t.copyJsonCommand, t.paletteGroups.agents, copyJson));
+    if (onExit) list.push(cmd('exit', t.leaveView, t.paletteGroups.agents, onExit));
     for (const session of sessions) {
       list.push({
         id: `agent.${session.id}`,
@@ -2654,6 +2700,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     return list;
   }, [
     openComposer,
+    t,
     active,
     apps.length,
     peekAvailable,
@@ -2685,24 +2732,25 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   ]);
   (host.useRegisterCommands ?? registerNothing)('agents', paletteCommands);
 
-  // New kinds the host cannot create: issues (no issue dialog), orchestrators, chats (no UI view)
+  // New kinds the host cannot create: issues (no issue dialog), orchestrators, chats (no UI view),
+  // agents and chats without a terminal this view starts
   const hiddenKinds = useMemo<NewMenuKind[]>(
     () => [
       ...(renderIssueCreate ? [] : (['issue'] as const)),
       ...(orchestrator ? [] : (['orchestrator'] as const)),
-      ...(transport.chat ? [] : (['chat'] as const)),
+      ...(canSpawn ? [] : (['agent'] as const)),
+      ...(transport.chat && canSpawn ? [] : (['chat'] as const)),
     ],
-    [renderIssueCreate, orchestrator, transport.chat]
+    [renderIssueCreate, orchestrator, transport.chat, canSpawn]
   );
 
   const defaultModel = settings.dispatch.model || userSettings?.model || 'default';
   // Model of the open agent; the dispatch default only stands in when it is unknown
   const activeModel = formatModelName(activeSessionId ? contexts[activeSessionId]?.model : null);
   const modelLabel =
-    activeModel ?? (defaultModel === 'default' ? 'default' : `default: ${defaultModel}`);
-  const modelTitle = activeModel
-    ? 'Model of the open agent (from its session)'
-    : 'Dispatch model for new agents (/model)';
+    activeModel ??
+    (defaultModel === 'default' ? t.modelDefault : t.modelDefaultNamed(defaultModel));
+  const modelTitle = activeModel ? t.modelOfOpenAgent : t.dispatchModelTitle;
 
   // Other routes keep their main area when the agent view cannot show its rail
   if ((disabled || cliInstalled === false) && !active) {
@@ -2715,12 +2763,12 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         className={`h-full flex flex-col items-center justify-center gap-4 text-gray-400 agents-ui ${className}`}
       >
         <Power size={32} className="text-gray-500" />
-        <div>The agent view is turned off.</div>
+        <div>{t.viewTurnedOff}</div>
         <button
           onClick={() => updateSettings({ disabled: false })}
           className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-sm"
         >
-          Turn on again
+          {t.turnOnAgain}
         </button>
       </div>
     );
@@ -2732,10 +2780,11 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         className={`h-full flex flex-col items-center justify-center gap-3 text-gray-400 p-8 text-center agents-ui ${className}`}
       >
         <AlertTriangle size={32} className="text-yellow-500" />
-        <div className="text-gray-200 font-medium">Claude Code CLI not found</div>
+        <div className="text-gray-200 font-medium">{t.cliNotFound}</div>
         <div className="text-sm">
-          Install it on the machine running the Orkumo server, then run{' '}
-          <code className="text-blue-300">claude</code> once to sign in.
+          {t.cliInstall[0]}
+          <code className="text-blue-300">claude</code>
+          {t.cliInstall[1]}
         </div>
         <pre className="text-xs bg-gray-950 border border-gray-800 rounded p-3">
           npm install -g @anthropic-ai/claude-code
@@ -2744,7 +2793,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           onClick={refresh}
           className="px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 hover:text-white text-sm text-gray-200"
         >
-          Check again
+          {t.checkAgain}
         </button>
       </div>
     );
@@ -2758,7 +2807,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       {/* Activity bar, like VS Code: modes on top, settings at the bottom */}
       {host.renderActivityBar && (
         <nav
-          aria-label="Activity bar"
+          aria-label={t.activityBar}
           className={`${active ? 'flex' : 'hidden md:flex'} w-12 shrink-0 flex-col py-1 border-r border-gray-800 bg-gray-950`}
         >
           {host.renderActivityBar({ onToggleRail: toggleRail })}
@@ -2766,8 +2815,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
             <button
               onClick={nav.onOpenSettings}
               className="mt-auto flex items-center justify-center h-11 text-gray-500 hover:text-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cursor"
-              title="Settings"
-              aria-label="Settings"
+              title={t.settings}
+              aria-label={t.settings}
             >
               <Settings size={20} strokeWidth={1.75} aria-hidden />
             </button>
@@ -2783,8 +2832,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
             <button
               onClick={nav.onOpenContextDashboard}
               className="p-1 -m-1 rounded text-blue-300 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
-              title="Dashboard of this context"
-              aria-label="Open context dashboard"
+              title={t.contextDashboardTitle}
+              aria-label={t.contextDashboardLabel}
             >
               <Bot size={18} />
             </button>
@@ -2853,42 +2902,40 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           <div
             className={`hidden ${active ? 'md:flex' : ''} items-center gap-1.5 text-[11px] text-gray-300`}
             role="status"
-            title="Switch with F6 or Ctrl+Alt+Left / Right"
+            title={t.focusSwitchTitle}
           >
             <span
               className={`px-1.5 py-0.5 rounded font-medium whitespace-nowrap ${
                 focusZone === 'terminal' ? 'bg-blue-300 text-gray-950' : 'bg-gray-700 text-gray-100'
               }`}
             >
-              {focusZone === 'terminal'
-                ? 'Keys: terminal'
-                : focusZone === 'rail'
-                  ? 'Keys: agent list'
-                  : 'Keys: page'}
+              {t.focusZones[focusZone === 'terminal' || focusZone === 'rail' ? focusZone : 'page']}
             </span>
             <kbd className="kbd">{FOCUS_CHORD_LABEL}</kbd>
-            <span className="text-gray-400 hidden xl:inline">switches</span>
+            <span className="text-gray-400 hidden xl:inline">{t.switches}</span>
           </div>
           <span className="text-[11px] text-gray-500 font-mono" title={modelTitle}>
-            model {modelLabel}
+            {t.modelPrefix} {modelLabel}
             <span className="sr-only"> ({modelTitle})</span>
           </span>
           <div className="hidden xl:flex items-center gap-3 text-[11px] text-gray-500 font-mono">
             {settings.dispatch.effort && (
-              <span title="Dispatch effort (/effort)">effort {settings.dispatch.effort}</span>
+              <span title={t.effortTitle}>
+                {t.effortPrefix} {settings.dispatch.effort}
+              </span>
             )}
             {settings.dispatch.permissionMode && <span>{settings.dispatch.permissionMode}</span>}
             {settings.dispatch.skipPermissions && (
-              <span className="text-orange-400">bypass permissions</span>
+              <span className="text-orange-400">{t.bypassPermissions}</span>
             )}
-            {settings.scopeCwd && <span title="Scope (--cwd)">cwd {settings.scopeCwd}</span>}
-            {!connected && <span className="text-yellow-500">reconnecting…</span>}
+            {settings.scopeCwd && <span title={t.scopeTitle}>cwd {settings.scopeCwd}</span>}
+            {!connected && <span className="text-yellow-500">{t.reconnecting}</span>}
           </div>
           {manage && (
             <button
               onClick={copyJson}
               className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800"
-              title="Copy `claude agents --json --all`"
+              title={t.copyJsonTitle}
             >
               <Braces size={15} />
             </button>
@@ -2896,21 +2943,21 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           <button
             onClick={refresh}
             className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800"
-            title="Refresh"
+            title={t.refresh}
           >
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
             onClick={() => setShowSettings(true)}
             className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800"
-            title="Dispatch defaults & settings"
+            title={t.settingsTitle}
           >
             <Settings2 size={15} />
           </button>
           <button
             onClick={() => setShowHelp(true)}
             className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800"
-            title="Shortcuts (?)"
+            title={t.shortcutsTitle}
           >
             <HelpCircle size={15} />
           </button>
@@ -2995,7 +3042,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
               <ListError message={error} status={errorStatus} onRetry={refresh} />
             ) : loading && sessions.length === 0 ? (
               <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-                <RefreshCw size={14} className="animate-spin mr-2" /> Loading sessions…
+                <RefreshCw size={14} className="animate-spin mr-2" /> {t.loadingSessions}
               </div>
             ) : (
               <AgentList
@@ -3050,11 +3097,11 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
             )}
             {filter && (
               <div className="px-3 py-1 text-[11px] text-blue-300 bg-blue-900/20 border-t border-blue-900/40 flex items-center gap-2">
-                filter active — {visibleSessions.length} of {sessions.length} sessions
+                {t.filterActive(visibleSessions.length, sessions.length)}
                 <button
                   onClick={() => setInput('')}
                   className="ml-auto hover:text-white"
-                  aria-label="Clear filter"
+                  aria-label={t.clearFilter}
                 >
                   <X size={11} />
                 </button>
@@ -3062,16 +3109,16 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
             )}
             <RailSwitch
               id="interactive-sessions-label"
-              label="Interactive sessions"
+              label={t.interactiveSessions}
               hint={
                 interactiveCount > 0
-                  ? `${interactiveCount} ${showInteractive ? 'shown' : 'hidden'}`
-                  : 'not running in Orkumo'
+                  ? t.interactiveCount(interactiveCount, showInteractive)
+                  : t.interactiveNotRunning
               }
               checked={showInteractive}
               onToggle={toggleInteractive}
             />
-            {cloud && <CloudSessionBar onOpen={openCloud} />}
+            {cloud && canSpawn && <CloudSessionBar onOpen={openCloud} />}
             {/* Feedback for actions started outside the composer (the composer shows its own) */}
             <div role="status" aria-live="polite">
               {!composerOpen && (hint || dispatching) && (
@@ -3084,7 +3131,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                         : 'text-gray-200'
                   }`}
                 >
-                  {hint?.text || 'Dispatching…'}
+                  {hint?.text || t.dispatching}
                 </p>
               )}
             </div>
@@ -3286,7 +3333,9 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           setComposerImages([]);
         }}
         hiddenKinds={hiddenKinds}
-        harness={composerHarness}
+        canAttach={canSpawn}
+        // Other harnesses only run in a terminal this view starts: no picker without one
+        harness={canSpawn ? composerHarness : undefined}
         onHarnessChange={(harness) => {
           setComposerHarness(harness);
           // model names differ per CLI: a new harness starts from its default
@@ -3301,7 +3350,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         defaultModel={composerHarness === 'claude' ? settings.dispatch.model || null : null}
         images={composerImages}
         onImagesChange={setComposerImages}
-        hint={hint?.text || (dispatching ? 'Dispatching…' : null)}
+        hint={hint?.text || (dispatching ? t.dispatching : null)}
         hintTone={hint?.tone}
         disabled={dispatching}
         subagents={subagents}
@@ -3324,9 +3373,9 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       )}
       {confirmingStop && (
         <ConfirmDialog
-          title="Stop agent?"
-          body={`${confirmingStop.session.name} ends its current work. This cannot be undone.`}
-          confirm="Stop"
+          title={t.stopAgentTitle}
+          body={t.stopAgentBody(confirmingStop.session.name)}
+          confirm={t.stop}
           onCancel={() => setConfirmingStop(null)}
           onConfirm={() => {
             setConfirmingStop(null);
@@ -3369,7 +3418,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           choices={apps.map((a) => ({ name: a.name, path: a.path, source: 'project' }))}
           current={null}
           home={homeDir}
-          label="Project to keep in the rail…"
+          label={t.fixedProjectPicker}
           allowPath={false}
           onCancel={() => setPickFixedOpen(false)}
           onPick={(path) => {
@@ -3383,12 +3432,9 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         <DirectoryPicker
           choices={
             composerMode === 'agent' && homeDir
-              ? [{ name: '~ (home)', path: homeDir, source: 'home' }, ...directoryChoices]
+              ? [{ name: t.homeChoice, path: homeDir, source: 'home' }, ...directoryChoices]
               : composerMode === 'chat' && chatsDir
-                ? [
-                    { name: 'Chats (no project)', path: chatsDir, source: 'chats' },
-                    ...directoryChoices,
-                  ]
+                ? [{ name: t.chatsChoice, path: chatsDir, source: 'chats' }, ...directoryChoices]
                 : directoryChoices
           }
           current={composerCwd}
@@ -3411,27 +3457,30 @@ const ListError: React.FC<{ message: string; status: number | null; onRetry: () 
   message,
   status,
   onRetry,
-}) => (
-  <div role="alert" className="flex gap-2 p-4 text-xs">
-    <AlertTriangle size={14} className="text-red-400 shrink-0 mt-px" aria-hidden />
-    <div className="min-w-0 flex-1">
-      <div className="text-gray-100">
-        {status === 401 || status === 403
-          ? 'No access to the agents.'
-          : status !== null && status >= 500
-            ? 'The agent service is not available right now.'
-            : 'Could not load the agents.'}
+}) => {
+  const t = useLabels().shell;
+  return (
+    <div role="alert" className="flex gap-2 p-4 text-xs">
+      <AlertTriangle size={14} className="text-red-400 shrink-0 mt-px" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <div className="text-gray-100">
+          {status === 401 || status === 403
+            ? t.listNoAccess
+            : status !== null && status >= 500
+              ? t.listUnavailable
+              : t.listFailed}
+        </div>
+        {message && <div className="text-gray-500 font-mono break-words mt-0.5">{message}</div>}
+        <button
+          onClick={onRetry}
+          className="mt-2 flex items-center gap-1 px-2 py-1 rounded border border-gray-700 text-gray-200 hover:bg-gray-800"
+        >
+          <RefreshCw size={11} aria-hidden /> {t.tryAgain}
+        </button>
       </div>
-      {message && <div className="text-gray-500 font-mono break-words mt-0.5">{message}</div>}
-      <button
-        onClick={onRetry}
-        className="mt-2 flex items-center gap-1 px-2 py-1 rounded border border-gray-700 text-gray-200 hover:bg-gray-800"
-      >
-        <RefreshCw size={11} aria-hidden /> Try again
-      </button>
     </div>
-  </div>
-);
+  );
+};
 
 /** Ctrl+G: larger prompt editor (browser stand-in for $VISUAL / $EDITOR) */
 const PromptEditor: React.FC<{
@@ -3439,6 +3488,7 @@ const PromptEditor: React.FC<{
   onCancel: () => void;
   onSave: (text: string) => void;
 }> = ({ value, onCancel, onSave }) => {
+  const t = useLabels().shell;
   const [text, setText] = useState(value);
   return (
     <div
@@ -3452,7 +3502,7 @@ const PromptEditor: React.FC<{
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-2 border-b border-gray-800 text-sm font-medium">
-          Edit dispatch prompt
+          {t.editPromptTitle}
         </div>
         <textarea
           autoFocus
@@ -3466,18 +3516,18 @@ const PromptEditor: React.FC<{
           spellCheck={false}
         />
         <div className="flex items-center justify-end gap-2 px-4 py-2 border-t border-gray-800 text-sm">
-          <span className="text-xs text-gray-500 mr-auto">Ctrl+Enter to apply · Esc to cancel</span>
+          <span className="text-xs text-gray-500 mr-auto">{t.editPromptKeys}</span>
           <button
             onClick={onCancel}
             className="px-3 py-1.5 rounded text-gray-300 hover:bg-gray-800"
           >
-            Cancel
+            {t.cancel}
           </button>
           <button
             onClick={() => onSave(text)}
             className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white"
           >
-            Use prompt
+            {t.usePrompt}
           </button>
         </div>
       </div>

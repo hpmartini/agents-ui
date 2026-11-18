@@ -8,7 +8,11 @@ import type { AgentsTransport } from '../transport';
 import { testHost, testTransport } from '../test/agents';
 
 const fetchMock = vi.fn<NonNullable<AgentsTransport['servers']>['fetchServerStats']>();
-const servers = { fetchOrphanServers: vi.fn(), stopOrphanServer: vi.fn(), fetchServerStats: fetchMock };
+const servers = {
+  fetchOrphanServers: vi.fn(),
+  stopOrphanServer: vi.fn(),
+  fetchServerStats: fetchMock,
+};
 const host = testHost();
 const transport = testTransport({ servers });
 

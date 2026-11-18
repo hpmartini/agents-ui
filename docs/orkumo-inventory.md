@@ -167,23 +167,25 @@ The MAPLE features of the package stay as props of the full view: `canStop`, `co
 
 ## 5. Decisions and assumptions
 
-- **Delivery to Orkumo.** Orkumo is a public repo and this package is private. A `git+ssh`
-  dependency would break Orkumo's CI, the Docker and Linux release builds, and every public clone
-  without a key. Orkumo therefore pins a packed tarball of a tagged version (`vendor/`, `file:`).
-  MAPLE stays on `git+ssh` with the deploy key. Making this repo public would allow one `git` tag
-  for both; that is Hape's call.
+- **Delivery.** Hape decided on 18.11. to make this repo public, after a gitleaks scan of the
+  whole history found only false positives. Orkumo (public) and MAPLE both pin the same git tag
+  (`github:hpmartini/agents-ui#v0.4.0`), and neither CI needs a key.
 - **Styling.** Orkumo styles with the Tailwind v3 Play CDN, using its own `gray` scale. The moved
   components keep their classes unchanged. The package compiles them with Tailwind v4 (no
   preflight) for hosts without Orkumo's CDN, and its `gray` scale is Orkumo's, as
   `--agents-gray-*` variables. Orkumo does not import `styles.css`.
-- **Texts.** Orkumo's view is English and hard-coded, and the full view keeps it that way. The
-  package's `de`/`en` labels belonged to the reduced port and go with it. MAPLE shows Orkumo's
-  English texts.
-- **Removed reduced ports.** `AgentsPanel`, `StartAgentDialog`, `ChatInput`, `AgentTranscript`,
-  `ConfirmDialog` and `labels`, plus the HTTP and IPC transports. MAPLE supplies its own transport.
-  The mock transport stays for the demo and the tests.
-- **Tests.** Tests of moved components and utils move here. Orkumo's tests that render the whole
-  view keep running in Orkumo, against Orkumo's transport.
-- **MAPLE's plain transcript view (#613).** Orkumo's UI view replaces it. MAPLE keeps a
-  conversation view only if its transport provides `chat`, which is decided in the MAPLE step.
-  Until then, the switch is hidden there.
+- **Texts (Hape, 18.11.).** Every text goes through `src/labels/{shell,terminal,panels}.ts`. `en`
+  is Orkumo's wording verbatim, including the texts that are already German there, and Orkumo
+  renders `en`. `de` is for MAPLE (`locale="de"`). Product names, CLI commands and shortcuts stay as
+  they are.
+- **Removed reduced ports.** `AgentsPanel`, `StartAgentDialog`, `ChatInput`, `AgentTranscript`
+  and the old `labels`, plus the HTTP and IPC transports. MAPLE supplies its own transport. The
+  mock transport stays for the demo and the tests.
+- **Terminals.** `pty.attach` attaches to a listed agent. `pty.spawn` starts the terminals of
+  client-side sessions: interactive harnesses, `--resume`, `--continue` and `--cloud`. Without
+  `spawn`, the view offers background dispatch only (MAPLE).
+- **Tests.** Tests of moved components and utils move here. Orkumo's tests that render
+  Orkumo-side parts (Chats route, board dialogs, PTY spawn of the server) stay in Orkumo.
+- **MAPLE's plain transcript view (#613).** Orkumo's UI view replaces it. MAPLE's server serves
+  the `chat` stream and history from the Claude transcript. Status line, file completion, shells
+  and images are optional parts of `chat` that MAPLE leaves out.

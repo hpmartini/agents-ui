@@ -176,7 +176,9 @@ export function createMockTransport(
       push();
     },
     fail(error) {
-      failure = error ? { message: error.message ?? `HTTP ${error.status}`, status: error.status } : null;
+      failure = error
+        ? { message: error.message ?? `HTTP ${error.status}`, status: error.status }
+        : null;
       push();
     },
     agents: {

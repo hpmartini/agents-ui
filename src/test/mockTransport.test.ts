@@ -47,7 +47,10 @@ describe('createMockTransport', () => {
     expect(messages[0]).toMatchObject({ type: 'connected', cwd: '/w' });
 
     socket.send(JSON.stringify({ type: 'input', data: 'hi\r' }));
-    const output = messages.filter((m) => m.type === 'output').map((m) => m.data).join('');
+    const output = messages
+      .filter((m) => m.type === 'output')
+      .map((m) => m.data)
+      .join('');
     expect(output).toContain('hi');
     expect(output).toContain('mock answer to: hi');
     expect(transport.attachCount.get(id)).toBe(1);

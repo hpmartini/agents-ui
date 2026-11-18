@@ -11,12 +11,8 @@ import {
 } from 'lucide-react';
 import type { AgentContext, AgentPullRequest, AgentSession } from '../../types';
 import { formatAge, type PullRequestRow } from '../../utils/agentSessions';
-import {
-  MERGE_LABELS,
-  mergeKey,
-  type MergeKey,
-  type PullGroup,
-} from '../../utils/pullRequestQuery';
+import { mergeKey, type MergeKey, type PullGroup } from '../../utils/pullRequestQuery';
+import { useLabels } from '../../labels';
 
 /**
  * Popover behaviour shared by the summary-bar panels: focus moves in, Esc and
@@ -62,11 +58,11 @@ export function usePopover(onClose: () => void, exclusive = false) {
   return ref;
 }
 
-const CI: Record<AgentPullRequest['ci'], { label: string; icon: React.ReactNode; tone: string }> = {
-  success: { label: 'Passing', icon: <CheckCircle2 size={12} />, tone: 'text-emerald-400' },
-  failure: { label: 'Failing', icon: <XCircle size={12} />, tone: 'text-red-300' },
-  pending: { label: 'Running', icon: <CircleDashed size={12} />, tone: 'text-yellow-400' },
-  none: { label: 'No checks', icon: <CircleDashed size={12} />, tone: 'text-gray-500' },
+const CI: Record<AgentPullRequest['ci'], { icon: React.ReactNode; tone: string }> = {
+  success: { icon: <CheckCircle2 size={12} />, tone: 'text-emerald-400' },
+  failure: { icon: <XCircle size={12} />, tone: 'text-red-300' },
+  pending: { icon: <CircleDashed size={12} />, tone: 'text-yellow-400' },
+  none: { icon: <CircleDashed size={12} />, tone: 'text-gray-500' },
 };
 
 const MERGE_TONE: Record<MergeKey, string> = {
@@ -76,16 +72,12 @@ const MERGE_TONE: Record<MergeKey, string> = {
   conflicts: 'text-red-300',
 };
 
-function mergeState(pr: AgentPullRequest): { label: string; tone: string } {
-  const key = mergeKey(pr);
-  return { label: MERGE_LABELS[key], tone: MERGE_TONE[key] };
-}
-
-const REVIEW: Record<string, string> = {
-  APPROVED: 'Approved',
-  CHANGES_REQUESTED: 'Changes requested',
-  REVIEW_REQUIRED: 'Review required',
-};
+/** GitHub's review decisions -> the review keys of the labels */
+const REVIEW = {
+  APPROVED: 'approved',
+  CHANGES_REQUESTED: 'changes',
+  REVIEW_REQUIRED: 'required',
+} as const;
 
 export const filterPullRows = (rows: PullRequestRow[], repoFilter: string | null) =>
   repoFilter ? rows.filter((r) => r.pr.repoSlug === repoFilter) : rows;
@@ -122,6 +114,7 @@ export const PullRequestList: React.FC<PullRequestListProps> = ({
   onDone,
   groups,
 }) => {
+  const t = useLabels().shell;
   const loading = Object.keys(contexts).length === 0;
   const shown = groups ? groups.flatMap((g) => g.rows) : filterPullRows(rows, repoFilter);
   // pulls === null means gh could not answer for that repo; never show it as 0
@@ -137,7 +130,9 @@ export const PullRequestList: React.FC<PullRequestListProps> = ({
   const renderRow = (row: PullRequestRow, groupKey: string) => {
     const { pr, agents } = row;
     const ci = CI[pr.ci];
-    const merge = mergeState(pr);
+    const mergeState = mergeKey(pr);
+    const review = REVIEW[pr.reviewDecision as keyof typeof REVIEW] as
+      (typeof REVIEW)[keyof typeof REVIEW] | undefined;
     const isOpen = !!openUrl && openUrl === pr.url;
     return (
       <li
@@ -152,7 +147,7 @@ export const PullRequestList: React.FC<PullRequestListProps> = ({
                 onClick={() => onOpenPr(pr)}
                 aria-current={isOpen || undefined}
                 className="flex items-center gap-1 min-w-0 text-left text-gray-100 hover:text-blue-300 hover:underline"
-                title="Open next to the list"
+                title={t.openNextToList}
               >
                 <span className="font-mono shrink-0">#{pr.number}</span>
                 <span className="truncate">{pr.title}</span>
@@ -162,8 +157,8 @@ export const PullRequestList: React.FC<PullRequestListProps> = ({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="shrink-0 text-gray-400 hover:text-blue-300"
-                title="Open in browser"
-                aria-label={`Open #${pr.number} in browser`}
+                title={t.openInBrowser}
+                aria-label={t.openPrInBrowser(`#${pr.number}`)}
               >
                 <ExternalLink size={10} />
               </a>
@@ -182,28 +177,28 @@ export const PullRequestList: React.FC<PullRequestListProps> = ({
           )}
           {pr.isDraft && (
             <span className="px-1 rounded border border-gray-600 text-gray-400 shrink-0">
-              Draft
+              {t.draft}
             </span>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-gray-400">
           <span className={`flex items-center gap-1 ${ci.tone}`}>
             {ci.icon}
-            {ci.label}
+            {t.pulls.ci[pr.ci]}
             {pr.ci !== 'none' && (
               <span className="tabular-nums text-gray-500">
-                {pr.ciPassed} passed, {pr.ciFailed} failed, {pr.ciPending} pending
+                {t.ciCounts(pr.ciPassed, pr.ciFailed, pr.ciPending)}
               </span>
             )}
           </span>
-          <span className={merge.tone}>{merge.label}</span>
-          {pr.reviewDecision && <span>{REVIEW[pr.reviewDecision]}</span>}
-          {pr.author && <span>by {pr.author}</span>}
+          <span className={MERGE_TONE[mergeState]}>{t.pulls.merge[mergeState]}</span>
+          {pr.reviewDecision && <span>{review ? t.pulls.review[review] : undefined}</span>}
+          {pr.author && <span>{t.byAuthor(pr.author)}</span>}
           <span className="tabular-nums" title={pr.updatedAt}>
-            updated {formatAge(Date.now() - Date.parse(pr.updatedAt))} ago
+            {t.updatedAgo(formatAge(Date.now() - Date.parse(pr.updatedAt), t.ageUnits))}
           </span>
           <span className="font-mono text-gray-500 truncate max-w-[16rem]">
-            {pr.headRef} to {pr.baseRef}
+            {t.branchTo(pr.headRef, pr.baseRef)}
           </span>
           {agents.map((agent) => (
             <button
@@ -213,7 +208,7 @@ export const PullRequestList: React.FC<PullRequestListProps> = ({
                 onDone?.();
               }}
               className="px-1.5 rounded text-blue-300 hover:text-white hover:bg-gray-800"
-              title="Select this agent"
+              title={t.selectAgent}
             >
               {agent.name}
             </button>
@@ -225,9 +220,9 @@ export const PullRequestList: React.FC<PullRequestListProps> = ({
                 onDone?.();
               }}
               className="flex items-center gap-1 px-1.5 rounded text-gray-300 hover:text-white hover:bg-gray-800"
-              title="Open the branch in Code mode (agent worktree, else the repo)"
+              title={t.openCodeTitle}
             >
-              <Code2 size={11} /> Code
+              <Code2 size={11} /> {t.code}
             </button>
           )}
         </div>
@@ -242,12 +237,10 @@ export const PullRequestList: React.FC<PullRequestListProps> = ({
   return (
     <>
       {loading ? (
-        <p className="px-3 py-4 text-xs text-gray-500">Loading pull requests…</p>
+        <p className="px-3 py-4 text-xs text-gray-500">{t.loadingPulls}</p>
       ) : shown.length === 0 ? (
         <p className="px-3 py-4 text-xs text-gray-500">
-          {groups && rows.length > 0
-            ? 'No pull requests match the filters.'
-            : `No open pull requests${repoFilter ? ` in ${repoFilter}` : ''}.`}
+          {groups && rows.length > 0 ? t.noPullsMatch : t.noOpenPulls(repoFilter)}
         </p>
       ) : groups && clustered ? (
         groups.map((g) => (
@@ -264,8 +257,7 @@ export const PullRequestList: React.FC<PullRequestListProps> = ({
       )}
       {unavailable.length > 0 && (
         <p className="px-3 py-2 text-[11px] text-yellow-400/90 border-t border-gray-800">
-          Pull requests unavailable (gh missing, not signed in or no access):{' '}
-          {unavailable.join(', ')}
+          {t.pullsUnavailable} {unavailable.join(', ')}
         </p>
       )}
     </>
@@ -278,24 +270,27 @@ export const PullRequestsHeader: React.FC<{
   repoFilter: string | null;
   onClearRepo: () => void;
   children?: React.ReactNode;
-}> = ({ count, repoFilter, onClearRepo, children }) => (
-  <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800 shrink-0 text-sm">
-    <GitPullRequest size={14} className="text-gray-400" />
-    <span className="font-medium">Open pull requests</span>
-    <span className="text-gray-500 tabular-nums text-xs">{count}</span>
-    {repoFilter && (
-      <button
-        onClick={onClearRepo}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs text-blue-300 hover:text-white hover:bg-gray-800"
-        title="Show all repositories"
-      >
-        {repoFilter} <X size={10} />
-      </button>
-    )}
-    <div className="flex-1" />
-    {children}
-  </div>
-);
+}> = ({ count, repoFilter, onClearRepo, children }) => {
+  const t = useLabels().shell;
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800 shrink-0 text-sm">
+      <GitPullRequest size={14} className="text-gray-400" />
+      <span className="font-medium">{t.openPullRequests}</span>
+      <span className="text-gray-500 tabular-nums text-xs">{count}</span>
+      {repoFilter && (
+        <button
+          onClick={onClearRepo}
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs text-blue-300 hover:text-white hover:bg-gray-800"
+          title={t.showAllRepos}
+        >
+          {repoFilter} <X size={10} />
+        </button>
+      )}
+      <div className="flex-1" />
+      {children}
+    </div>
+  );
+};
 
 interface PullRequestsPanelProps extends Omit<
   PullRequestListProps,
@@ -313,6 +308,7 @@ export const PullRequestsPanel: React.FC<PullRequestsPanelProps> = ({
   onClose,
   ...list
 }) => {
+  const t = useLabels().shell;
   const ref = usePopover(onClose);
 
   return (
@@ -320,7 +316,7 @@ export const PullRequestsPanel: React.FC<PullRequestsPanelProps> = ({
       ref={ref}
       tabIndex={-1}
       role="dialog"
-      aria-label="Open pull requests"
+      aria-label={t.openPullRequests}
       className="absolute right-4 top-full mt-1 z-40 w-[min(900px,calc(100vw-2rem))] max-h-[70vh] flex flex-col bg-gray-900 border border-gray-700 rounded-lg shadow-2xl outline-none"
     >
       <PullRequestsHeader
@@ -334,8 +330,8 @@ export const PullRequestsPanel: React.FC<PullRequestsPanelProps> = ({
               onMaximize();
               onClose();
             }}
-            aria-label="Maximize pull requests"
-            title="Open as full view"
+            aria-label={t.maximizePulls}
+            title={t.openFullView}
             className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-800"
           >
             <Maximize2 size={14} />
@@ -343,7 +339,7 @@ export const PullRequestsPanel: React.FC<PullRequestsPanelProps> = ({
         )}
         <button
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t.close}
           className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-800"
         >
           <X size={14} />

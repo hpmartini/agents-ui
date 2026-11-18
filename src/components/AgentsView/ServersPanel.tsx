@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Check, Copy, ExternalLink, Server, Square, X } from 'lucide-react';
 import type { AgentOrphanServer, AgentServerStats } from '../../types';
 import { useTransport } from '../../host';
+import { useLabels } from '../../labels';
+import { panelsEn, type PanelsLabels } from '../../labels/panels';
 import type { AgentServer } from '../../utils/agentSessions';
 import {
   MAX_STALE_FAILURES,
@@ -29,22 +31,24 @@ const formatMem = (s?: AgentServerStats) =>
 /** What a row shows for its load: the values (if any), whether they are stale, and why. */
 export function serverLoad(
   state: ServerStatsState,
-  pid?: number
+  pid?: number,
+  t: PanelsLabels = panelsEn
 ): { stats?: AgentServerStats; stale: boolean; note?: string } {
-  if (!pid) return { stale: false, note: 'No PID known' };
-  if (state.failures >= MAX_STALE_FAILURES) return { stale: false, note: 'Load unavailable' };
+  if (!pid) return { stale: false, note: t.serversNoPid };
+  if (state.failures >= MAX_STALE_FAILURES) return { stale: false, note: t.serversLoadUnavailable };
   const stats = state.stats[pid];
   const stale = state.failures > 0 && !!stats;
   if (stale) {
     const at = new Date(state.updatedAt ?? 0).toLocaleTimeString();
-    return { stats, stale, note: `As of ${at}, refresh failed` };
+    return { stats, stale, note: t.serversStale(at) };
   }
-  if (!stats && state.checked.has(pid)) return { stale: false, note: 'Process exited' };
+  if (!stats && state.checked.has(pid)) return { stale: false, note: t.serversExited };
   return { stats, stale: false };
 }
 
 export const ServersPanel: React.FC<ServersPanelProps> = ({ rows, onSelectAgent, onClose }) => {
   const ref = usePopover(onClose);
+  const t = useLabels().panels;
   const [copied, setCopied] = useState<number | null>(null);
   const [orphans, setOrphans] = useState<AgentOrphanServer[]>([]);
   const [confirmPid, setConfirmPid] = useState<number | null>(null);
@@ -97,17 +101,17 @@ export const ServersPanel: React.FC<ServersPanelProps> = ({ rows, onSelectAgent,
       ref={ref}
       tabIndex={-1}
       role="dialog"
-      aria-label="Running servers"
+      aria-label={t.serversTitle}
       className="absolute right-4 top-full mt-1 z-40 w-[min(640px,calc(100vw-2rem))] max-h-[70vh] flex flex-col bg-gray-900 border border-gray-700 rounded-lg shadow-2xl outline-none"
     >
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800 shrink-0 text-sm">
         <Server size={14} className="text-gray-400" />
-        <span className="font-medium">Running servers</span>
+        <span className="font-medium">{t.serversTitle}</span>
         <span className="text-gray-500 tabular-nums text-xs">{rows.length}</span>
         <div className="flex-1" />
         <button
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t.close}
           className="p-2 rounded text-gray-400 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
         >
           <X size={14} />
@@ -115,13 +119,11 @@ export const ServersPanel: React.FC<ServersPanelProps> = ({ rows, onSelectAgent,
       </div>
       <div className="overflow-y-auto min-h-0">
         {rows.length === 0 ? (
-          <p className="px-3 py-4 text-xs text-gray-500">
-            No server is listening in an agent directory.
-          </p>
+          <p className="px-3 py-4 text-xs text-gray-500">{t.serversEmpty}</p>
         ) : (
           <ul className="divide-y divide-gray-800">
             {rows.map(({ server, agentId, agentName }) => {
-              const load = serverLoad(stats, server.pid);
+              const load = serverLoad(stats, server.pid, t);
               const loadTitle = (base: string) => (load.note ? `${base} – ${load.note}` : base);
               const loadClass = load.stale ? 'text-gray-500' : 'text-gray-300';
               return (
@@ -140,13 +142,13 @@ export const ServersPanel: React.FC<ServersPanelProps> = ({ rows, onSelectAgent,
                     <>
                       <span
                         className={`w-12 shrink-0 text-right tabular-nums ${loadClass}`}
-                        title={loadTitle('CPU (share of one core, incl. child processes)')}
+                        title={loadTitle(t.serversCpu)}
                       >
                         {formatCpu(load.stats)}
                       </span>
                       <span
                         className={`w-16 shrink-0 text-right tabular-nums ${loadClass}`}
-                        title={loadTitle('Memory (RSS, incl. child processes)')}
+                        title={loadTitle(t.serversMemory)}
                       >
                         {formatMem(load.stats)}
                       </span>
@@ -158,7 +160,7 @@ export const ServersPanel: React.FC<ServersPanelProps> = ({ rows, onSelectAgent,
                       onClose();
                     }}
                     className="truncate max-w-[10rem] text-blue-300 hover:text-white hover:underline"
-                    title="Select this agent"
+                    title={t.serversSelectAgent}
                   >
                     {agentName}
                   </button>
@@ -167,16 +169,16 @@ export const ServersPanel: React.FC<ServersPanelProps> = ({ rows, onSelectAgent,
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2 rounded text-gray-400 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
-                    aria-label={`Open localhost:${server.port}`}
-                    title="Open"
+                    aria-label={t.serversOpenPort(server.port)}
+                    title={t.open}
                   >
                     <ExternalLink size={12} />
                   </a>
                   <button
                     onClick={() => copy(server.port)}
                     className="p-2 rounded text-gray-400 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
-                    aria-label={`Copy URL of port ${server.port}`}
-                    title="Copy URL"
+                    aria-label={t.serversCopyPort(server.port)}
+                    title={t.serversCopyUrl}
                   >
                     {copied === server.port ? <Check size={12} /> : <Copy size={12} />}
                   </button>
@@ -186,17 +188,16 @@ export const ServersPanel: React.FC<ServersPanelProps> = ({ rows, onSelectAgent,
           </ul>
         )}
         {orphans.length > 0 && (
-          <section aria-label="Orphaned servers" className="border-t border-gray-700">
+          <section aria-label={t.serversOrphaned} className="border-t border-gray-700">
             <h3 className="px-3 pt-2 pb-1 text-xs font-medium text-amber-300">
-              Verwaist <span className="text-gray-500 tabular-nums">{orphans.length}</span>
-              <span className="ml-2 font-normal text-gray-500">
-                no running session owns these (worktree or job dir)
-              </span>
+              {t.serversOrphanedHeading}{' '}
+              <span className="text-gray-500 tabular-nums">{orphans.length}</span>
+              <span className="ml-2 font-normal text-gray-500">{t.serversOrphanedHint}</span>
             </h3>
             {stopError && <p className="px-3 pb-1 text-xs text-red-400">{stopError}</p>}
             <ul className="divide-y divide-gray-800">
               {orphans.map((orphan) => {
-                const load = serverLoad(stats, orphan.pid);
+                const load = serverLoad(stats, orphan.pid, t);
                 return (
                   <li
                     key={orphan.pid + ':' + orphan.port}
@@ -226,21 +227,21 @@ export const ServersPanel: React.FC<ServersPanelProps> = ({ rows, onSelectAgent,
                           onClick={() => stop(orphan.pid)}
                           className="px-2 py-1 rounded bg-red-600 hover:bg-red-500 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
                         >
-                          Stop pid {orphan.pid}
+                          {t.serversStopPid(orphan.pid)}
                         </button>
                         <button
                           onClick={() => setConfirmPid(null)}
                           className="px-2 py-1 rounded text-gray-300 hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
                         >
-                          Cancel
+                          {t.cancel}
                         </button>
                       </span>
                     ) : (
                       <button
                         onClick={() => setConfirmPid(orphan.pid)}
                         className="p-2 rounded text-gray-400 hover:text-red-300 hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
-                        aria-label={`Stop orphaned server on port ${orphan.port}`}
-                        title="Stop (SIGTERM)"
+                        aria-label={t.serversStopOrphan(orphan.port)}
+                        title={t.serversStopTitle}
                       >
                         <Square size={12} />
                       </button>

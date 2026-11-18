@@ -23,6 +23,7 @@ import {
   UI_VIEW_HARNESSES,
 } from '../../utils/agentSessions';
 import { useHost, useTransport } from '../../host';
+import { useLabels } from '../../labels';
 import { LOCAL_TARGETS } from '../../transport';
 import type { PaneView } from '../../hooks/useAgentWorkspace';
 import {
@@ -113,10 +114,10 @@ interface ResolvedTab {
   root: SplitNode;
 }
 
-const LAYOUTS: { id: PaneLayout; icon: React.ReactNode; label: string }[] = [
-  { id: 'columns', icon: <Columns2 size={14} />, label: 'Panes side by side' },
-  { id: 'rows', icon: <Rows2 size={14} />, label: 'Panes stacked' },
-  { id: 'grid', icon: <LayoutGrid size={14} />, label: 'Panes in a grid' },
+const LAYOUTS: { id: Exclude<PaneLayout, 'single'>; icon: React.ReactNode }[] = [
+  { id: 'columns', icon: <Columns2 size={14} /> },
+  { id: 'rows', icon: <Rows2 size={14} /> },
+  { id: 'grid', icon: <LayoutGrid size={14} /> },
 ];
 
 const ZONE_HIGHLIGHT: Record<DropZone, string> = {
@@ -183,6 +184,7 @@ export const BrowserPane: React.FC<{
   headerProps?: React.HTMLAttributes<HTMLDivElement>;
 }> = ({ url, active, onFocus, onClose, onMaximize, headerProps }) => {
   const { renderBrowser } = useHost();
+  const t = useLabels().terminal;
   if (!renderBrowser) return null;
   return (
     <div
@@ -193,14 +195,14 @@ export const BrowserPane: React.FC<{
         {renderBrowser({
           url,
           onClose,
-          closeLabel: 'Close browser',
+          closeLabel: t.closeBrowser,
           dragHandleProps: headerProps,
           actions: onMaximize && (
             <button
               onClick={onMaximize}
               className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 shrink-0"
-              title="Own tab"
-              aria-label="Move browser to its own tab"
+              title={t.ownTab}
+              aria-label={t.moveBrowserToOwnTab}
             >
               <Maximize2 size={14} />
             </button>
@@ -292,6 +294,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   const targets = transport.targets ?? LOCAL_TARGETS;
   // Without a built-in browser there are no browser panes: links go to the system browser
   const { renderBrowser } = useHost();
+  const labels = useLabels();
+  const t = labels.terminal;
   const onOpenLink = renderBrowser ? onOpenLinkProp : undefined;
 
   // Tabs whose sessions have not loaded yet stay in the stored workspace but are not shown
@@ -301,8 +305,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     .map((tab) => {
       const resolved = tab.panes
         .map(
-          (id) =>
-            byId.get(id) ?? (renderBrowser ? browserSession(id) : null) ?? shellSession(id)
+          (id) => byId.get(id) ?? (renderBrowser ? browserSession(id) : null) ?? shellSession(id)
         )
         .filter((s): s is AgentSession => !!s);
       const shown =
@@ -443,12 +446,9 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
       <div className="h-full flex flex-col items-center justify-center text-gray-500 gap-3 p-8 text-center">
         <Bot size={40} className="text-gray-700" />
         <div className="text-sm">
-          No agent attached. Select a session and press <kbd className="kbd">Enter</kbd> or{' '}
-          <kbd className="kbd">→</kbd> to open it in a tab.
+          {t.noAgentAttached(<kbd className="kbd">Enter</kbd>, <kbd className="kbd">→</kbd>)}
         </div>
-        <div className="text-xs text-gray-500">
-          Drag one tab onto another pane to work with several agents side by side.
-        </div>
+        <div className="text-xs text-gray-500">{t.dragTabsHint}</div>
       </div>
     );
   }
@@ -521,8 +521,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               headerProps={
                 dragHeader && {
                   ...dragHeader,
-                  title:
-                    'Drag onto a pane edge to rearrange, or onto the tab strip for its own tab',
+                  title: t.dragPaneTitle,
                 }
               }
             />
@@ -610,14 +609,17 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
         <div
           ref={stripRef}
           role="tablist"
-          aria-label="Attached agents"
+          aria-label={t.attachedAgents}
           className="flex-1 flex items-center overflow-x-auto scrollbar-hide h-full"
         >
           {tabs.map(({ tab, sessions: panes }) => {
             const isActive = tab.id === activeTabId;
             const lead = panes.find((s) => s.id === tab.activeSessionId) ?? panes[0];
             const needsInput = panes.some((s) => s.displayState === 'needs-input');
-            const glyph = stateGlyph(needsInput ? 'needs-input' : lead.displayState);
+            const glyph = stateGlyph(
+              needsInput ? 'needs-input' : lead.displayState,
+              labels.shell.displayStates
+            );
             const title = tabTitle(
               panes.map((s) => s.name),
               paneNoun
@@ -652,11 +654,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                     ? 'bg-gray-800 text-white'
                     : 'text-gray-400 hover:bg-gray-850 hover:text-gray-200'
                 } ${drag?.kind === 'tab' && drag.id === tab.id ? 'opacity-40' : ''}`}
-                title={panes
-                  .map(
-                    (s) => `${s.name} · ${s.cwd}${s.sessionId ? ` · session ${s.sessionId}` : ''}`
-                  )
-                  .join('\n')}
+                title={panes.map((s) => t.tabPaneTitle(s.name, s.cwd, s.sessionId)).join('\n')}
               >
                 {isActive && <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500" />}
                 {indicator && (
@@ -674,7 +672,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                   aria-selected={isActive}
                   aria-controls={`agent-tabpanel-${tab.id}`}
                   aria-keyshortcuts="Alt+Shift+ArrowLeft Alt+Shift+ArrowRight"
-                  aria-label={`${title}, ${glyph.label}${panes.length > 1 ? `, ${panes.length} panes` : ''}${needsInput ? ', needs input' : ''}`}
+                  aria-label={t.tabAria(title, glyph.label, panes.length, needsInput)}
                   tabIndex={isActive ? 0 : -1}
                   onClick={() => onActivateTab(tab.id)}
                   onKeyDown={(e) => {
@@ -689,9 +687,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                       if (step) {
                         refocusId.current = tab.id;
                         onMoveTab(tab.id, order[step.to], delta < 0 ? 'before' : 'after');
-                        setAnnouncement(
-                          `${title} moved to position ${step.to + 1} of ${order.length}`
-                        );
+                        setAnnouncement(t.tabMoved(title, step.to + 1, order.length));
                       }
                       return;
                     }
@@ -766,8 +762,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                           splitOut(tab.id, 'right');
                         }}
                         className={`p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 ${focusRing}`}
-                        title="Split right (into the neighbouring tab)"
-                        aria-label={`Split ${title} right`}
+                        title={t.splitRightTitle}
+                        aria-label={t.splitRight(title)}
                       >
                         <Columns2 size={12} />
                       </button>
@@ -777,8 +773,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                           splitOut(tab.id, 'bottom');
                         }}
                         className={`p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 ${focusRing}`}
-                        title="Split down (into the neighbouring tab)"
-                        aria-label={`Split ${title} down`}
+                        title={t.splitDownTitle}
+                        aria-label={t.splitDown(title)}
                       >
                         <Rows2 size={12} />
                       </button>
@@ -790,8 +786,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                       onCloseTab(tab.id);
                     }}
                     className={`p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-white ${focusRing}`}
-                    aria-label={`Close ${title}`}
-                    title="Close"
+                    aria-label={t.closeNamed(title)}
+                    title={t.close}
                   >
                     <X size={12} />
                   </button>
@@ -830,8 +826,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               aria-haspopup="menu"
               onClick={() => setTabListOpen((o) => !o)}
               className={`flex items-center gap-1 h-full px-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white ${focusRing}`}
-              title="All tabs"
-              aria-label={`All tabs, ${hiddenTabs.length} hidden`}
+              title={t.allTabs}
+              aria-label={t.allTabsHidden(hiddenTabs.length)}
             >
               {hiddenTabs.length > 0 && (
                 <span className="tabular-nums text-[11px] text-gray-400">+{hiddenTabs.length}</span>
@@ -866,7 +862,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             <div
               className="flex items-center gap-0.5 px-1 shrink-0"
               role="group"
-              aria-label="Pane layout"
+              aria-label={t.paneLayout}
             >
               {LAYOUTS.map((item) => (
                 <button
@@ -877,8 +873,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                       ? 'bg-gray-700 text-white'
                       : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
                   }`}
-                  title={item.label}
-                  aria-label={item.label}
+                  title={t.layout(item.id)}
+                  aria-label={t.layout(item.id)}
                   aria-pressed={activeTab.tab.layout === item.id}
                 >
                   {item.icon}
@@ -921,34 +917,35 @@ const TabList: React.FC<{
   onClose: () => void;
 }> = ({ items, onPick, onClose }) => {
   const ref = usePopover(onClose, true);
+  const t = useLabels().terminal;
   return (
     <div
       ref={ref}
       tabIndex={-1}
       role="menu"
-      aria-label="All tabs"
+      aria-label={t.allTabs}
       className="absolute right-0 top-full z-50 mt-1 w-72 max-h-[60vh] overflow-y-auto rounded-lg border border-gray-600 bg-gray-900 py-1 shadow-2xl outline-none"
     >
-      {items.map((t) => (
+      {items.map((item) => (
         <button
-          key={t.id}
+          key={item.id}
           type="button"
           role="menuitem"
-          onClick={() => onPick(t.id)}
+          onClick={() => onPick(item.id)}
           className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-800 focus-visible:bg-gray-800 focus-visible:outline-none ${
-            t.active ? 'text-white' : t.hidden ? 'text-gray-400' : 'text-gray-200'
+            item.active ? 'text-white' : item.hidden ? 'text-gray-400' : 'text-gray-200'
           }`}
         >
-          {t.hidden ? (
+          {item.hidden ? (
             <EyeOff size={12} aria-hidden className="shrink-0 text-gray-500" />
           ) : (
             <Eye size={12} aria-hidden className="shrink-0 text-emerald-400" />
           )}
-          <span className="min-w-0 flex-1 truncate" title={t.title}>
-            {t.title}
+          <span className="min-w-0 flex-1 truncate" title={item.title}>
+            {item.title}
           </span>
           <span className="shrink-0 text-[10px] text-gray-500">
-            {t.active ? 'active' : t.hidden ? 'hidden' : 'visible'}
+            {item.active ? t.tabActive : item.hidden ? t.tabHidden : t.tabVisible}
           </span>
         </button>
       ))}

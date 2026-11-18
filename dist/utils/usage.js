@@ -1,18 +1,19 @@
+import { terminalEn } from '../labels/terminal';
 /** "in 2 h 53 min", "in 4 T 6 h", "in 12 min", "jetzt" */
-export function formatResetIn(resetsAt, now = Date.now()) {
+export function formatResetIn(resetsAt, now = Date.now(), t = terminalEn) {
     if (resetsAt == null)
-        return 'erfolgt';
+        return t.resetDone;
     const min = Math.floor((resetsAt - now) / 60_000);
     if (min <= 0)
-        return 'jetzt';
+        return t.resetNow;
     const d = Math.floor(min / 1440);
     const h = Math.floor((min % 1440) / 60);
     const m = min % 60;
     if (d > 0)
-        return `in ${d} T ${h} h`;
+        return t.resetInDays(d, h);
     if (h > 0)
-        return `in ${h} h ${m} min`;
-    return `in ${m} min`;
+        return t.resetInHours(h, m);
+    return t.resetInMinutes(m);
 }
 export function limitStatus(window) {
     if (!window || window.usedPercent == null)

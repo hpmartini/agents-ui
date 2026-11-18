@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { useLabels } from '../../labels';
 import { useDialogA11y } from '../CommandPalette/useDialogA11y';
 
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400';
@@ -14,6 +15,7 @@ export const ConfirmDialog: React.FC<{
   onConfirm: () => void;
   onCancel: () => void;
 }> = ({ title, body, confirm, onConfirm, onCancel }) => {
+  const t = useLabels().shell;
   const dialogRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const trapTab = useDialogA11y(true, dialogRef, () => cancelRef.current);
@@ -53,7 +55,7 @@ export const ConfirmDialog: React.FC<{
             onClick={onCancel}
             className={`px-3 py-1.5 rounded-md text-gray-200 hover:bg-gray-700 ${FOCUS}`}
           >
-            Cancel
+            {t.cancel}
           </button>
           <button
             type="button"

@@ -14,10 +14,10 @@ export function recencyOf(time: number | null, now = Date.now()): Recency {
 }
 
 /** Short age for a rail row: "now", "5m", "3h", a weekday this week, else the date */
-export function relativeTime(time: number | null, now = Date.now()): string {
+export function relativeTime(time: number | null, now = Date.now(), justNow = 'now'): string {
   if (time == null) return '';
   const minutes = Math.floor((now - time) / 60_000);
-  if (minutes < 1) return 'now';
+  if (minutes < 1) return justNow;
   if (minutes < 60) return `${minutes}m`;
   if (time >= startOfDay(now)) return `${Math.floor(minutes / 60)}h`;
   const date = new Date(time);

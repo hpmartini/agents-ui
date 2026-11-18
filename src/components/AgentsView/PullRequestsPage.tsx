@@ -7,12 +7,7 @@ import { BrowserPane } from './AgentWorkspace';
 import { PullRequestList, type PullRequestListProps } from './PullRequestsPanel';
 import { getEmbedsAnySite, getLinkTarget, openLink } from '../../utils/links';
 import {
-  CI_LABELS,
   FILTER_RESET,
-  GROUP_LABELS,
-  MERGE_LABELS,
-  REVIEW_LABELS,
-  SORT_LABELS,
   hasFilters,
   parsePullQuery,
   patchPullParams,
@@ -20,6 +15,7 @@ import {
   queryPulls,
   type PullQuery,
 } from '../../utils/pullRequestQuery';
+import { useLabels } from '../../labels';
 
 /** Filters, grouping and sorting live in the URL of /pulls (#191), not in these props */
 export type PullRequestsPageProps = Omit<
@@ -55,7 +51,6 @@ export const ICON_BTN =
 type Options = Record<string, string>;
 export const asOptions = (values: string[]): Options =>
   Object.fromEntries(values.map((v) => [v, v]));
-const YES_NO: Options = { yes: 'Yes', no: 'No' };
 
 /** One select filter; the empty option means "any" (also used by the Issues mode) */
 export const Filter: React.FC<{
@@ -63,23 +58,26 @@ export const Filter: React.FC<{
   value: string | null;
   options: Options;
   onChange: (value: string | null) => void;
-}> = ({ label, value, options, onChange }) => (
-  <select
-    aria-label={label}
-    value={value ?? ''}
-    onChange={(e) => onChange(e.target.value || null)}
-    className={`${SELECT_CLS} ${value ? 'border-blue-500/70 text-white' : ''}`}
-  >
-    <option value="">{label}: any</option>
-    {Object.entries(options).map(([key, text]) => (
-      <option key={key} value={key}>
-        {text}
-      </option>
-    ))}
-    {/* A value from the URL that no PR has (any more) stays visible and clearable */}
-    {value && !Object.hasOwn(options, value) && <option value={value}>{value}</option>}
-  </select>
-);
+}> = ({ label, value, options, onChange }) => {
+  const t = useLabels().shell;
+  return (
+    <select
+      aria-label={label}
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value || null)}
+      className={`${SELECT_CLS} ${value ? 'border-blue-500/70 text-white' : ''}`}
+    >
+      <option value="">{t.filterAny(label)}</option>
+      {Object.entries(options).map(([key, text]) => (
+        <option key={key} value={key}>
+          {text}
+        </option>
+      ))}
+      {/* A value from the URL that no PR has (any more) stays visible and clearable */}
+      {value && !Object.hasOwn(options, value) && <option value={value}>{value}</option>}
+    </select>
+  );
+};
 
 /** Select over a fixed set of keys; the setter receives the key typed like the query field */
 function keyed<K extends keyof PullQuery>(
@@ -99,13 +97,17 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
   setSearchParams: setParams,
   ...props
 }) => {
+  const t = useLabels().shell;
   const [openUrl, setOpenUrl] = useState<string | null>(null);
   // A built-in browser that frames any site (Orkumo's Electron BrowserView)
   const canEmbed = getEmbedsAnySite() && !!useHost().renderBrowser;
   const viewRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const query = useMemo(() => parsePullQuery(params), [params]);
-  const { shown, groups } = useMemo(() => queryPulls(props.rows, query), [props.rows, query]);
+  const { shown, groups } = useMemo(
+    () => queryPulls(props.rows, query, t.pulls),
+    [props.rows, query, t.pulls]
+  );
   const options = useMemo(() => pullOptions(props.rows), [props.rows]);
   const filtered = hasFilters(query);
   // Typing replaces the history entry; every other change is one Back step
@@ -132,7 +134,7 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
     <div
       ref={viewRef}
       tabIndex={-1}
-      aria-label="Open pull requests"
+      aria-label={t.openPullRequests}
       className="absolute inset-0 flex flex-col min-h-0 bg-gray-900 outline-none"
       data-pulls-view
     >
@@ -144,9 +146,9 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
             <div className="px-3 py-2 border-b border-gray-800 shrink-0 space-y-2">
               <div className="flex items-center gap-2 text-sm">
                 <GitPullRequest size={14} className="text-gray-400" aria-hidden />
-                <span className="font-medium">Open pull requests</span>
+                <span className="font-medium">{t.openPullRequests}</span>
                 <span className="text-gray-500 tabular-nums text-xs" data-testid="pulls-count">
-                  {filtered ? `${shown.length} of ${props.rows.length}` : props.rows.length}
+                  {filtered ? t.shownOf(shown.length, props.rows.length) : props.rows.length}
                 </span>
                 <div className="flex-1" />
                 {filtered && (
@@ -158,101 +160,101 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
                     }}
                     className={ICON_BTN}
                   >
-                    <RotateCcw size={11} aria-hidden /> Reset filters
+                    <RotateCcw size={11} aria-hidden /> {t.resetFilters}
                   </button>
                 )}
               </div>
               <div
                 role="toolbar"
-                aria-label="Filter, group and sort pull requests"
+                aria-label={t.pullsToolbar}
                 className="flex flex-wrap items-center gap-1.5"
               >
                 <input
                   ref={searchRef}
                   type="search"
-                  aria-label="Search pull requests"
-                  placeholder="Title, #number, branch, author"
+                  aria-label={t.searchPulls}
+                  placeholder={t.searchPullsPlaceholder}
                   value={query.q}
                   onChange={(e) => update({ q: e.target.value }, true)}
                   className={`${SELECT_CLS} w-56 placeholder:text-gray-500`}
                 />
                 <Filter
-                  label="Repo"
+                  label={t.pullFilters.repo}
                   value={query.repo}
                   options={asOptions(options.repos)}
                   onChange={keyed(update, 'repo')}
                 />
                 <Filter
-                  label="CI"
+                  label={t.pullFilters.ci}
                   value={query.ci}
-                  options={CI_LABELS}
+                  options={t.pulls.ci}
                   onChange={keyed(update, 'ci')}
                 />
                 <Filter
-                  label="Merge"
+                  label={t.pullFilters.merge}
                   value={query.merge}
-                  options={MERGE_LABELS}
+                  options={t.pulls.merge}
                   onChange={keyed(update, 'merge')}
                 />
                 <Filter
-                  label="Review"
+                  label={t.pullFilters.review}
                   value={query.review}
-                  options={REVIEW_LABELS}
+                  options={t.pulls.review}
                   onChange={keyed(update, 'review')}
                 />
                 <Filter
-                  label="Draft"
+                  label={t.pullFilters.draft}
                   value={query.draft}
-                  options={YES_NO}
+                  options={t.pulls.yesNo}
                   onChange={keyed(update, 'draft')}
                 />
                 <Filter
-                  label="Author"
+                  label={t.pullFilters.author}
                   value={query.author}
                   options={asOptions(options.authors)}
                   onChange={keyed(update, 'author')}
                 />
                 <Filter
-                  label="Base"
+                  label={t.pullFilters.base}
                   value={query.base}
                   options={asOptions(options.bases)}
                   onChange={keyed(update, 'base')}
                 />
                 <Filter
-                  label="Has agent"
+                  label={t.pullFilters.agent}
                   value={query.agent}
-                  options={YES_NO}
+                  options={t.pulls.yesNo}
                   onChange={keyed(update, 'agent')}
                 />
                 <span className="w-px h-4 bg-gray-700 mx-1" aria-hidden />
                 <select
-                  aria-label="Group by"
+                  aria-label={t.groupBy}
                   value={query.group}
                   onChange={(e) => keyed(update, 'group')(e.target.value)}
                   className={SELECT_CLS}
                 >
-                  {Object.entries(GROUP_LABELS).map(([key, text]) => (
+                  {Object.entries(t.pulls.group).map(([key, text]) => (
                     <option key={key} value={key}>
-                      {key === 'none' ? text : `Group: ${text}`}
+                      {key === 'none' ? text : t.groupOption(text)}
                     </option>
                   ))}
                 </select>
                 <select
-                  aria-label="Sort by"
+                  aria-label={t.sortBy}
                   value={query.sort}
                   onChange={(e) => keyed(update, 'sort')(e.target.value)}
                   className={SELECT_CLS}
                 >
-                  {Object.entries(SORT_LABELS).map(([key, text]) => (
+                  {Object.entries(t.pulls.sort).map(([key, text]) => (
                     <option key={key} value={key}>
-                      Sort: {text}
+                      {t.sortOption(text)}
                     </option>
                   ))}
                 </select>
                 <button
                   onClick={() => update({ dir: query.dir === 'asc' ? 'desc' : 'asc' })}
-                  aria-label={query.dir === 'asc' ? 'Sort ascending' : 'Sort descending'}
-                  title={query.dir === 'asc' ? 'Ascending' : 'Descending'}
+                  aria-label={query.dir === 'asc' ? t.sortAscending : t.sortDescending}
+                  title={query.dir === 'asc' ? t.ascending : t.descending}
                   className={ICON_BTN}
                 >
                   {query.dir === 'asc' ? (

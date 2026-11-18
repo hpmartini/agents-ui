@@ -14,6 +14,7 @@ import {
 import type { AgentGrouping } from '../../types';
 import type { AgentConfigLike } from './types';
 import { useHost } from '../../host';
+import { useLabels } from '../../labels';
 
 /** A work mode of the host (Orkumo: a module's mode); opened through `host.openMode` */
 export interface RailMode {
@@ -37,12 +38,7 @@ export interface RailNavProps {
   onOpenProject: (appId: string) => void;
 }
 
-const GROUP_MODES: { key: AgentGrouping; label: string }[] = [
-  { key: 'project', label: 'Project' },
-  { key: 'state', label: 'Status' },
-  { key: 'directory', label: 'Directory' },
-  { key: 'none', label: 'None' },
-];
+const GROUP_MODES: AgentGrouping[] = ['project', 'state', 'directory', 'none'];
 
 const PROJECTS_COLLAPSED_KEY = 'devOrbitAgentProjectsCollapsed';
 
@@ -54,10 +50,11 @@ export const GroupingPicker: React.FC<{
   grouping: AgentGrouping;
   onGrouping: (grouping: AgentGrouping) => void;
 }> = ({ grouping, onGrouping }) => {
+  const t = useLabels().shell;
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<number | undefined>(undefined);
-  const current = GROUP_MODES.find((m) => m.key === grouping) ?? GROUP_MODES[0];
+  const current = GROUP_MODES.includes(grouping) ? grouping : GROUP_MODES[0];
 
   const cancelClose = () => window.clearTimeout(closeTimer.current);
   useEffect(() => cancelClose, []);
@@ -107,34 +104,34 @@ export const GroupingPicker: React.FC<{
         onClick={(e) => setOpen((v) => (e.detail === 0 ? !v : true))}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Group agents by: ${current.label} (Ctrl+S)`}
-        title="Group agents by (Ctrl+S)"
+        aria-label={t.groupAgentsByCurrent(t.groupModes[current])}
+        title={t.groupAgentsByTitle}
         className={`flex items-center gap-1 px-1.5 py-1 rounded border text-gray-300 hover:bg-gray-800 ${
           open ? 'bg-gray-800 border-gray-700' : 'border-gray-800'
         }`}
       >
         <Layers size={12} aria-hidden />
-        {current.label}
+        {t.groupModes[current]}
       </button>
       {open && (
         // pt-1 instead of mt-1: the pointer stays inside the hover area on its way to the menu
         <div className="absolute left-0 top-full pt-1 z-30">
           <div
             role="menu"
-            aria-label="Group agents by"
+            aria-label={t.groupAgentsBy}
             className="min-w-[180px] bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1"
           >
             {GROUP_MODES.map((mode) => (
               <button
-                key={mode.key}
+                key={mode}
                 type="button"
                 role="menuitemradio"
-                aria-checked={mode.key === grouping}
-                onClick={() => run(() => onGrouping(mode.key))}
+                aria-checked={mode === grouping}
+                onClick={() => run(() => onGrouping(mode))}
                 className={item}
               >
-                <span className="w-3">{mode.key === grouping && <Check size={12} />}</span>
-                {mode.label}
+                <span className="w-3">{mode === grouping && <Check size={12} />}</span>
+                {t.groupModes[mode]}
               </button>
             ))}
           </div>
@@ -162,15 +159,16 @@ export const FoldButtons: React.FC<{
   onCards: (expand: boolean) => void;
   cardsDisabled?: boolean;
 }> = ({ groupsCollapsed, onGroups, groupsDisabled, cardsExpanded, onCards, cardsDisabled }) => {
-  const groupsLabel = groupsCollapsed ? 'Expand all groups' : 'Collapse all groups';
-  const cardsLabel = cardsExpanded ? 'Collapse all agent cards' : 'Expand all agent cards';
+  const t = useLabels().shell;
+  const groupsLabel = groupsCollapsed ? t.expandAllGroups : t.collapseAllGroups;
+  const cardsLabel = cardsExpanded ? t.collapseAllCards : t.expandAllCards;
   return (
     <>
       <button
         type="button"
         onClick={() => onGroups(!groupsCollapsed)}
         disabled={groupsDisabled}
-        title={groupsDisabled ? 'Clear the filters to fold groups' : groupsLabel}
+        title={groupsDisabled ? t.foldGroupsDisabled : groupsLabel}
         aria-label={groupsLabel}
         className={foldButton}
       >
@@ -197,6 +195,7 @@ export const ProjectsSection: React.FC<{
   /** A filter is active: the list is for agents, so keep the project list out of the way */
   filtered?: boolean;
 }> = ({ apps, nav, filtered }) => {
+  const t = useLabels().shell;
   const { openCode } = useHost();
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -227,7 +226,7 @@ export const ProjectsSection: React.FC<{
         className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-300 bg-gray-800 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cursor ${open ? 'border-b border-gray-700' : ''}`}
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        Projects
+        {t.projects}
         <span className="font-normal text-gray-400">{list.length}</span>
       </button>
       {open && (
@@ -237,7 +236,7 @@ export const ProjectsSection: React.FC<{
               <button
                 onClick={() => nav.onOpenProject(app.id)}
                 className="flex-1 min-w-0 truncate text-left text-sm text-gray-300 hover:text-white"
-                title={`Open ${app.name}\n${app.path}`}
+                title={`${t.openNamed(app.name)}\n${app.path}`}
               >
                 {app.name}
               </button>
@@ -246,8 +245,8 @@ export const ProjectsSection: React.FC<{
                   <button
                     onClick={() => openCode(app.path)}
                     className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
-                    title={`View code of ${app.name}`}
-                    aria-label={`View code of ${app.name}`}
+                    title={t.viewCodeOf(app.name)}
+                    aria-label={t.viewCodeOf(app.name)}
                   >
                     <Code2 size={11} />
                   </button>
