@@ -2,6 +2,7 @@
  * Groups dispatch-target directories for the directory picker (#158):
  * pinned entries (home, current) first, then one group per parent directory.
  */
+import { panelsEn } from '../labels/panels';
 const WORKTREE_MARKER = '/.claude/worktrees/';
 /** Real paths win over app config paths, which may be typed in another case */
 const SOURCE_PRIORITY = ['home', 'repo', 'worktree', 'session', 'configured', 'app'];
@@ -58,6 +59,7 @@ const byItem = (a, b) => byText(a.primary, b.primary) ||
 export function groupDirectories(choices, opts = {}) {
     const home = opts.home ?? null;
     const query = (opts.query || '').trim().toLowerCase();
+    const worktreeOf = opts.worktreeOf ?? panelsEn.dirWorktreeOf;
     const pinnedKeys = [opts.current, home].filter(Boolean).map((p) => pathKey(p));
     const entries = dedupeDirectories(choices);
     const nameByPath = new Map(entries.map((e) => [pathKey(e.path), e.name]));
@@ -79,7 +81,7 @@ export function groupDirectories(choices, opts = {}) {
             ? {
                 primary: nameByPath.get(pathKey(repoRoot)) ?? basename(repoRoot),
                 worktree: true,
-                entry: { ...entry, detail: `worktree of ${basename(repoRoot)}` },
+                entry: { ...entry, detail: worktreeOf(basename(repoRoot)) },
             }
             : { primary: entry.name, worktree: false, entry };
         const key = pathKey(parent);

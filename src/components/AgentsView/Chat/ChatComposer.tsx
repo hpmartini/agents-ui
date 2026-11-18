@@ -14,6 +14,7 @@ import {
   type Edit,
 } from '../../../utils/chatComposer';
 import { useTransport } from '../../../host';
+import { useLabels } from '../../../labels';
 import { useAutoGrowTextarea } from '../../../hooks/useAutoGrowTextarea';
 import { ResizeGrip } from '../../ResizeGrip';
 
@@ -21,12 +22,6 @@ const MAX_HEIGHT = 320;
 // One full line: leading-6 + py-2 + border
 const MIN_HEIGHT = 42;
 export const CHAT_COMPOSER_HEIGHT_KEY = 'devOrbitChatComposerHeight';
-const KIND_LABEL: Record<ChatSuggestion['kind'], string> = {
-  command: 'command',
-  agent: 'agent',
-  file: 'file',
-  dir: 'directory',
-};
 
 interface ChatComposerProps {
   /** Transcript view id for `@` file completion; null until the view is open */
@@ -69,16 +64,17 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   takeSuggestion,
   inputRef,
 }) => {
+  const t = useLabels().terminal;
   // The suggestion the user typed over or took; a new one shows again
   const [dropped, setDropped] = useState<string | null>(null);
   const ghost = !disabled && !value && suggestion && suggestion !== dropped ? suggestion : null;
   const placeholder = ghost
     ? `${ghost}${suggestionCut ? '…' : ''}  ⇥ Tab`
     : disabled
-      ? 'Terminal not connected'
+      ? t.composerDisconnected
       : submitKey === 'enter'
-        ? 'Message · Enter sends · / commands · @ files'
-        : 'Message · Cmd/Ctrl+Enter sends · / commands · @ files';
+        ? t.composerPlaceholderEnter
+        : t.composerPlaceholderModEnter;
   const valueRef = useRef(value);
   valueRef.current = value;
   const [caret, setCaret] = useState(0);
@@ -118,11 +114,11 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   const chat = useTransport().chat;
 
   useEffect(() => {
-    if (dirQuery === null || !chatId || !chat) return;
+    if (dirQuery === null || !chatId || !chat?.fetchChatDirs) return;
+    const fetchDirs = chat.fetchChatDirs;
     let cancelled = false;
     const timer = setTimeout(() => {
-      chat
-        .fetchChatDirs(chatId, dirQuery)
+      fetchDirs(chatId, dirQuery)
         .then((list) => !cancelled && setDirs(list))
         .catch(() => !cancelled && setDirs([]));
     }, 80);
@@ -133,11 +129,11 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   }, [chat, chatId, dirQuery]);
 
   useEffect(() => {
-    if (fileQuery === null || !chatId || !chat) return;
+    if (fileQuery === null || !chatId || !chat?.fetchChatFiles) return;
+    const fetchFiles = chat.fetchChatFiles;
     let cancelled = false;
     const timer = setTimeout(() => {
-      chat
-        .fetchChatFiles(chatId, fileQuery)
+      fetchFiles(chatId, fileQuery)
         .then((list) => !cancelled && setFiles(list))
         .catch(() => !cancelled && setFiles([]));
     }, 120);
@@ -291,7 +287,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             ref={listRef}
             id={listId}
             role="listbox"
-            aria-label={query?.trigger === '/' ? 'Commands' : 'Files and agents'}
+            aria-label={query?.trigger === '/' ? t.commands : t.filesAndAgents}
             className="w-1/2 min-w-0 overflow-y-auto py-1"
           >
             {suggestions.map((s, i) => (
@@ -312,7 +308,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
               >
                 <span className="font-mono text-blue-300 truncate min-w-0">{s.label}</span>
                 <span className="ml-auto shrink-0 text-[10px] text-gray-500">
-                  {KIND_LABEL[s.kind]}
+                  {t.suggestionKind(s.kind)}
                 </span>
               </li>
             ))}
@@ -324,19 +320,17 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             <div className="font-mono text-sm text-blue-200 break-all">{current.label}</div>
             {current.hint && (
               <div className="mt-1.5 text-gray-400">
-                <span className="text-gray-500">Arguments: </span>
+                <span className="text-gray-500">{t.arguments}</span>
                 <span className="font-mono text-gray-200">{current.hint}</span>
               </div>
             )}
             {current.kind !== 'file' && (
               <p className="mt-2 text-gray-300 whitespace-pre-wrap leading-relaxed">
-                {current.description || 'No description'}
+                {current.description || t.noDescription}
               </p>
             )}
             <p className="mt-3 text-[11px] text-gray-500">
-              {current.kind === 'dir'
-                ? '↑↓ choose · Tab opens the folder · Enter on a finished path sends · Esc close'
-                : '↑↓ choose · Enter/Tab insert · Esc close'}
+              {current.kind === 'dir' ? t.pickerHintDir : t.pickerHint}
             </p>
           </div>
         </div>
@@ -361,7 +355,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
           onKeyDown={onKeyDown}
           onBlur={() => setDismissed(queryKey)}
           placeholder={placeholder}
-          aria-label="Message"
+          aria-label={t.message}
           aria-autocomplete="list"
           aria-controls={open ? listId : undefined}
           aria-activedescendant={open ? `${listId}-${highlighted}` : undefined}

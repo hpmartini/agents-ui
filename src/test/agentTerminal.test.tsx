@@ -34,7 +34,11 @@ vi.mock('@xterm/xterm', () => ({
     dispose() {}
   },
 }));
-vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit() {} } }));
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: class {
+    fit() {}
+  },
+}));
 vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: class {} }));
 vi.mock('@xterm/addon-image', () => ({ ImageAddon: class {} }));
 vi.mock('../utils/terminalLinkStyle', () => ({ styleTerminalLinks: () => ({ dispose() {} }) }));
@@ -89,14 +93,7 @@ function setup(id: string, overrides: Partial<AgentsTransport> = {}, host = test
 describe('AgentTerminal', () => {
   it('only pty.attach: attaches through the transport and is a plain working terminal', async () => {
     const { socket, attach } = setup('t-plain');
-    expect(attach).toHaveBeenCalledWith({
-      cwd: '/w/app',
-      cols: 80,
-      rows: 24,
-      id: 't-plain',
-      args: undefined,
-      command: undefined,
-    });
+    expect(attach).toHaveBeenCalledWith({ cwd: '/w/app', cols: 80, rows: 24, id: 't-plain' });
     // theme from the --agents-* variables (defaults here), not a host's options
     const terminal = terminals.at(-1)!;
     expect(terminal.options.fontFamily).toContain('Nerd Font');
@@ -115,7 +112,11 @@ describe('AgentTerminal', () => {
   });
 
   it("uses the host's terminal options when it has them", () => {
-    setup('t-host', {}, testHost({ terminalOptions: { fontFamily: 'Host Mono', theme: { background: '#123456' } } }));
+    setup(
+      't-host',
+      {},
+      testHost({ terminalOptions: { fontFamily: 'Host Mono', theme: { background: '#123456' } } })
+    );
     expect(terminals.at(-1)!.options.fontFamily).toBe('Host Mono');
   });
 
@@ -164,5 +165,43 @@ describe('AgentTerminal', () => {
     );
     expect(shell).toHaveBeenCalledWith({ cwd: '/w/app', cols: 80, rows: 24 });
     expect(attach).not.toHaveBeenCalled();
+  });
+
+  const renderSpawned = (id: string, pty: AgentsTransport['pty']) =>
+    renderWithAgents(
+      <AgentTerminal
+        session={session(id, { kind: 'interactive', ptyCommand: 'omp', ptyArgs: ['-r', 'x'] })}
+        visible
+        active
+        focused={false}
+        onFocus={() => {}}
+        onClose={() => {}}
+      />,
+      { transport: testTransport({ pty }) }
+    );
+
+  it('a session with ptyArgs starts through pty.spawn, not attach', () => {
+    const spawn = vi.fn(() => fakeSocket() as unknown as PtySocket);
+    const attach = vi.fn();
+    renderSpawned('p-spawn', { attach, spawn });
+    expect(spawn).toHaveBeenCalledWith({
+      id: 'p-spawn',
+      cwd: '/w/app',
+      cols: 80,
+      rows: 24,
+      command: 'omp',
+      args: ['-r', 'x'],
+    });
+    expect(attach).not.toHaveBeenCalled();
+  });
+
+  it('without pty.spawn a session with ptyArgs shows a notice and stays detached', () => {
+    const attach = vi.fn();
+    renderSpawned('p-nospawn', { attach });
+    expect(attach).not.toHaveBeenCalled();
+    expect(terminals.at(-1)!.write).toHaveBeenCalledWith(
+      '\x1b[31mThis host cannot start terminals\x1b[0m\r\n'
+    );
+    expect(screen.getByText(/Detached\./)).toBeInTheDocument();
   });
 });

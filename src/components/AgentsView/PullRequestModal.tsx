@@ -6,6 +6,7 @@ import { useHost } from '../../host';
 import { getEmbedsAnySite } from '../../utils/links';
 import { BrowserPane } from './AgentWorkspace';
 import { PullRequestList, type PullRequestListProps } from './PullRequestsPanel';
+import { useLabels } from '../../labels';
 
 const noop = () => {};
 const embeddable = (href: string) => href.startsWith('https://github.com/');
@@ -24,9 +25,10 @@ export const PullRequestModal: React.FC<
     onClose: () => void;
   }
 > = ({ links, rows, contexts, onSelectAgent, onOpenCode, onOpenOverview, onClose }) => {
+  const t = useLabels().shell;
   const dialogRef = useRef<HTMLDivElement>(null);
   const trapTab = useDialogA11y(true, dialogRef, () =>
-    dialogRef.current?.querySelector<HTMLElement>('button[aria-label="Close"]')
+    dialogRef.current?.querySelector<HTMLElement>(`button[aria-label="${t.close}"]`)
   );
   // A built-in browser that frames any site (Orkumo's Electron BrowserView)
   const canEmbed = getEmbedsAnySite() && !!useHost().renderBrowser;
@@ -37,8 +39,8 @@ export const PullRequestModal: React.FC<
   const prefix = (l: AgentPrLink) => (l.provider === 'gitlab' ? '!' : '#');
   const title =
     links.length === 1
-      ? `Pull request ${links[0].number ? `${prefix(links[0])}${links[0].number}` : ''}`.trim()
-      : `${links.length} pull requests`;
+      ? t.pullRequestTitle(links[0].number ? `${prefix(links[0])}${links[0].number}` : '')
+      : t.pullRequestsTitle(links.length);
   const embed = canEmbed && !!url;
 
   return (
@@ -76,14 +78,14 @@ export const PullRequestModal: React.FC<
               }}
               className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-300 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
             >
-              <List size={13} aria-hidden /> All open PRs
+              <List size={13} aria-hidden /> {t.allOpenPrs}
             </button>
           )}
           <button
             onClick={onClose}
             className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
-            aria-label="Close"
-            title="Close (Esc)"
+            aria-label={t.close}
+            title={t.closeEsc}
           >
             <X size={16} />
           </button>
@@ -136,8 +138,10 @@ export const PullRequestModal: React.FC<
                     target="_blank"
                     rel="noopener noreferrer"
                     className="shrink-0 text-gray-400 hover:text-blue-300"
-                    title="Open in browser"
-                    aria-label={`Open ${l.number ? `${prefix(l)}${l.number}` : 'pull request'} in browser`}
+                    title={t.openInBrowser}
+                    aria-label={t.openPrInBrowser(
+                      l.number ? `${prefix(l)}${l.number}` : t.pullRequestNoun
+                    )}
                   >
                     <ExternalLink size={11} />
                   </a>

@@ -32,16 +32,25 @@ export interface AgentsHandlers {
     onError?: (message: string, status?: number) => void;
     onConnectionChange?: (connected: boolean) => void;
 }
-/** Terminal of an agent: `claude attach <id>`, or a harness started with `args` */
+/** Terminal of a session the server runs: `claude attach <id>` */
 export interface PtyAttachRequest {
     id: string;
     cwd: string;
     cols: number;
     rows: number;
-    /** Default `['attach', id]` */
-    args?: string[];
-    /** Default `'claude'` */
-    command?: AgentHarness;
+}
+/**
+ * A terminal the server starts from scratch for a client-side session: an interactive harness,
+ * `--session-id`, `--resume`, `--continue`, `--cloud` (the session's `ptyArgs`)
+ */
+export interface PtySpawnRequest {
+    /** Id of the client-side session (names the PTY session; the instance it runs on, #220) */
+    id: string;
+    cwd: string;
+    cols: number;
+    rows: number;
+    command: AgentHarness;
+    args: string[];
 }
 /** A plain shell in `cwd` (the server's default shell) */
 export interface PtyShellRequest {
@@ -165,6 +174,8 @@ export interface AgentsTransport {
     /** Terminals */
     pty: {
         attach: (request: PtyAttachRequest) => PtySocket;
+        /** Sessions started in a pane (`ptyArgs`); without it those panes show a notice, detached */
+        spawn?: (request: PtySpawnRequest) => PtySocket;
         /** Plain shell panes ("Open terminal here") */
         shell?: (request: PtyShellRequest) => PtySocket;
     };
@@ -282,16 +293,20 @@ export interface AgentsTransport {
         subscribeToChat: (id: string, handlers: ChatHandlers) => () => void;
         /** Older turns: the page before cursor `before` */
         fetchChatHistory: (id: string, before: number) => Promise<ChatHistoryPage>;
-        fetchChatStatus: (id: string) => Promise<ChatStatus>;
-        fetchChatFiles: (id: string, q: string) => Promise<string[]>;
-        fetchChatDirs: (id: string, q: string) => Promise<string[]>;
-        fetchChatShell: (id: string, shellId: string) => Promise<{
+        /** Branch, context, cache and plan limits under the input; without it that line is not shown */
+        fetchChatStatus?: (id: string) => Promise<ChatStatus>;
+        /** `@` file completion in the input; without it `@` lists agents only */
+        fetchChatFiles?: (id: string, q: string) => Promise<string[]>;
+        /** Directory completion for path arguments (`/cd <path>`); without it there is none */
+        fetchChatDirs?: (id: string, q: string) => Promise<string[]>;
+        /** Output of a background shell; without it a shell chip opens no output panel */
+        fetchChatShell?: (id: string, shellId: string) => Promise<{
             output: string;
             updatedAt: number;
             truncated: boolean;
         }>;
-        /** URL of an image in a chat's tool results (its ref comes from the server) */
-        chatImageUrl: (chatId: string, ref: string) => string;
+        /** URL of an image in a chat's tool results (its ref comes from the server); without it no images */
+        chatImageUrl?: (chatId: string, ref: string) => string;
     };
     /** Files and pages a chat produced */
     artifacts?: {

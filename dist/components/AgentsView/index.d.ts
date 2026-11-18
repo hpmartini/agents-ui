@@ -3,7 +3,7 @@ export type { RailMode, RailNavProps } from './ProjectsRail';
 export type { AgentConfigLike } from './types';
 export { MAIN_AGENT_EVENT } from './MainAgentDialog';
 export { RailOutletContext } from './railOutlet';
-export { ConnectedPullRequestsPage, type PullRequestsQueryProps, } from './PullRequestsPage';
+export { ConnectedPullRequestsPage, type PullRequestsQueryProps } from './PullRequestsPage';
 export { AgentWorkspace } from './AgentWorkspace';
 export { AgentTerminal } from './AgentTerminal';
 export { AgentList } from './AgentList';

@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentSession, AgentViewSettings } from '../../types';
 import { PeekPanel } from './PeekPanel';
+import { useLabels } from '../../labels';
 
 type MainAgentConfig = AgentViewSettings['mainAgent'];
 
@@ -20,8 +21,9 @@ export const MainAgentDialog: React.FC<{
   onClose: () => void;
   onAttach: (session: AgentSession) => void;
   onReply: (session: AgentSession, text: string) => Promise<void>;
-}> = ({ session, config, onConfig, onClose, onAttach, onReply }) =>
-  createPortal(
+}> = ({ session, config, onConfig, onClose, onAttach, onReply }) => {
+  const t = useLabels().shell;
+  return createPortal(
     <div
       className="fixed inset-0 z-[80] bg-gray-950/70 flex items-start justify-center px-4 pt-[8vh]"
       onMouseDown={onClose}
@@ -32,23 +34,23 @@ export const MainAgentDialog: React.FC<{
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Main agent"
+        aria-label={t.mainAgent}
         onMouseDown={(e) => e.stopPropagation()}
         className="w-full max-w-[760px] h-[70vh] flex flex-col bg-gray-800 border border-gray-600 rounded-xl shadow-2xl overflow-hidden"
       >
         <div className="flex items-center gap-3 px-3 py-2 border-b border-gray-700 text-xs text-gray-300 shrink-0">
-          <span className="font-semibold text-gray-50">Main agent</span>
+          <span className="font-semibold text-gray-50">{t.mainAgent}</span>
           <span className="font-mono text-gray-400">{config.name}</span>
           <label
             className="ml-auto flex items-center gap-1.5 cursor-pointer"
-            title="Restart this session when it is stopped (claude respawn)"
+            title={t.keepAliveTitle}
           >
             <input
               type="checkbox"
               checked={config.keepAlive}
               onChange={(e) => onConfig({ ...config, keepAlive: e.target.checked })}
             />
-            Keep alive
+            {t.keepAlive}
           </label>
         </div>
         <div className="flex-1 min-h-0">
@@ -62,18 +64,21 @@ export const MainAgentDialog: React.FC<{
           ) : (
             <div className="h-full flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-gray-300">
               <p>
-                No background session named <span className="font-mono">{config.name}</span>.
+                {t.noMainSession[0]}
+                <span className="font-mono">{config.name}</span>
+                {t.noMainSession[1]}
               </p>
               <p className="text-xs text-gray-400">
-                Start it with <span className="font-mono">claude --bg --name {config.name}</span>{' '}
-                (or a new task with that name); it shows up here once it runs.
+                {t.startMainSession[0]}
+                <span className="font-mono">claude --bg --name {config.name}</span>
+                {t.startMainSession[1]}
               </p>
               <button
                 autoFocus
                 onClick={onClose}
                 className="mt-2 px-3 py-1.5 rounded text-xs text-gray-200 bg-gray-700 hover:bg-gray-600"
               >
-                Close
+                {t.close}
               </button>
             </div>
           )}
@@ -82,3 +87,4 @@ export const MainAgentDialog: React.FC<{
     </div>,
     document.body
   );
+};

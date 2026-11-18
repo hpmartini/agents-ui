@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import { useTransport } from '../../../host';
+import { useLabels } from '../../../labels';
 import type { ChatStatus } from '../../../transport';
 import { cacheCountdown, formatTokens } from '../../../utils/agentCache';
 import { CacheBadge } from '../CacheBadge';
@@ -23,13 +24,14 @@ export const ChatStatusLine: React.FC<{
 }> = ({ chatId, turns, visible, picker }) => {
   const [status, setStatus] = useState<ChatStatus | null>(null);
   const chat = useTransport().chat;
+  const t = useLabels().terminal;
 
   useEffect(() => {
-    if (!visible || !chat) return;
+    const fetchStatus = chat?.fetchChatStatus;
+    if (!visible || !fetchStatus) return;
     let cancelled = false;
     const load = () =>
-      chat
-        .fetchChatStatus(chatId)
+      fetchStatus(chatId)
         .then((s) => !cancelled && setStatus(s))
         .catch(() => {
           // keep the last status; the chat itself reports a gone session
@@ -52,7 +54,7 @@ export const ChatStatusLine: React.FC<{
         {git?.branch && (
           <span
             className="flex items-center gap-1.5 font-mono"
-            title={`${git.untracked} untracked, ${git.changed} uncommitted changes${git.ahead || git.behind ? `, ${git.ahead} ahead, ${git.behind} behind` : ''}`}
+            title={t.gitTitle(git.untracked, git.changed, git.ahead, git.behind)}
           >
             <GitBranch size={13} aria-hidden className="text-gray-400" />
             <span className="text-gray-100 font-medium">{git.branch}</span>
@@ -68,14 +70,14 @@ export const ChatStatusLine: React.FC<{
       {context ? (
         <div className="min-w-0">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-gray-400">Context</span>
+            <span className="text-gray-400">{t.context}</span>
             <span className="tabular-nums text-gray-100">
               {formatTokens(context.tokens)} / {formatTokens(context.window)} · {Math.round(fill)} %
             </span>
           </div>
           <div
             role="meter"
-            aria-label="Context window fill"
+            aria-label={t.contextFill}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={Math.round(fill)}
@@ -89,7 +91,7 @@ export const ChatStatusLine: React.FC<{
           {cache && (
             <div className="mt-1 text-[11px] text-gray-500">
               {cold ? (
-                <span title="Prompt cache expired: the next turn writes it again">cache cold</span>
+                <span title={t.cacheColdTitle}>{t.cacheCold}</span>
               ) : (
                 <CacheBadge cache={cache} context={false} />
               )}
@@ -102,17 +104,17 @@ export const ChatStatusLine: React.FC<{
       {limits ? (
         <>
           {limits.fiveHour ? (
-            <LimitBar label="5h" window={limits.fiveHour} unknownText="–" />
+            <LimitBar label={t.limitFiveHours} window={limits.fiveHour} unknownText="–" />
           ) : (
             <span />
           )}
           <LimitBar
-            label="7 Tage"
+            label={t.limitWeek}
             window={limits.weekly}
             unknownText="–"
             ticks={WEEK_TICKS}
             marker={weekPace()}
-            markerLabel="Heute"
+            markerLabel={t.today}
           />
         </>
       ) : null}

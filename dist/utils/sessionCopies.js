@@ -43,8 +43,7 @@ export function transcriptHolder(sessions, sessionId) {
 export function paneHolding(panes, openIds, sessionId, targets) {
     if (!sessionId)
         return null;
-    return (panes.find((p) => openIds.has(p.id) && resumableSessionId(p, targets) === sessionId)?.id ??
-        null);
+    return (panes.find((p) => openIds.has(p.id) && resumableSessionId(p, targets) === sessionId)?.id ?? null);
 }
 /**
  * Resuming `session` elsewhere makes a copy: a background job always (its own process is

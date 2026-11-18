@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { shellEn } from '../labels/shell';
 /** Key of the synthetic group holding favorite agents (always first, not reorderable) */
 export const FAVORITES_GROUP_KEY = 'favorites';
 export const STORAGE_KEY = 'devOrbitAgentRail.v1';
@@ -122,7 +123,7 @@ export function withFavoriteSessions(groups, favoriteIds) {
     return [
         {
             key: FAVORITES_GROUP_KEY,
-            title: 'Favorites',
+            title: shellEn.groupTitles[FAVORITES_GROUP_KEY],
             sessions: favorites,
             hidden: [],
         },

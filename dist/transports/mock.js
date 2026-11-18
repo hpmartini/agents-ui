@@ -151,7 +151,9 @@ export function createMockTransport(initial = [], { latencyMs = 0 } = {}) {
             push();
         },
         fail(error) {
-            failure = error ? { message: error.message ?? `HTTP ${error.status}`, status: error.status } : null;
+            failure = error
+                ? { message: error.message ?? `HTTP ${error.status}`, status: error.status }
+                : null;
             push();
         },
         agents: {

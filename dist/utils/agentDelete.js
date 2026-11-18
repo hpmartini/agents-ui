@@ -1,9 +1,10 @@
+import { shellEn } from '../labels/shell';
 /**
  * Asks before a background session is deleted (#94). Resolves to false without
- * calling `remove` when the user cancels.
+ * calling `remove` when the user cancels. `question` is the locale's wording.
  */
-export async function confirmDelete(name, remove, ask = (message) => window.confirm(message)) {
-    if (!ask(`Delete session "${name}"?\n\nThis removes the session and its worktree.`))
+export async function confirmDelete(name, remove, ask = (message) => window.confirm(message), question = shellEn.confirmDeleteSession) {
+    if (!ask(question(name)))
         return false;
     await remove();
     return true;

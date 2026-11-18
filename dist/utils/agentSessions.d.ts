@@ -1,6 +1,7 @@
 /**
  * Grouping, sorting and formatting helpers for the agent view session list.
  */
+import { type ShellLabels } from '../labels/shell';
 import { type AgentTargets } from '../transport';
 import type { AgentSession, AgentHarness, AgentDisplayState, AgentGrouping, AgentPrLink, AgentContext, AgentPullRequest, AgentCardElement, AgentCardFields, AgentCardSlot } from '../types';
 export type GroupKey = 'pinned' | 'review' | 'needs-input' | 'working' | 'completed' | 'app' | 'interactive' | 'all' | 'orchestrators' | `dir:${string}` | `project:${string}`;
@@ -139,9 +140,9 @@ export interface AgentSort {
     key: AgentSortKey;
     dir: 'asc' | 'desc';
 }
+/** Sort choices; their names are `ShellLabels.sortOptions` */
 export declare const SORT_OPTIONS: {
     key: AgentSortKey;
-    label: string;
     dir: 'asc' | 'desc';
     /** Whether the direction toggle makes sense */
     directional: boolean;
@@ -170,10 +171,9 @@ export declare function displayRepo(session: AgentSession, ctx?: AgentContext): 
 export declare function formatModelName(id: string | null | undefined): string | null;
 export declare function sortSessionsBy(sessions: AgentSession[], sort: AgentSort, lookup?: SessionLookup): AgentSession[];
 export type AgentQuickFilter = 'needs-input' | 'working' | 'completed' | 'failed' | 'pr' | 'server' | 'subagents' | 'local' | 'workflow' | 'cache-expiring';
+/** Quick filters in chip order; their texts are `ShellLabels.quickFilters` */
 export declare const QUICK_FILTERS: {
     key: AgentQuickFilter;
-    label: string;
-    title: string;
 }[];
 export declare function matchesQuickFilter(key: AgentQuickFilter, session: AgentSession, lookup?: SessionLookup): boolean;
 /** State chips and origin chips each combine with OR (alternatives), attribute chips with AND. */
@@ -258,20 +258,21 @@ export declare function summarizeSessions(sessions: AgentSession[]): {
  * Age since creation. Frozen at the last update once the session finished.
  */
 export declare function sessionAgeMs(session: AgentSession, now?: number): number;
-export declare function formatAge(ms: number): string;
+/** `units` are the locale's unit suffixes (`ShellLabels.ageUnits`) */
+export declare function formatAge(ms: number, units?: ShellLabels['ageUnits']): string;
 /**
- * Icon glyph + colour for a display state, matching the TUI legend.
+ * Icon glyph + colour for a display state, matching the TUI legend; `labels` name the states
+ * (`ShellLabels.displayStates`).
  */
-export declare function stateGlyph(state: AgentDisplayState): {
+export declare function stateGlyph(state: AgentDisplayState, labels?: ShellLabels['displayStates']): {
     glyph: string;
     className: string;
     animate: boolean;
     label: string;
 };
-/** Card elements in display order within a slot, with their settings labels (#159) */
+/** Card elements in display order within a slot; settings names are `ShellLabels.cardElements` (#159) */
 export declare const CARD_ELEMENTS: {
     key: AgentCardElement;
-    label: string;
 }[];
 /** Agent harnesses (#195) in picker order, with their display names */
 export declare const HARNESSES: {
@@ -299,9 +300,9 @@ export declare const MODEL_SUGGESTIONS: Record<AgentHarness, string[]>;
 export declare const isOmpStoreSession: (session: AgentSession) => boolean;
 /** Where a Claude app session was started ("iOS", "Android", "Web"); null for other sessions */
 export declare function appOriginLabel(session: AgentSession): string | null;
+/** Card slots; their names are `ShellLabels.cardSlots` */
 export declare const CARD_SLOTS: {
     key: AgentCardSlot;
-    label: string;
 }[];
 /**
  * Sorts rendered card elements into their slots. Empty elements (null, false, empty list)
@@ -317,9 +318,9 @@ export declare function prLabel(links: AgentPrLink[]): {
     href: string | null;
 } | null;
 /**
- * Title for the browser tab: "2 awaiting input · claude agents".
+ * Title for the browser tab: "2 awaiting input · claude agents" (`ShellLabels.documentTitle`).
  */
-export declare function documentTitle(awaitingInput: number): string;
+export declare function documentTitle(awaitingInput: number, title?: ShellLabels['documentTitle']): string;
 export declare function shortenPath(cwd: string, max?: number): string;
 /**
  * Transcript id of the session a pane runs, or null: Claude Code's UUID (`claude --resume`), or

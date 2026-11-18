@@ -1,7 +1,7 @@
 export { AgentsView } from './AgentsView';
 export { MAIN_AGENT_EVENT } from './MainAgentDialog';
 export { RailOutletContext } from './railOutlet';
-export { ConnectedPullRequestsPage, } from './PullRequestsPage';
+export { ConnectedPullRequestsPage } from './PullRequestsPage';
 export { AgentWorkspace } from './AgentWorkspace';
 export { AgentTerminal } from './AgentTerminal';
 export { AgentList } from './AgentList';

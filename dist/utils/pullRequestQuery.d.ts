@@ -2,6 +2,7 @@
  * Filter, cluster and sort the open PRs of the /pulls view (#191). Pure; the state lives in
  * the URL search params, so every value read from there is checked against the known options.
  */
+import { type ShellLabels } from '../labels/shell';
 import type { AgentPullRequest } from '../types';
 import type { PullRequestRow } from './agentSessions';
 export type CiKey = AgentPullRequest['ci'];
@@ -51,8 +52,12 @@ export interface PullGroup {
     label: string;
     rows: PullRequestRow[];
 }
-/** Clusters already sorted rows; a PR with several agents is listed under each of them */
-export declare function groupPulls(rows: PullRequestRow[], group: GroupKey): PullGroup[];
+type PullLabels = ShellLabels['pulls'];
+/**
+ * Clusters already sorted rows; a PR with several agents is listed under each of them. `labels`
+ * name the clusters.
+ */
+export declare function groupPulls(rows: PullRequestRow[], group: GroupKey, labels?: PullLabels): PullGroup[];
 /** Distinct values for the select filters, from all rows (not only the filtered ones) */
 export declare function pullOptions(rows: PullRequestRow[]): {
     repos: string[];
@@ -60,7 +65,8 @@ export declare function pullOptions(rows: PullRequestRow[]): {
     bases: string[];
 };
 /** filter -> sort -> group, as the view shows it */
-export declare function queryPulls(rows: PullRequestRow[], q: PullQuery): {
+export declare function queryPulls(rows: PullRequestRow[], q: PullQuery, labels?: PullLabels): {
     shown: PullRequestRow[];
     groups: PullGroup[];
 };
+export {};

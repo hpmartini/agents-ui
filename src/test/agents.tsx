@@ -6,6 +6,7 @@ import React from 'react';
 import { render, type RenderOptions } from '@testing-library/react';
 import { vi } from 'vitest';
 import { AgentsProvider, type AgentsHost } from '../host';
+import type { Locale } from '../labels';
 import type { AgentsTransport } from '../transport';
 import { DEFAULT_AGENT_VIEW_SETTINGS, type AgentViewSettings, type AgentsResponse } from '../types';
 
@@ -13,16 +14,19 @@ export function testTransport(overrides: Partial<AgentsTransport> = {}): AgentsT
   const settings: AgentViewSettings = { ...DEFAULT_AGENT_VIEW_SETTINGS };
   return {
     agents: {
-      fetchAgents: vi.fn(
-        async (): Promise<AgentsResponse> => ({
-          sessions: [],
-          daemon: null,
-          userSettings: null,
-          cli: { installed: true, path: '/usr/bin/claude' },
-        })
-      ),
+      fetchAgents: vi.fn(async (): Promise<AgentsResponse> => ({
+        sessions: [],
+        daemon: null,
+        userSettings: null,
+        cli: { installed: true, path: '/usr/bin/claude' },
+      })),
       subscribeToAgents: vi.fn(() => () => {}),
-      dispatchAgent: vi.fn(async () => ({ id: 'new', name: 'new', alreadyRunning: false, output: '' })),
+      dispatchAgent: vi.fn(async () => ({
+        id: 'new',
+        name: 'new',
+        alreadyRunning: false,
+        output: '',
+      })),
       stopAgent: vi.fn(async () => ({ output: '' })),
     },
     settings: {
@@ -50,11 +54,15 @@ export function renderWithAgents(
   {
     transport = testTransport(),
     host = testHost(),
+    locale,
     ...options
-  }: { transport?: AgentsTransport; host?: AgentsHost } & Omit<RenderOptions, 'wrapper'> = {}
+  }: { transport?: AgentsTransport; host?: AgentsHost; locale?: Locale } & Omit<
+    RenderOptions,
+    'wrapper'
+  > = {}
 ) {
   const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <AgentsProvider transport={transport} host={host}>
+    <AgentsProvider transport={transport} host={host} locale={locale}>
       {children}
     </AgentsProvider>
   );

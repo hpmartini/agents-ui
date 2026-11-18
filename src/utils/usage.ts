@@ -1,16 +1,21 @@
 import type { UsageWindow } from '../components/UsageView/types';
+import { terminalEn, type TerminalLabels } from '../labels/terminal';
 
 /** "in 2 h 53 min", "in 4 T 6 h", "in 12 min", "jetzt" */
-export function formatResetIn(resetsAt: number | null, now = Date.now()): string {
-  if (resetsAt == null) return 'erfolgt';
+export function formatResetIn(
+  resetsAt: number | null,
+  now = Date.now(),
+  t: TerminalLabels = terminalEn
+): string {
+  if (resetsAt == null) return t.resetDone;
   const min = Math.floor((resetsAt - now) / 60_000);
-  if (min <= 0) return 'jetzt';
+  if (min <= 0) return t.resetNow;
   const d = Math.floor(min / 1440);
   const h = Math.floor((min % 1440) / 60);
   const m = min % 60;
-  if (d > 0) return `in ${d} T ${h} h`;
-  if (h > 0) return `in ${h} h ${m} min`;
-  return `in ${m} min`;
+  if (d > 0) return t.resetInDays(d, h);
+  if (h > 0) return t.resetInHours(h, m);
+  return t.resetInMinutes(m);
 }
 
 export type LimitStatus = 'unknown' | 'ok' | 'warn' | 'critical';

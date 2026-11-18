@@ -8,6 +8,7 @@ import { type HTMLAttributes, type ReactNode } from 'react';
 import type { ITerminalOptions } from '@xterm/xterm';
 import type { AgentsTransport } from './transport';
 import type { AgentSession } from './types';
+import { type LabelOverrides, type Locale } from './labels';
 export interface ToastOptions {
     id?: string;
     /** ms */
@@ -130,7 +131,14 @@ interface AgentsContextValue {
     transport: AgentsTransport;
     host: AgentsHost;
 }
-export declare const AgentsProvider: ({ transport, host, children, }: AgentsContextValue & {
+/**
+ * Transport, host and texts for every agents-ui component below. `locale` (default `'en'`,
+ * Orkumo's wording) and `labels` (single texts replaced) apply below; without both, an outer
+ * provider's texts stay.
+ */
+export declare const AgentsProvider: ({ transport, host, locale, labels, children, }: AgentsContextValue & {
+    locale?: Locale;
+    labels?: LabelOverrides;
     children: ReactNode;
 }) => import("react").JSX.Element;
 export declare const useTransport: () => AgentsTransport;

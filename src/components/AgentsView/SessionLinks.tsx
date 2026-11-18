@@ -2,6 +2,7 @@ import React from 'react';
 import { Bot, ExternalLink, GitPullRequest } from 'lucide-react';
 import type { AgentContext, AgentPrLink, AgentSession } from '../../types';
 import { AgentServer, prLabel } from '../../utils/agentSessions';
+import { useLabels } from '../../labels';
 
 /** "owner/name#12" → "#12" inside the agent's own repo, else "name#12" */
 const issueLabel = (key: string, repoSlug?: string | null) => {
@@ -17,24 +18,28 @@ export const IssuePill: React.FC<{
   issueKey: string;
   repoSlug?: string | null;
   onOpen?: (issueKey: string) => void;
-}> = ({ issueKey, repoSlug, onOpen }) => (
-  <button
-    onClick={(e) => {
-      e.stopPropagation();
-      onOpen?.(issueKey);
-    }}
-    className={`${pillClass} border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor`}
-    title={`Open ${issueKey}`}
-  >
-    {issueLabel(issueKey, repoSlug)}
-  </button>
-);
+}> = ({ issueKey, repoSlug, onOpen }) => {
+  const t = useLabels().shell;
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen?.(issueKey);
+      }}
+      className={`${pillClass} border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor`}
+      title={t.openNamed(issueKey)}
+    >
+      {issueLabel(issueKey, repoSlug)}
+    </button>
+  );
+};
 
 /** PR state of a session; opens exactly its PR(s) when `onOpenPr` is given, else links out */
 export const PrPill: React.FC<{
   session: Pick<AgentSession, 'links'>;
   onOpenPr?: (links: AgentPrLink[]) => void;
 }> = ({ session, onOpenPr }) => {
+  const t = useLabels().shell;
   const label = prLabel(session.links);
   if (!label) return null;
   return onOpenPr ? (
@@ -46,12 +51,12 @@ export const PrPill: React.FC<{
       className={`${pillClass} ${label.className} flex items-center gap-0.5 hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor`}
       title={
         session.links.length > 1
-          ? `Show these ${session.links.length} pull requests`
-          : `Show pull request ${label.text}`
+          ? t.showPullRequests(session.links.length)
+          : t.showPullRequest(label.text)
       }
     >
       <GitPullRequest size={10} aria-hidden="true" />
-      <span className="sr-only">Pull request </span>
+      <span className="sr-only">{t.pullRequestSr}</span>
       {label.text}
     </button>
   ) : (
@@ -61,10 +66,10 @@ export const PrPill: React.FC<{
       rel="noreferrer"
       onClick={(e) => e.stopPropagation()}
       className={`${pillClass} ${label.className} flex items-center gap-0.5`}
-      title={`Open pull request${session.links.length > 1 ? 's' : ''}\n${session.links.map((l) => l.href).join('\n')}`}
+      title={`${t.openPullRequestsLink(session.links.length)}\n${session.links.map((l) => l.href).join('\n')}`}
     >
       <GitPullRequest size={10} aria-hidden="true" />
-      <span className="sr-only">Pull request </span>
+      <span className="sr-only">{t.pullRequestSr}</span>
       {label.text}
       {label.href && <ExternalLink size={9} />}
     </a>
@@ -75,26 +80,30 @@ export const ServerLinks: React.FC<{
   session: Pick<AgentSession, 'worktree' | 'cwd'>;
   /** Running servers only */
   servers: AgentServer[];
-}> = ({ session, servers }) => (
-  <>
-    {servers.map((server) => (
-      <a
-        key={server.port}
-        href={`http://localhost:${server.port}`}
-        target="_blank"
-        rel="noreferrer"
-        onClick={(e) => e.stopPropagation()}
-        className="shrink-0 flex items-center gap-1 min-w-0 text-gray-400 hover:text-white"
-        title={`${server.command || server.name}: port ${server.port}${server.pid ? `, pid ${server.pid}` : ''}\n${session.worktree || session.cwd}\nClick to open`}
-      >
-        <span className="font-mono text-emerald-400">:{server.port}</span>
-        <span className="truncate max-w-[8rem]">{server.name}</span>
-      </a>
-    ))}
-  </>
-);
+}> = ({ session, servers }) => {
+  const t = useLabels().shell;
+  return (
+    <>
+      {servers.map((server) => (
+        <a
+          key={server.port}
+          href={`http://localhost:${server.port}`}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 flex items-center gap-1 min-w-0 text-gray-400 hover:text-white"
+          title={`${t.serverTitle(server.command || server.name, server.port, server.pid)}\n${session.worktree || session.cwd}\n${t.clickToOpen}`}
+        >
+          <span className="font-mono text-emerald-400">:{server.port}</span>
+          <span className="truncate max-w-[8rem]">{server.name}</span>
+        </a>
+      ))}
+    </>
+  );
+};
 
 export const SubagentsBadge: React.FC<{ ctx?: AgentContext }> = ({ ctx }) => {
+  const t = useLabels().shell;
   const running = ctx?.subagents.running || 0;
   if (running === 0) return null;
   return (
@@ -103,7 +112,7 @@ export const SubagentsBadge: React.FC<{ ctx?: AgentContext }> = ({ ctx }) => {
       title={ctx?.subagents.names.join('\n') || undefined}
     >
       <Bot size={10} />
-      {running} sub-agent{running === 1 ? '' : 's'} running
+      {t.subagentsRunning(running)}
     </span>
   );
 };

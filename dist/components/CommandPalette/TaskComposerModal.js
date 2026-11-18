@@ -7,11 +7,13 @@ import { useDialogA11y } from './useDialogA11y';
 import { ImageAttachments, imageDropHandlers } from '../ImageAttachments';
 import { attachableFiles } from '../../utils/composer';
 import { useTransport } from '../../host';
+import { useLabels } from '../../labels';
 /**
  * "New task" / "New agent" dialog around the dispatch input. Attachments need the transport's
  * `uploads` group.
  */
 export const TaskComposerModal = ({ open, onClose, images, onImagesChange, onKindChange, hiddenKinds, ...inputProps }) => {
+    const t = useLabels().shell;
     const dialogRef = useRef(null);
     const trapTab = useDialogA11y(open, dialogRef, () => inputProps.inputRef.current);
     const extensions = useTransport().uploads?.attachmentExtensions;
@@ -27,8 +29,8 @@ export const TaskComposerModal = ({ open, onClose, images, onImagesChange, onKin
                 }
             }, onMouseDown: (e) => e.stopPropagation(), ...(extensions &&
                 imageDropHandlers((files) => onImagesChange([...images, ...files]), (list) => attachableFiles(list, extensions))), className: "w-full max-w-[680px] bg-gray-800 border border-gray-600 rounded-xl shadow-2xl p-4", children: [_jsxs("div", { className: "flex items-center mb-3", children: [_jsx("h2", { id: "task-composer-title", className: "text-sm font-semibold text-gray-50", children: inputProps.variant === 'chat'
-                                ? 'New chat'
+                                ? t.newMenu.chat
                                 : inputProps.variant === 'agent'
-                                    ? 'New agent'
-                                    : 'New task' }), onKindChange && (_jsx("div", { className: "ml-3", children: _jsx(NewKindTabs, { kind: inputProps.variant ?? 'task', onChange: onKindChange, disabled: inputProps.disabled, hidden: hiddenKinds }) })), _jsx("button", { type: "button", onClick: onClose, className: "ml-auto p-1.5 rounded-md text-gray-200 hover:bg-gray-700 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400", "aria-label": "Close", children: _jsx(X, { size: 15 }) })] }), _jsx(DispatchInput, { ...inputProps, onEscape: onClose, attachments: extensions && (_jsx(ImageAttachments, { images: images, onChange: onImagesChange, disabled: inputProps.disabled, files: extensions, note: images.length ? 'Stays local, handed to the agent by path' : undefined })) })] }) }));
+                                    ? t.newMenu.agent
+                                    : t.newMenu.task }), onKindChange && (_jsx("div", { className: "ml-3", children: _jsx(NewKindTabs, { kind: inputProps.variant ?? 'task', onChange: onKindChange, disabled: inputProps.disabled, hidden: hiddenKinds }) })), _jsx("button", { type: "button", onClick: onClose, className: "ml-auto p-1.5 rounded-md text-gray-200 hover:bg-gray-700 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400", "aria-label": t.close, children: _jsx(X, { size: 15 }) })] }), _jsx(DispatchInput, { ...inputProps, onEscape: onClose, attachments: extensions && (_jsx(ImageAttachments, { images: images, onChange: onImagesChange, disabled: inputProps.disabled, files: extensions, note: images.length ? t.imagesNote : undefined })) })] }) }));
 };

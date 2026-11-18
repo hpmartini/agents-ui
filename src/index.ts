@@ -23,13 +23,13 @@ export {
 } from './host';
 export type * from './transport';
 export { createLocalSettings } from './settings';
-export { createMockTransport, type MockTransport, type MockTransportOptions } from './transports/mock';
+export { de, en, useLabels, type LabelOverrides, type Labels, type Locale } from './labels';
+export {
+  createMockTransport,
+  type MockTransport,
+  type MockTransportOptions,
+} from './transports/mock';
 export { DEFAULT_TERMINAL_FONT, refreshTerminalTheme } from './components/AgentsView/AgentTerminal';
 export { configureLinks, type LinkPlatform } from './utils/links';
 export { ResizeHandle, clampWidth, useStoredWidth, type ResizeHandleProps } from './ResizeHandle';
-export type {
-  AgentDisplayState,
-  AgentHarness,
-  AgentSession,
-  AgentViewSettings,
-} from './types';
+export type { AgentDisplayState, AgentHarness, AgentSession, AgentViewSettings } from './types';

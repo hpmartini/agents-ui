@@ -2,6 +2,7 @@
  * Filter, cluster and sort the open PRs of the /pulls view (#191). Pure; the state lives in
  * the URL search params, so every value read from there is checked against the known options.
  */
+import { shellEn, type ShellLabels } from '../labels/shell';
 import type { AgentPullRequest } from '../types';
 import type { PullRequestRow } from './agentSessions';
 
@@ -30,40 +31,12 @@ export interface PullQuery {
   dir: SortDir;
 }
 
-export const CI_LABELS: Record<CiKey, string> = {
-  success: 'Passing',
-  failure: 'Failing',
-  pending: 'Running',
-  none: 'No checks',
-};
-export const MERGE_LABELS: Record<MergeKey, string> = {
-  ready: 'Ready to merge',
-  blocked: 'Blocked',
-  checking: 'Checking',
-  conflicts: 'Conflicts',
-};
-export const REVIEW_LABELS: Record<ReviewKey, string> = {
-  approved: 'Approved',
-  changes: 'Changes requested',
-  required: 'Review required',
-  none: 'No review',
-};
-export const GROUP_LABELS: Record<GroupKey, string> = {
-  none: 'No grouping',
-  repo: 'Repository',
-  merge: 'Merge state',
-  ci: 'CI',
-  review: 'Review',
-  author: 'Author',
-  agent: 'Agent',
-};
-export const SORT_LABELS: Record<SortKey, string> = {
-  updated: 'Last updated',
-  ready: 'Ready to merge first',
-  number: 'Number',
-  title: 'Title',
-  repo: 'Repository',
-};
+// The option sets; their names in `en` (the view shows `ShellLabels.pulls` of its locale)
+export const CI_LABELS: Record<CiKey, string> = shellEn.pulls.ci;
+export const MERGE_LABELS: Record<MergeKey, string> = shellEn.pulls.merge;
+export const REVIEW_LABELS: Record<ReviewKey, string> = shellEn.pulls.review;
+export const GROUP_LABELS: Record<GroupKey, string> = shellEn.pulls.group;
+export const SORT_LABELS: Record<SortKey, string> = shellEn.pulls.sort;
 
 export const DEFAULT_QUERY: PullQuery = {
   q: '',
@@ -203,8 +176,7 @@ export interface PullGroup {
   rows: PullRequestRow[];
 }
 
-const NO_AUTHOR = 'No author';
-const NO_AGENT = 'No agent';
+type PullLabels = ShellLabels['pulls'];
 
 /** Fixed order for the state clusters, alphabetical for the open-ended ones (empty last) */
 const ORDER: Partial<Record<GroupKey, string[]>> = {
@@ -213,9 +185,16 @@ const ORDER: Partial<Record<GroupKey, string[]>> = {
   review: ['changes', 'required', 'approved', 'none'],
 };
 
-/** Clusters already sorted rows; a PR with several agents is listed under each of them */
-export function groupPulls(rows: PullRequestRow[], group: GroupKey): PullGroup[] {
-  if (group === 'none') return [{ key: 'all', label: 'All', rows }];
+/**
+ * Clusters already sorted rows; a PR with several agents is listed under each of them. `labels`
+ * name the clusters.
+ */
+export function groupPulls(
+  rows: PullRequestRow[],
+  group: GroupKey,
+  labels: PullLabels = shellEn.pulls
+): PullGroup[] {
+  if (group === 'none') return [{ key: 'all', label: labels.all, rows }];
   const groups = new Map<string, PullGroup>();
   const add = (key: string, label: string, row: PullRequestRow) => {
     const g = groups.get(key) ?? { key, label, rows: [] };
@@ -225,11 +204,11 @@ export function groupPulls(rows: PullRequestRow[], group: GroupKey): PullGroup[]
   for (const row of rows) {
     const { pr, agents } = row;
     if (group === 'repo') add(pr.repoSlug, pr.repoSlug, row);
-    else if (group === 'merge') add(mergeKey(pr), MERGE_LABELS[mergeKey(pr)], row);
-    else if (group === 'ci') add(pr.ci, CI_LABELS[pr.ci], row);
-    else if (group === 'review') add(reviewKey(pr), REVIEW_LABELS[reviewKey(pr)], row);
-    else if (group === 'author') add(pr.author ?? '', pr.author ?? NO_AUTHOR, row);
-    else if (agents.length === 0) add('', NO_AGENT, row);
+    else if (group === 'merge') add(mergeKey(pr), labels.merge[mergeKey(pr)], row);
+    else if (group === 'ci') add(pr.ci, labels.ci[pr.ci], row);
+    else if (group === 'review') add(reviewKey(pr), labels.review[reviewKey(pr)], row);
+    else if (group === 'author') add(pr.author ?? '', pr.author ?? labels.noAuthor, row);
+    else if (agents.length === 0) add('', labels.noAgent, row);
     else for (const a of agents) add(a.id, a.name || a.id, row);
   }
   const order = ORDER[group];
@@ -252,7 +231,7 @@ export function pullOptions(rows: PullRequestRow[]) {
 }
 
 /** filter -> sort -> group, as the view shows it */
-export function queryPulls(rows: PullRequestRow[], q: PullQuery) {
+export function queryPulls(rows: PullRequestRow[], q: PullQuery, labels?: PullLabels) {
   const shown = sortPulls(filterPulls(rows, q), q.sort, q.dir);
-  return { shown, groups: groupPulls(shown, q.group) };
+  return { shown, groups: groupPulls(shown, q.group, labels) };
 }

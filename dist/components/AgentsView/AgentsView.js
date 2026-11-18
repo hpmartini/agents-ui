@@ -31,6 +31,7 @@ import { AgentWorkspace } from './AgentWorkspace';
 import { SessionLinks } from './SessionLinks';
 import { ResumePicker } from './ResumePicker';
 import { CopyWarningDialog } from './CopyWarningDialog';
+import { useLabels } from '../../labels';
 import { collapseCopies, openPlan, resumeMakesCopy, transcriptHolder, } from '../../utils/sessionCopies';
 import { ShortcutsHelp } from './ShortcutsHelp';
 import { AgentSettingsPanel } from './AgentSettingsPanel';
@@ -111,10 +112,15 @@ async function briefSession(messaging, session, text) {
  */
 export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenView = noop, contextId, contextAppIds, children, railOutlet = false, selectedId, onSelectedIdChange, prefill: prefillProp, onPrefillConsumed, canStop, confirmStop = false, className = '', }) => {
     const host = useHost();
+    const t = useLabels().shell;
     const { toast, openCode, openBoard, openMode, openPulls, openProjectSettings, fetchRepoPath, renderIssueModal, renderIssueCreate, onQuickPrompt, onQuickChat, onAttention, } = host;
     const transport = useTransport();
     const { agents: agentsApi, manage, messaging, orchestrator, discovery, cloud, uploads, history, } = transport;
     const targets = transport.targets ?? LOCAL_TARGETS;
+    // The transport can start a terminal session itself (`pty.spawn`): interactive claude, other
+    // harnesses, `--resume` in a terminal, cloud sessions, agent and chat starts that attach. Without
+    // it (MAGOS) the view only dispatches Claude Code in the background.
+    const canSpawn = !!transport.pty.spawn;
     // Peek and the main agent dialog (a peek) read the session's recent output
     const peekAvailable = !!transport.logs;
     const canShell = !!transport.pty.shell;
@@ -150,7 +156,8 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     // Harness of the next agent (#195), preset from the default on every open
     // null follows the default harness, also when the settings arrive after the composer opened
     const [pickedHarness, setComposerHarness] = useState(null);
-    const composerHarness = pickedHarness ?? settings.dispatch.harness;
+    // Other harnesses only run in a terminal this view starts
+    const composerHarness = canSpawn ? (pickedHarness ?? settings.dispatch.harness) : 'claude';
     const [harnessInstalled, setHarnessInstalled] = useState({});
     useEffect(() => {
         discovery
@@ -352,7 +359,9 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         apps,
         // A filter asks for agents: empty fixed projects would only be in the way
         fixedProjects: filterActive ? [] : rail.fixedProjects,
-    }), sort.key === 'manual'), settings.orchestrators), [
+    }), sort.key === 'manual'), settings.orchestrators
+    // Built-in groups carry their `en` title: the locale's replaces it
+    ).map((g) => (t.groupTitles[g.key] ? { ...g, title: t.groupTitles[g.key] } : g)), [
         shownSessions,
         filterActive,
         settings.grouping,
@@ -364,6 +373,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         apps,
         arrange,
         rail.fixedProjects,
+        t,
     ]);
     // Session of the active workspace tab: marked and revealed in the rail
     const activeSessionId = useMemo(() => {
@@ -417,20 +427,23 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     // Start directory of new tasks (settings `taskCwd`, `~` = home); unset: the rail selection decides
     const taskCwd = settings.taskCwd?.replace(/^~(?=\/|$)/, homeDir ?? '~') || null;
     const openComposer = useCallback((mode, cwd = null) => {
-        setComposerMode(mode);
+        // Agent and chat start a session and attach it right away: a terminal this view starts
+        setComposerMode(canSpawn ? mode : 'task');
         setOpenCwd(cwd);
         setPickedCwd(null);
         setComposerHarness(null);
         setComposerModel('');
         setComposerEffort('');
         setComposerOpen(true);
-    }, []);
+    }, [canSpawn]);
     // Quick window (#251): its prompt opens the chat composer here, ready to send, without a project
-    useEffect(() => onQuickPrompt?.((text) => {
-        onOpenView();
-        setInput(text);
-        openComposer('chat', chatsDir);
-    }), [onQuickPrompt, onOpenView, openComposer, chatsDir]);
+    useEffect(() => canSpawn
+        ? onQuickPrompt?.((text) => {
+            onOpenView();
+            setInput(text);
+            openComposer('chat', chatsDir);
+        })
+        : undefined, [canSpawn, onQuickPrompt, onOpenView, openComposer, chatsDir]);
     // What the composer shows is what every start path uses
     const composerCwd = composerStartCwd(composerMode, {
         picked: pickedCwd,
@@ -494,9 +507,9 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     useEffect(() => {
         if (!active || !onAttention)
             return;
-        onAttention(documentTitle(counts.awaitingInput));
+        onAttention(documentTitle(counts.awaitingInput, t.documentTitle));
         return () => onAttention(null);
-    }, [active, counts.awaitingInput, onAttention]);
+    }, [active, counts.awaitingInput, onAttention, t]);
     // Discovery data (subagents, repos, slash commands) follows the scope
     useEffect(() => {
         if (!active)
@@ -579,10 +592,12 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     // Quick window (#251) handing over its agent pane: opened here once the session list names the
     // pane (its stand-in), which reattaches to the same process
     const [quickPane, setQuickPane] = useState(null);
-    useEffect(() => onQuickChat?.((paneId) => {
-        onOpenView();
-        setQuickPane(paneId);
-    }), [onQuickChat, onOpenView]);
+    useEffect(() => canSpawn
+        ? onQuickChat?.((paneId) => {
+            onOpenView();
+            setQuickPane(paneId);
+        })
+        : undefined, [canSpawn, onQuickChat, onOpenView]);
     const quickPaneListed = !!quickPane && paneStandIns.some((s) => s.id === quickPane);
     useEffect(() => {
         if (!quickPane)
@@ -594,10 +609,10 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         }
         const timer = setTimeout(() => {
             setQuickPane(null);
-            showHint('The quick window agent did not show up here', 'error');
+            showHint(t.quickAgentMissing, 'error');
         }, 20000);
         return () => clearTimeout(timer);
-    }, [quickPane, quickPaneListed, attach, showHint]);
+    }, [quickPane, quickPaneListed, attach, showHint, t]);
     // "New orchestrator": the server starts the default harness as an agent pane in the
     // orchestrator workspace; it is marked right away and opened once the list names its pane
     const [orchestratorPane, setOrchestratorPane] = useState(null);
@@ -613,10 +628,10 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         }
         const timer = setTimeout(() => {
             setOrchestratorPane(null);
-            showHint('The orchestrator runs but is not listed yet: open it from the rail', 'error');
+            showHint(t.orchestratorNotListed, 'error');
         }, 30000);
         return () => clearTimeout(timer);
-    }, [orchestratorPane, orchestratorPaneListed, attach, showHint]);
+    }, [orchestratorPane, orchestratorPaneListed, attach, showHint, t]);
     // Roles (<workspace>/roles/*.md): loaded on mount and whenever the "New" menu opens
     const [orchestratorRoles, setOrchestratorRoles] = useState([]);
     const loadOrchestratorRoles = useCallback(() => {
@@ -627,7 +642,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         if (!orchestrator || startingOrchestrator)
             return;
         setStartingOrchestrator(true);
-        showHint(`Starting ${role ?? 'an orchestrator'}…`, 'info');
+        showHint(t.startingOrchestrator(role), 'info');
         try {
             const agent = await orchestrator.startOrchestrator(role);
             await updateSettings({
@@ -641,7 +656,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         }
         catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            showHint(`Orchestrator did not start: ${message}`, 'error', 8000);
+            showHint(t.orchestratorFailed(message), 'error', 8000);
         }
         finally {
             setStartingOrchestrator(false);
@@ -650,6 +665,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         orchestrator,
         startingOrchestrator,
         showHint,
+        t,
         updateSettings,
         settings.orchestrators,
         settings.orchestratorRoles,
@@ -663,8 +679,8 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             if (folder)
                 openCode(folder);
             else
-                toast.error(`No local checkout of ${pr.repoSlug}`);
-        }), [contexts, openCode, fetchRepoPath, toast]);
+                toast.error(t.noLocalCheckout(pr.repoSlug));
+        }), [contexts, openCode, fetchRepoPath, toast, t]);
     // Read by the host's /pulls route (ConnectedPullRequestsPage)
     const pullsData = useMemo(() => ({
         rows: pullRows,
@@ -712,7 +728,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             // not listed (or a claude.ai session): it never becomes active, stop waiting for it
             awaiting.current = null;
             if (!row)
-                showHint(`Agent ${pending} not found`, 'error');
+                showHint(t.agentNotFound(pending), 'error');
         }
         if (lastReported.current === undefined && activeSessionId === null) {
             lastReported.current = null;
@@ -722,7 +738,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             return;
         lastReported.current = activeSessionId;
         reportSelection.current?.(activeSessionId);
-    }, [activeSessionId, loading, sessions, showHint]);
+    }, [activeSessionId, loading, sessions, showHint, t]);
     // Board "Agent starten" / chat history "Continue" and "New chat" (#280, #19): composer prefill
     // from the host (Orkumo: router state, which external links cannot set). `place: 'chats'` = no
     // project, the chats folder; `openChat` = an Orkumo chat of /chats to open again
@@ -758,7 +774,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             kind: 'interactive',
             cwd: targetCwd || '',
             startedAt: Date.now(),
-            name: target ? `Cloud ${target.slice(-8)}` : 'Cloud-Sessions',
+            name: target ? `Cloud ${target.slice(-8)}` : t.cloudSessions,
             state: null,
             ptyArgs: args,
             pinned: false,
@@ -769,7 +785,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         targets.pinTarget(id, targets.getAgentTarget());
         setCloudSessions((prev) => [...prev, session]);
         attach(id);
-    }, [cloud, targetCwd, attach, targets]);
+    }, [cloud, targetCwd, attach, targets, t]);
     /**
      * A pane whose agent ended (Stop, Delete): gone from the workspace and from the rail. Closing a
      * pane or tab only detaches (the server keeps an agent PTY running) and its row reopens it.
@@ -810,10 +826,10 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     const toggleGroup = useCallback((group) => {
         // Quick filters force all groups open, so a toggle would change nothing visible
         if (filterActive)
-            showHint('Clear the filters to collapse groups', 'info');
+            showHint(t.clearFiltersToCollapse, 'info');
         else
             toggleCollapsed(group.key);
-    }, [toggleCollapsed, filterActive, showHint]);
+    }, [toggleCollapsed, filterActive, showHint, t]);
     /** The view a newly opened pane of `session` starts in: the UI view if preferred and readable */
     const preferredView = useCallback((session) => settings.agentOpenView === 'chat' &&
         UI_VIEW_HARNESSES[sessionHarness(session)] &&
@@ -884,7 +900,9 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             const elsewhere = session.ptyArgs && session.pid != null && !session.paneId;
             if (!elsewhere)
                 return attachIn(session.id, view);
-            return guardCopy(session, () => void agentsApi.stopAgent(session.id).then(() => attachIn(session.id, view), (err) => showHint(`Takeover failed: ${err.message}`, 'error', 6000)), true);
+            if (!canSpawn)
+                return showHint(t.interactiveOwnTerminal, 'info');
+            return guardCopy(session, () => void agentsApi.stopAgent(session.id).then(() => attachIn(session.id, view), (err) => showHint(t.takeoverFailed(err.message), 'error', 6000)), true);
         }
         if (plan.type === 'focus')
             return focusOpen(plan.paneId);
@@ -893,15 +911,17 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             return attachIn(plan.paneId, view);
         // Interactive and remote-control sessions keep their transcript locally: continue it here
         const { sessionId } = plan;
-        if (sessionId)
+        if (sessionId && canSpawn)
             guardCopy(resumeMakesCopy(session) ? session : null, () => openInteractiveClaude(session.cwd, session.name, ['--resume', sessionId], 'claude', undefined, view));
         else
-            showHint('Interactive sessions run in their own terminal', 'info');
+            showHint(t.interactiveOwnTerminal, 'info');
     }, [
         agentsApi,
+        canSpawn,
         targets,
         attachIn,
         showHint,
+        t,
         openInteractiveClaude,
         preferredView,
         allPanes,
@@ -921,7 +941,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     const doDispatch = useCallback(async (extra, attachAfter = false, view = 'terminal') => {
         const cwd = extra.cwd || targetCwd;
         if (!cwd) {
-            showHint('Pick a directory first', 'error');
+            showHint(t.pickDirectory, 'error');
             return;
         }
         setDispatching(true);
@@ -938,18 +958,18 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             setHighlightedId(result.id);
             setSelectedKey(result.id);
             showHint(result.alreadyRunning
-                ? `Started a copy: ${result.id}`
-                : `Started ${result.name || result.id}`, 'success');
+                ? t.startedCopy(result.id)
+                : t.startedNamed(result.name || result.id), 'success');
             refresh();
-            if (attachAfter)
+            if (attachAfter && canSpawn)
                 attachIn(result.id, view);
         }
         catch (err) {
-            const message = err instanceof Error ? err.message : 'Dispatch failed';
-            if (isUntrustedWorkspaceError(message)) {
+            const message = err instanceof Error ? err.message : t.dispatchFailed;
+            if (canSpawn && isUntrustedWorkspaceError(message)) {
                 // Input stays in the composer so the user can retry once the folder is trusted
                 openInteractiveClaude(cwd, `claude · ${cwd.split(/[\\/]/).filter(Boolean).pop() || cwd}`);
-                showHint('Folder not trusted yet: accept the trust prompt in the terminal, then start the agent again', 'info', 10000);
+                showHint(t.folderNotTrusted, 'info', 10000);
                 return;
             }
             showHint(message, 'error', 6000);
@@ -957,7 +977,17 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         finally {
             setDispatching(false);
         }
-    }, [agentsApi, targetCwd, settings.dispatch, showHint, refresh, attachIn, openInteractiveClaude]);
+    }, [
+        agentsApi,
+        targetCwd,
+        settings.dispatch,
+        showHint,
+        refresh,
+        attachIn,
+        openInteractiveClaude,
+        t,
+        canSpawn,
+    ]);
     const handleCommand = useCallback(async (command, args, raw, attachAfter) => {
         switch (command) {
             case 'resume': {
@@ -971,7 +1001,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                     setResumePicker({ open: true, query: args });
                 }
                 else
-                    showHint('Give the session id: /resume <id>', 'error');
+                    showHint(t.giveSessionId, 'error');
                 return;
             }
             case 'model': {
@@ -979,7 +1009,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 await updateSettings({ dispatch: { ...settings.dispatch, model } });
                 setInput('');
                 setComposerOpen(false);
-                showHint(model ? `Dispatch model: ${model}` : 'Dispatch model: default', 'success');
+                showHint(t.dispatchModel(model), 'success');
                 return;
             }
             case 'effort': {
@@ -987,19 +1017,19 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 await updateSettings({ dispatch: { ...settings.dispatch, effort } });
                 setInput('');
                 setComposerOpen(false);
-                showHint(effort ? `Dispatch effort: ${effort}` : 'Dispatch effort: default', 'success');
+                showHint(t.dispatchEffort(effort), 'success');
                 return;
             }
             case 'bg':
             case 'background':
             case 'fork':
-                showHint(`/${command} works inside an attached session`, 'info');
+                showHint(t.commandInsideSession(command), 'info');
                 return;
             default:
                 // Skills / custom commands are sent as the prompt
                 await doDispatch({ prompt: raw.trim() }, attachAfter);
         }
-    }, [doDispatch, updateSettings, settings.dispatch, showHint, guardCopy, sessions, history]);
+    }, [doDispatch, updateSettings, settings.dispatch, showHint, guardCopy, sessions, history, t]);
     /** Stores the composer attachments on the server; null when an upload failed (hint shown) */
     const uploadComposerImages = useCallback(async () => {
         if (composerImages.length === 0 || !uploads)
@@ -1009,13 +1039,13 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             return await Promise.all(composerImages.map(uploads.uploadAttachment));
         }
         catch (err) {
-            showHint(err instanceof Error ? err.message : 'Upload failed', 'error', 6000);
+            showHint(err instanceof Error ? err.message : t.uploadFailed, 'error', 6000);
             return null;
         }
         finally {
             setDispatching(false);
         }
-    }, [composerImages, showHint, uploads]);
+    }, [composerImages, showHint, uploads, t]);
     const handleSubmit = useCallback(async ({ attach: attachAfter }) => {
         // New chat (#189) starts the same agent as New agent, only shown in the UI view
         const chat = composerMode === 'chat';
@@ -1023,11 +1053,11 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         if (chat) {
             const harness = composerHarness;
             if (harnessInstalled[harness] === false) {
-                showHint(`${harnessLabel(harness)} is not installed on this machine`, 'error');
+                showHint(t.harnessNotInstalled(harnessLabel(harness)), 'error');
                 return;
             }
             if (!composerCwd) {
-                showHint('Pick a project directory first', 'error');
+                showHint(t.pickProjectDirectory, 'error');
                 return;
             }
             const cwd = composerCwd;
@@ -1047,28 +1077,28 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 else if (harness === 'claude')
                     setResumePicker({ open: true, query: '', chat: true });
                 else
-                    showHint(`${harnessLabel(harness)}: give the session id, /resume <id>`, 'error');
+                    showHint(t.harnessGiveSessionId(harnessLabel(harness)), 'error');
                 return;
             }
             if (input.trim() === '/continue') {
                 if (harness === 'claude')
                     openInteractiveClaude(cwd, name, ['--continue'], 'claude', undefined, view);
                 else
-                    showHint('/continue is Claude Code only: use /resume <id>', 'error');
+                    showHint(t.continueClaudeOnly, 'error');
                 return;
             }
             if (view === 'terminal')
-                showHint(`${harnessLabel(harness)} has no UI view yet: it opens in the terminal`, 'info');
+                showHint(t.harnessNoUiView(harnessLabel(harness)), 'info');
         }
         if (composerHarness !== 'claude') {
             // Other harnesses (#195) run interactively in a terminal pane; the server checks the args
             const cwd = composerCwd;
             if (!cwd) {
-                showHint('Pick a project directory first', 'error');
+                showHint(t.pickProjectDirectory, 'error');
                 return;
             }
             if (harnessInstalled[composerHarness] === false) {
-                showHint(`${harnessLabel(composerHarness)} is not installed on this machine`, 'error');
+                showHint(t.harnessNotInstalled(harnessLabel(composerHarness)), 'error');
                 return;
             }
             const stored = await uploadComposerImages();
@@ -1076,7 +1106,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 return;
             const prompt = promptWithAttachments(input, stored).trim();
             if (prompt && composerHarness === 'opencode') {
-                showHint('OpenCode takes no start prompt: leave it empty and type in the terminal', 'error', 8000);
+                showHint(t.openCodeNoPrompt, 'error', 8000);
                 return;
             }
             // A model picked for this agent or chat (#19 AK-2) goes as `--model` where the CLI takes it
@@ -1094,7 +1124,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             // The CLI refuses `--bg` in ~ (trusted one session at a time): run it interactively there
             if (homeDir && composerCwd === homeDir) {
                 if (input.trim() || composerImages.length > 0) {
-                    showHint('In ~ Claude Code only runs interactively: start without prompt and type it in the terminal, or pick a project folder', 'error', 8000);
+                    showHint(t.homeInteractiveOnly, 'error', 8000);
                     return;
                 }
                 openInteractiveClaude(homeDir, 'claude · ~', [], 'claude', undefined, view);
@@ -1117,7 +1147,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         const parsed = parseDispatchInput(input, { subagents, repos });
         switch (parsed.kind) {
             case 'empty':
-                showHint('Describe the task first', 'error');
+                showHint(t.describeTask, 'error');
                 return;
             case 'filter':
                 // The list filter follows `input`; keep it and let the user see the narrowed list
@@ -1128,7 +1158,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                     ? l.href === parsed.url
                     : parsed.number !== null && l.number === parsed.number));
                 if (!match) {
-                    showHint('No session is working on that PR', 'error');
+                    showHint(t.noSessionOnPr, 'error');
                     return;
                 }
                 setSelectedKey(match.id);
@@ -1139,7 +1169,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 return;
             }
             case 'too-short':
-                showHint('Too short — describe the task', 'error');
+                showHint(t.tooShort, 'error');
                 return;
             case 'command':
                 await handleCommand(parsed.command, parsed.args, parsed.raw, attachAfter);
@@ -1177,6 +1207,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         repos,
         sessions,
         showHint,
+        t,
         attach,
         handleCommand,
         doDispatch,
@@ -1206,7 +1237,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         guardCopy(transcriptHolder(sessions, id), () => {
             if (harness === 'claude')
                 void doDispatch({ resume: id, cwd }, true, view);
-            else
+            else if (canSpawn)
                 openInteractiveClaude(cwd, name, terminalResumeArgs(harness, id), harness, undefined, view);
         });
     }, [
@@ -1218,11 +1249,12 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         guardCopy,
         doDispatch,
         openInteractiveClaude,
+        canSpawn,
     ]);
     const handleRename = useCallback(async (session) => {
         if (!manage || session.kind !== 'background')
             return;
-        const name = window.prompt('Rename session:', session.name);
+        const name = window.prompt(t.renamePrompt, session.name);
         if (!name || !name.trim() || name.trim() === session.name)
             return;
         try {
@@ -1230,21 +1262,21 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             refresh();
         }
         catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Rename failed');
+            toast.error(err instanceof Error ? err.message : t.renameFailed);
         }
-    }, [manage, refresh, toast]);
+    }, [manage, refresh, toast, t]);
     const handlePin = useCallback(async (session) => {
         if (!manage || session.kind !== 'background')
             return;
         try {
             await manage.pinAgent(session.id, !session.pinned);
-            showHint(session.pinned ? 'Unpinned' : 'Pinned — kept running while idle', 'success');
+            showHint(session.pinned ? t.unpinned : t.pinnedHint, 'success');
             refresh();
         }
         catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Pin failed');
+            toast.error(err instanceof Error ? err.message : t.pinFailed);
         }
-    }, [manage, refresh, showHint, toast]);
+    }, [manage, refresh, showHint, toast, t]);
     const removeSession = useCallback(async (session, options = {}) => {
         if (!manage)
             return;
@@ -1252,11 +1284,11 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             const result = await manage.removeAgent(session.id, options);
             if (!result.removed) {
                 if (result.hints?.discardUnpushed &&
-                    window.confirm(`${result.message}\n\nDiscard the unpushed commits and delete anyway?`)) {
+                    window.confirm(t.discardUnpushedConfirm(result.message))) {
                     return removeSession(session, { discardUnpushed: result.hints.discardUnpushed });
                 }
                 if (result.hints?.forceRemoveWorktree &&
-                    window.confirm(`${result.message}\n\nForce-remove the worktree directory and delete?`)) {
+                    window.confirm(t.forceRemoveWorktreeConfirm(result.message))) {
                     return removeSession(session, {
                         forceRemoveWorktree: result.hints.forceRemoveWorktree,
                     });
@@ -1264,17 +1296,17 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 toast.error(result.message, { duration: 8000 });
                 return;
             }
-            toast.success(`Deleted ${session.name}`);
+            toast.success(t.deleted(session.name));
             dropPane(session.paneId ?? session.id);
             if (peekId === session.id)
                 setPeekId(null);
             refresh();
         }
         catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Delete failed');
+            toast.error(err instanceof Error ? err.message : t.deleteFailed);
         }
-    }, [manage, dropPane, peekId, refresh, toast]);
-    const deleteSession = useCallback((session) => confirmDelete(session.name, () => removeSession(session)), [removeSession]);
+    }, [manage, dropPane, peekId, refresh, toast, t]);
+    const deleteSession = useCallback((session) => confirmDelete(session.name, () => removeSession(session), undefined, t.confirmDeleteSession), [removeSession, t]);
     const handleStopOrDelete = useCallback(async (item) => {
         if (!item || !manage)
             return;
@@ -1282,7 +1314,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             const list = [...item.group.sessions, ...item.group.hidden].filter((s) => s.kind === 'background' || isOmpStoreSession(s));
             if (list.length === 0)
                 return;
-            if (!window.confirm(`Delete all ${list.length} sessions in "${item.group.title}"?`))
+            if (!window.confirm(t.deleteAllInGroup(list.length, item.group.title)))
                 return;
             for (const session of list)
                 await removeSession(session);
@@ -1293,7 +1325,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         if (item.session.kind !== 'background' && !isOmpStoreSession(item.session))
             return;
         await deleteSession(item.session);
-    }, [manage, deleteSession, removeSession]);
+    }, [manage, deleteSession, removeSession, t]);
     const handleReorder = useCallback(async (direction) => {
         if (selectedItem?.type === 'group') {
             // Same rule as the group menu: orchestrators and favorites stay blocks of their own
@@ -1329,9 +1361,20 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             refresh();
         }
         catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Reorder failed');
+            toast.error(err instanceof Error ? err.message : t.reorderFailed);
         }
-    }, [manage, selectedItem, items, favoriteGroups, moveGroup, moveSession, sort.key, refresh, toast]);
+    }, [
+        manage,
+        selectedItem,
+        items,
+        favoriteGroups,
+        moveGroup,
+        moveSession,
+        sort.key,
+        refresh,
+        toast,
+        t,
+    ]);
     const handleReply = useCallback(async (session, text) => {
         if (!messaging)
             return;
@@ -1348,12 +1391,12 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         try {
             const json = await manage.fetchAgentsRawJson({ cwd: settings.scopeCwd, all: true });
             await navigator.clipboard.writeText(json);
-            toast.success('claude agents --json copied to clipboard');
+            toast.success(t.jsonCopied);
         }
         catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Copy failed');
+            toast.error(err instanceof Error ? err.message : t.copyFailed);
         }
-    }, [manage, settings.scopeCwd, toast]);
+    }, [manage, settings.scopeCwd, toast, t]);
     const attachNth = useCallback((n) => {
         let pool;
         if ((settings.grouping === 'directory' || settings.grouping === 'project') && selectedItem) {
@@ -1453,7 +1496,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 }
                 else {
                     ctrlCRef.current = nowMs;
-                    showHint('Press Ctrl+C again to leave the agents view', 'info', 1200);
+                    showHint(t.ctrlCAgain, 'info', 1200);
                 }
                 return;
             }
@@ -1565,6 +1608,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         attach,
         onExit,
         showHint,
+        t,
     ]);
     // ---------------------------------------------------------------------
     // Row / group menus
@@ -1586,14 +1630,14 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         try {
             const { briefing, dir } = await orchestrator.fetchOrchestratorWorkspace();
             if (!(await briefSession(messaging, session, briefing))) {
-                showHint(`Marked as orchestrator. It runs outside Orkumo: point it to ${dir}/AGENTS.md yourself`, 'info', 8000);
+                showHint(t.markedOutside(dir), 'info', 8000);
                 return;
             }
-            toast.success('Marked as orchestrator and briefed');
+            toast.success(t.markedBriefed);
         }
         catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            toast.error(`Marked as orchestrator, but the briefing did not arrive: ${message}`);
+            toast.error(t.markedBriefingFailed(message));
         }
     }, [
         orchestrator,
@@ -1602,6 +1646,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         settings.orchestratorRoles,
         updateSettings,
         showHint,
+        t,
         toast,
     ]);
     // Same delivery as the mark: the role briefing is typed into the pane or replied to the job
@@ -1614,15 +1659,15 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         });
         try {
             if (await briefSession(messaging, session, role.briefing))
-                toast.success(`Role ${role.id} assigned`);
+                toast.success(t.roleAssigned(role.id));
             else
-                showHint(`Role assigned. It runs outside Orkumo: point it to roles/${role.id}.md yourself`, 'info', 8000);
+                showHint(t.roleAssignedOutside(role.id), 'info', 8000);
         }
         catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            toast.error(`Role assigned, but the briefing did not arrive: ${message}`);
+            toast.error(t.roleBriefingFailed(message));
         }
-    }, [messaging, settings.orchestratorRoles, updateSettings, showHint, toast]);
+    }, [messaging, settings.orchestratorRoles, updateSettings, showHint, toast, t]);
     const scopedModes = useMemo(() => (openMode ? (nav?.modes?.filter((m) => m.scoped) ?? []) : []), [nav?.modes, openMode]);
     const rowActions = useCallback((session) => {
         const bg = session.kind === 'background';
@@ -1654,24 +1699,24 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 .catch((err) => toast.error(err.message));
         };
         return [
-            { id: 'attach', label: 'Attach in tab', disabled: !bg, onSelect: () => attach(session.id) },
+            { id: 'attach', label: t.attachInTab, disabled: !bg, onSelect: () => attach(session.id) },
             ...(appUrl
                 ? [
                     {
                         id: 'claude-app',
-                        label: 'Open on claude.ai',
+                        label: t.openOnClaudeAi,
                         onSelect: () => openInSystemBrowser(appUrl),
                     },
                 ]
                 : []),
             ...(peekAvailable
-                ? [{ id: 'peek', label: 'Peek / reply', onSelect: () => togglePeek(session) }]
+                ? [{ id: 'peek', label: t.peekReply, onSelect: () => togglePeek(session) }]
                 : []),
             ...(openCode
                 ? [
                     {
                         id: 'code',
-                        label: 'Open in Code',
+                        label: t.openInCode,
                         disabled: !agentFolder(session, contexts[session.id]),
                         onSelect: () => {
                             const folder = agentFolder(session, contexts[session.id]);
@@ -1686,8 +1731,9 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                     {
                         // #207: plain shell in the agent's folder (worktree); a peer agent's folder is on its host (#220)
                         id: 'terminal',
-                        label: 'Open terminal here',
-                        disabled: targets.targetOf(session.id) !== '' || !agentFolder(session, contexts[session.id]),
+                        label: t.openTerminalHere,
+                        disabled: targets.targetOf(session.id) !== '' ||
+                            !agentFolder(session, contexts[session.id]),
                         onSelect: () => {
                             const folder = agentFolder(session, contexts[session.id]);
                             if (folder && targets.targetOf(session.id) === '')
@@ -1700,7 +1746,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 ? [
                     {
                         id: 'board',
-                        label: 'Show on Board',
+                        label: t.showOnBoard,
                         disabled: !contexts[session.id]?.repo?.slug,
                         onSelect: () => {
                             const slug = contexts[session.id]?.repo?.slug;
@@ -1712,7 +1758,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 : []),
             ...scopedModes.map((m) => ({
                 id: `mode:${m.id}`,
-                label: `Show ${m.label}`,
+                label: t.showMode(m.label),
                 icon: m.icon,
                 // Only agents started for a board issue have something to show in a scoped mode
                 disabled: !contexts[session.id]?.repo?.slug || !issuesByAgent?.get(session.id)?.length,
@@ -1726,13 +1772,13 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 ? [
                     {
                         id: 'pin',
-                        label: session.pinned ? 'Unpin' : 'Pin (keep running while idle)',
+                        label: session.pinned ? t.unpin : t.pin,
                         disabled: !bg,
                         onSelect: () => handlePin(session),
                     },
                     {
                         id: 'rename',
-                        label: 'Rename',
+                        label: t.rename,
                         disabled: !bg,
                         onSelect: () => handleRename(session),
                     },
@@ -1743,7 +1789,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 ? [
                     {
                         id: 'stop',
-                        label: 'Stop',
+                        label: t.stop,
                         disabled: omp ? session.pid == null : !heldPane && (!bg || !alive),
                         onSelect: () => (confirmStop ? setConfirmingStop({ session, run: stop }) : stop()),
                     },
@@ -1753,7 +1799,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 ? [
                     {
                         id: 'respawn',
-                        label: 'Respawn (restart)',
+                        label: t.respawn,
                         disabled: !bg,
                         onSelect: () => manage
                             .respawnAgent(session.id)
@@ -1767,8 +1813,8 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                     {
                         id: 'orchestrator',
                         label: isOrchestrator(session, settings.orchestrators)
-                            ? 'Remove orchestrator mark'
-                            : 'Mark as orchestrator',
+                            ? t.unmarkOrchestrator
+                            : t.markOrchestrator,
                         disabled: session.kind === 'app',
                         onSelect: () => void toggleOrchestrator(session),
                     },
@@ -1776,24 +1822,24 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 : []),
             ...(isOrchestrator(session, settings.orchestrators) ? orchestratorRoles : []).map((r) => ({
                 id: `role:${r.id}`,
-                label: `Role: ${r.id}`,
+                label: t.roleNamed(r.id),
                 icon: Network,
                 disabled: orchestratorRole(session, settings.orchestratorRoles) === r.id,
                 onSelect: () => void assignRole(session, r),
             })),
             {
                 id: 'copy-id',
-                label: 'Copy session id',
+                label: t.copySessionId,
                 onSelect: () => {
                     navigator.clipboard?.writeText(session.sessionId || session.id);
-                    toast.success('Copied');
+                    toast.success(t.copied);
                 },
             },
             ...(manage
                 ? [
                     {
                         id: 'delete',
-                        label: 'Delete',
+                        label: t.delete,
                         danger: true,
                         disabled: !bg && !omp,
                         onSelect: () => deleteSession(session),
@@ -1808,6 +1854,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         orchestrator,
         targets,
         toast,
+        t,
         peekAvailable,
         canShell,
         openCode,
@@ -1836,7 +1883,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     const groupActions = useCallback((group) => [
         {
             id: 'toggle',
-            label: collapsed.has(group.key) ? 'Expand' : 'Collapse',
+            label: collapsed.has(group.key) ? t.expand : t.collapse,
             onSelect: () => toggleGroup(group),
         },
         ...(group.appId
@@ -1845,7 +1892,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                     ? [
                         {
                             id: 'open-project',
-                            label: 'Open project',
+                            label: t.openProject,
                             onSelect: () => openProject(group.appId),
                         },
                     ]
@@ -1854,7 +1901,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                     ? [
                         {
                             id: 'project-settings',
-                            label: 'Project settings…',
+                            label: t.projectSettings,
                             onSelect: () => openProjectSettings(group.appId),
                         },
                     ]
@@ -1865,7 +1912,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             ? [
                 {
                     id: 'fixed-project',
-                    label: group.fixed ? 'Remove fixed project' : 'Keep as fixed project',
+                    label: group.fixed ? t.removeFixedProject : t.keepFixedProject,
                     // Several stored directories can mean this project (worktree, subfolder of an app)
                     onSelect: () => (group.fixed
                         ? rail.fixedProjects.filter((dir) => groupSessions([], 'project', { apps, fixedProjects: [dir] })[0]?.key ===
@@ -1877,13 +1924,13 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         ...(group.cwd
             ? [
                 ...(openCode
-                    ? [{ id: 'view-code', label: 'View Code', onSelect: () => openCode(group.cwd) }]
+                    ? [{ id: 'view-code', label: t.viewCode, onSelect: () => openCode(group.cwd) }]
                     : []),
                 ...(canShell
                     ? [
                         {
                             id: 'open-terminal',
-                            label: 'Open terminal here',
+                            label: t.openTerminalHere,
                             onSelect: () => openShell(group.cwd),
                         },
                     ]
@@ -1896,14 +1943,14 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                     ? [
                         {
                             id: 'view-board',
-                            label: 'View Board',
+                            label: t.viewBoard,
                             onSelect: () => openBoard(groupRepoSlug(group, contexts)),
                         },
                     ]
                     : []),
                 ...scopedModes.map((m) => ({
                     id: `mode:${m.id}`,
-                    label: `View ${m.label}`,
+                    label: t.viewMode(m.label),
                     icon: m.icon,
                     onSelect: () => openMode?.(m.id, groupRepoSlug(group, contexts)),
                 })),
@@ -1913,7 +1960,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             ? [
                 {
                     id: 'new-issue',
-                    label: groupRepoSlug(group, contexts) ? 'New issue' : 'New issue (no GitHub repo)',
+                    label: groupRepoSlug(group, contexts) ? t.newIssue : t.newIssueNoRepo,
                     disabled: !groupRepoSlug(group, contexts),
                     onSelect: () => openIssueDialog(groupRepoSlug(group, contexts)),
                 },
@@ -1923,21 +1970,26 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             ? [
                 {
                     id: 'dispatch-here',
-                    label: 'Dispatch into this directory',
+                    label: t.dispatchHere,
                     onSelect: () => pickDispatchCwd(group.cwd || null),
                 },
-                {
-                    id: 'new-agent',
-                    label: 'New agent here',
-                    onSelect: () => openComposer('agent', group.cwd || null),
-                },
+                // A new agent attaches right away: a terminal this view starts
+                ...(canSpawn
+                    ? [
+                        {
+                            id: 'new-agent',
+                            label: t.newAgentHere,
+                            onSelect: () => openComposer('agent', group.cwd || null),
+                        },
+                    ]
+                    : []),
             ]
             : []),
         ...(manage
             ? [
                 {
                     id: 'delete-all',
-                    label: 'Delete all sessions in group',
+                    label: t.deleteAllInGroupAction,
                     danger: true,
                     onSelect: () => handleStopOrDelete({ type: 'group', group }),
                 },
@@ -1945,6 +1997,8 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             : []),
     ], [
         collapsed,
+        t,
+        canSpawn,
         toggleGroup,
         settings.grouping,
         rail.fixedProjects,
@@ -1985,8 +2039,8 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     const paletteCommands = useMemo(() => {
         const newTask = {
             id: 'agents.new-task',
-            title: 'New agent task',
-            group: 'Agents',
+            title: t.newAgentTask,
+            group: t.paletteGroups.agents,
             scope: 'command',
             keywords: 'dispatch compose prompt session create',
             shortcut: 'N',
@@ -2004,8 +2058,8 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             ? [
                 {
                     id: 'agents.main-agent',
-                    title: 'Main agent',
-                    group: 'Agents',
+                    title: t.mainAgent,
+                    group: t.paletteGroups.agents,
                     scope: 'command',
                     keywords: 'orchestrator main chef hauptagent',
                     run: () => setMainAgentOpen(true),
@@ -2019,34 +2073,34 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         const list = [newTask, ...mainAgent];
         // A fixed project is one of the host's projects
         if (apps.length > 0)
-            list.push(cmd('fixed-project.add', 'Add fixed project…', 'Rail', () => setPickFixedOpen(true), {
+            list.push(cmd('fixed-project.add', t.addFixedProject, t.paletteGroups.rail, () => setPickFixedOpen(true), {
                 keywords: 'projekt festlegen pflegen pin directory',
             }));
         if (selectedSession) {
             for (const action of rowActions(selectedSession)) {
                 if (action.disabled)
                     continue;
-                list.push(cmd(`selected.${action.id}`, `${action.label}: ${selectedSession.name}`, 'Selected agent', action.onSelect));
+                list.push(cmd(`selected.${action.id}`, `${action.label}: ${selectedSession.name}`, t.paletteGroups.selected, action.onSelect));
             }
         }
         for (const mode of ['project', 'state', 'directory', 'none']) {
             if (mode === settings.grouping)
                 continue;
-            list.push(cmd(`group.${mode}`, `Group agents by ${mode === 'state' ? 'status' : mode}`, 'Rail', () => updateSettings({ grouping: mode })));
+            list.push(cmd(`group.${mode}`, t.groupByCommand(mode), t.paletteGroups.rail, () => updateSettings({ grouping: mode })));
         }
         for (const option of SORT_OPTIONS) {
-            list.push(cmd(`sort.${option.key}`, `Sort agents by ${option.label.toLowerCase()}`, 'Rail', () => setSort({ key: option.key, dir: option.dir })));
+            list.push(cmd(`sort.${option.key}`, t.sortByCommand(t.sortOptions[option.key]), t.paletteGroups.rail, () => setSort({ key: option.key, dir: option.dir })));
         }
         for (const filterOption of QUICK_FILTERS) {
             const on = quickFilters.has(filterOption.key);
-            list.push(cmd(`filter.${filterOption.key}`, `${on ? 'Remove' : 'Add'} filter: ${filterOption.label}`, 'Rail', () => toggleQuickFilter(filterOption.key), { keywords: filterOption.title }));
+            list.push(cmd(`filter.${filterOption.key}`, t.filterCommand(on, t.quickFilters[filterOption.key].label), t.paletteGroups.rail, () => toggleQuickFilter(filterOption.key), { keywords: t.quickFilters[filterOption.key].title }));
         }
         // A quick filter keeps every group open, like the disabled header buttons
         if (!filterActive) {
-            list.push(cmd('groups.collapse', 'Collapse all groups', 'Rail', collapseAllGroups), cmd('groups.expand', 'Expand all groups', 'Rail', expandAllGroups));
+            list.push(cmd('groups.collapse', t.collapseAllGroups, t.paletteGroups.rail, collapseAllGroups), cmd('groups.expand', t.expandAllGroups, t.paletteGroups.rail, expandAllGroups));
         }
         if (filterActive || filter) {
-            list.push(cmd('filter.clear', 'Clear all filters', 'Rail', () => {
+            list.push(cmd('filter.clear', t.clearFilters, t.paletteGroups.rail, () => {
                 setQuickFilters(new Set());
                 setLinkFilter(new Set());
                 setTextQuery('');
@@ -2058,28 +2112,28 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             for (const layout of ['columns', 'rows', 'grid']) {
                 if (layout === activeTab.layout)
                     continue;
-                list.push(cmd(`layout.${layout}`, `Split layout: ${layout}`, 'Workspace', () => workspaceActions.setLayout(activeTab.id, layout)));
+                list.push(cmd(`layout.${layout}`, t.splitLayout(layout), t.paletteGroups.workspace, () => workspaceActions.setLayout(activeTab.id, layout)));
             }
         }
         if (activeTab) {
-            list.push(cmd('tab.close', 'Close current tab', 'Workspace', () => workspaceActions.closeTab(activeTab.id)));
+            list.push(cmd('tab.close', t.closeTab, t.paletteGroups.workspace, () => workspaceActions.closeTab(activeTab.id)));
         }
         if (transport.contexts)
-            list.push(cmd('panel.prs', 'Show pull requests', 'Panels', () => {
+            list.push(cmd('panel.prs', t.showPullRequestsCommand, t.paletteGroups.panels, () => {
                 setPrRepo(null);
                 setPanel('prs');
             }));
         if (openPulls)
-            list.push(cmd('panel.prs-full', 'Open pull requests (full view)', 'Panels', () => openPulls()));
+            list.push(cmd('panel.prs-full', t.openPullsFullCommand, t.paletteGroups.panels, () => openPulls()));
         if (transport.contexts)
-            list.push(cmd('panel.servers', 'Show running servers', 'Panels', () => setPanel('servers')));
-        list.push(cmd('settings', 'Dispatch defaults and settings', 'Agents', () => setShowSettings(true)), cmd('shortcuts', 'Show keyboard shortcuts', 'Agents', () => setShowHelp(true), {
+            list.push(cmd('panel.servers', t.showServersCommand, t.paletteGroups.panels, () => setPanel('servers')));
+        list.push(cmd('settings', t.settingsCommand, t.paletteGroups.agents, () => setShowSettings(true)), cmd('shortcuts', t.shortcutsCommand, t.paletteGroups.agents, () => setShowHelp(true), {
             shortcut: '?',
-        }), cmd('refresh', 'Refresh agent list', 'Agents', refresh), cmd('interactive', showInteractive ? 'Hide interactive sessions' : 'Show interactive sessions', 'Agents', toggleInteractive));
+        }), cmd('refresh', t.refreshCommand, t.paletteGroups.agents, refresh), cmd('interactive', showInteractive ? t.hideInteractive : t.showInteractive, t.paletteGroups.agents, toggleInteractive));
         if (manage)
-            list.push(cmd('copy-json', 'Copy claude agents --json', 'Agents', copyJson));
+            list.push(cmd('copy-json', t.copyJsonCommand, t.paletteGroups.agents, copyJson));
         if (onExit)
-            list.push(cmd('exit', 'Leave agents view', 'Agents', onExit));
+            list.push(cmd('exit', t.leaveView, t.paletteGroups.agents, onExit));
         for (const session of sessions) {
             list.push({
                 id: `agent.${session.id}`,
@@ -2093,6 +2147,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         return list;
     }, [
         openComposer,
+        t,
         active,
         apps.length,
         peekAvailable,
@@ -2123,30 +2178,31 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         toggleInteractive,
     ]);
     (host.useRegisterCommands ?? registerNothing)('agents', paletteCommands);
-    // New kinds the host cannot create: issues (no issue dialog), orchestrators, chats (no UI view)
+    // New kinds the host cannot create: issues (no issue dialog), orchestrators, chats (no UI view),
+    // agents and chats without a terminal this view starts
     const hiddenKinds = useMemo(() => [
         ...(renderIssueCreate ? [] : ['issue']),
         ...(orchestrator ? [] : ['orchestrator']),
-        ...(transport.chat ? [] : ['chat']),
-    ], [renderIssueCreate, orchestrator, transport.chat]);
+        ...(canSpawn ? [] : ['agent']),
+        ...(transport.chat && canSpawn ? [] : ['chat']),
+    ], [renderIssueCreate, orchestrator, transport.chat, canSpawn]);
     const defaultModel = settings.dispatch.model || userSettings?.model || 'default';
     // Model of the open agent; the dispatch default only stands in when it is unknown
     const activeModel = formatModelName(activeSessionId ? contexts[activeSessionId]?.model : null);
-    const modelLabel = activeModel ?? (defaultModel === 'default' ? 'default' : `default: ${defaultModel}`);
-    const modelTitle = activeModel
-        ? 'Model of the open agent (from its session)'
-        : 'Dispatch model for new agents (/model)';
+    const modelLabel = activeModel ??
+        (defaultModel === 'default' ? t.modelDefault : t.modelDefaultNamed(defaultModel));
+    const modelTitle = activeModel ? t.modelOfOpenAgent : t.dispatchModelTitle;
     // Other routes keep their main area when the agent view cannot show its rail
     if ((disabled || cliInstalled === false) && !active) {
         return _jsx("div", { className: `h-full relative agents-ui ${className}`, children: children });
     }
     if (disabled) {
-        return (_jsxs("div", { className: `h-full flex flex-col items-center justify-center gap-4 text-gray-400 agents-ui ${className}`, children: [_jsx(Power, { size: 32, className: "text-gray-500" }), _jsx("div", { children: "The agent view is turned off." }), _jsx("button", { onClick: () => updateSettings({ disabled: false }), className: "px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-sm", children: "Turn on again" })] }));
+        return (_jsxs("div", { className: `h-full flex flex-col items-center justify-center gap-4 text-gray-400 agents-ui ${className}`, children: [_jsx(Power, { size: 32, className: "text-gray-500" }), _jsx("div", { children: t.viewTurnedOff }), _jsx("button", { onClick: () => updateSettings({ disabled: false }), className: "px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-sm", children: t.turnOnAgain })] }));
     }
     if (cliInstalled === false) {
-        return (_jsxs("div", { className: `h-full flex flex-col items-center justify-center gap-3 text-gray-400 p-8 text-center agents-ui ${className}`, children: [_jsx(AlertTriangle, { size: 32, className: "text-yellow-500" }), _jsx("div", { className: "text-gray-200 font-medium", children: "Claude Code CLI not found" }), _jsxs("div", { className: "text-sm", children: ["Install it on the machine running the Orkumo server, then run", ' ', _jsx("code", { className: "text-blue-300", children: "claude" }), " once to sign in."] }), _jsx("pre", { className: "text-xs bg-gray-950 border border-gray-800 rounded p-3", children: "npm install -g @anthropic-ai/claude-code" }), _jsx("button", { onClick: refresh, className: "px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 hover:text-white text-sm text-gray-200", children: "Check again" })] }));
+        return (_jsxs("div", { className: `h-full flex flex-col items-center justify-center gap-3 text-gray-400 p-8 text-center agents-ui ${className}`, children: [_jsx(AlertTriangle, { size: 32, className: "text-yellow-500" }), _jsx("div", { className: "text-gray-200 font-medium", children: t.cliNotFound }), _jsxs("div", { className: "text-sm", children: [t.cliInstall[0], _jsx("code", { className: "text-blue-300", children: "claude" }), t.cliInstall[1]] }), _jsx("pre", { className: "text-xs bg-gray-950 border border-gray-800 rounded p-3", children: "npm install -g @anthropic-ai/claude-code" }), _jsx("button", { onClick: refresh, className: "px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 hover:text-white text-sm text-gray-200", children: t.checkAgain })] }));
     }
-    return (_jsxs("div", { className: `h-full flex min-h-0 bg-gray-900 text-gray-100 agents-ui ${className}`, "data-agents-view": true, children: [host.renderActivityBar && (_jsxs("nav", { "aria-label": "Activity bar", className: `${active ? 'flex' : 'hidden md:flex'} w-12 shrink-0 flex-col py-1 border-r border-gray-800 bg-gray-950`, children: [host.renderActivityBar({ onToggleRail: toggleRail }), nav && (_jsx("button", { onClick: nav.onOpenSettings, className: "mt-auto flex items-center justify-center h-11 text-gray-500 hover:text-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cursor", title: "Settings", "aria-label": "Settings", children: _jsx(Settings, { size: 20, strokeWidth: 1.75, "aria-hidden": true }) }))] })), _jsxs("div", { className: "flex-1 min-w-0 flex flex-col min-h-0", children: [_jsxs("div", { className: `relative ${active ? 'flex' : 'hidden md:flex'} flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 border-b border-gray-800 shrink-0`, children: [nav && (_jsx("button", { onClick: nav.onOpenContextDashboard, className: "p-1 -m-1 rounded text-blue-300 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor", title: "Dashboard of this context", "aria-label": "Open context dashboard", children: _jsx(Bot, { size: 18 }) })), _jsx(NewTaskButton, { onNew: (kind, role) => kind === 'issue'
+    return (_jsxs("div", { className: `h-full flex min-h-0 bg-gray-900 text-gray-100 agents-ui ${className}`, "data-agents-view": true, children: [host.renderActivityBar && (_jsxs("nav", { "aria-label": t.activityBar, className: `${active ? 'flex' : 'hidden md:flex'} w-12 shrink-0 flex-col py-1 border-r border-gray-800 bg-gray-950`, children: [host.renderActivityBar({ onToggleRail: toggleRail }), nav && (_jsx("button", { onClick: nav.onOpenSettings, className: "mt-auto flex items-center justify-center h-11 text-gray-500 hover:text-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cursor", title: t.settings, "aria-label": t.settings, children: _jsx(Settings, { size: 20, strokeWidth: 1.75, "aria-hidden": true }) }))] })), _jsxs("div", { className: "flex-1 min-w-0 flex flex-col min-h-0", children: [_jsxs("div", { className: `relative ${active ? 'flex' : 'hidden md:flex'} flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 border-b border-gray-800 shrink-0`, children: [nav && (_jsx("button", { onClick: nav.onOpenContextDashboard, className: "p-1 -m-1 rounded text-blue-300 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor", title: t.contextDashboardTitle, "aria-label": t.contextDashboardLabel, children: _jsx(Bot, { size: 18 }) })), _jsx(NewTaskButton, { onNew: (kind, role) => kind === 'issue'
                                     ? openIssueDialog(selectedRepo)
                                     : kind === 'orchestrator'
                                         ? void newOrchestrator(role)
@@ -2161,27 +2217,23 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                                         }
                                         : undefined, onOpenServers: transport.contexts
                                         ? () => setPanel((p) => (p === 'servers' ? null : 'servers'))
-                                        : undefined }) }), panel === 'prs' && (_jsx(PullRequestsPanel, { rows: pullRows, sessions: sessions, contexts: contexts, repoFilter: prRepo, onClearRepo: () => setPrRepo(null), onSelectAgent: attach, onOpenCode: openPrCode, onMaximize: openPulls && (() => openPulls(prRepo)), onClose: () => setPanel(null) })), panel === 'servers' && (_jsx(ServersPanel, { rows: serverRows, onSelectAgent: attach, onClose: () => setPanel(null) })), _jsx("div", { className: "flex-1" }), _jsxs("div", { className: `hidden ${active ? 'md:flex' : ''} items-center gap-1.5 text-[11px] text-gray-300`, role: "status", title: "Switch with F6 or Ctrl+Alt+Left / Right", children: [_jsx("span", { className: `px-1.5 py-0.5 rounded font-medium whitespace-nowrap ${focusZone === 'terminal' ? 'bg-blue-300 text-gray-950' : 'bg-gray-700 text-gray-100'}`, children: focusZone === 'terminal'
-                                            ? 'Keys: terminal'
-                                            : focusZone === 'rail'
-                                                ? 'Keys: agent list'
-                                                : 'Keys: page' }), _jsx("kbd", { className: "kbd", children: FOCUS_CHORD_LABEL }), _jsx("span", { className: "text-gray-400 hidden xl:inline", children: "switches" })] }), _jsxs("span", { className: "text-[11px] text-gray-500 font-mono", title: modelTitle, children: ["model ", modelLabel, _jsxs("span", { className: "sr-only", children: [" (", modelTitle, ")"] })] }), _jsxs("div", { className: "hidden xl:flex items-center gap-3 text-[11px] text-gray-500 font-mono", children: [settings.dispatch.effort && (_jsxs("span", { title: "Dispatch effort (/effort)", children: ["effort ", settings.dispatch.effort] })), settings.dispatch.permissionMode && _jsx("span", { children: settings.dispatch.permissionMode }), settings.dispatch.skipPermissions && (_jsx("span", { className: "text-orange-400", children: "bypass permissions" })), settings.scopeCwd && _jsxs("span", { title: "Scope (--cwd)", children: ["cwd ", settings.scopeCwd] }), !connected && _jsx("span", { className: "text-yellow-500", children: "reconnecting\u2026" })] }), manage && (_jsx("button", { onClick: copyJson, className: "p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800", title: "Copy `claude agents --json --all`", children: _jsx(Braces, { size: 15 }) })), _jsx("button", { onClick: refresh, className: "p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800", title: "Refresh", children: _jsx(RefreshCw, { size: 15, className: loading ? 'animate-spin' : '' }) }), _jsx("button", { onClick: () => setShowSettings(true), className: "p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800", title: "Dispatch defaults & settings", children: _jsx(Settings2, { size: 15 }) }), _jsx("button", { onClick: () => setShowHelp(true), className: "p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800", title: "Shortcuts (?)", children: _jsx(HelpCircle, { size: 15 }) })] }), error && received && (_jsxs("div", { className: "px-4 py-1.5 text-xs text-red-300 bg-red-900/20 border-b border-red-900/40 flex items-center gap-2", children: [_jsx(AlertTriangle, { size: 12 }), " ", error] })), _jsxs("div", { className: "flex-1 flex min-h-0", children: [outletShown && (_jsx("div", { ref: setOutlet, "data-collapsed": railCollapsed || undefined, className: `hidden ${railCollapsed ? '' : 'md:flex'} md:w-[340px] xl:w-[440px] shrink-0 flex-col min-h-0 border-r border-gray-800 bg-gray-950/40` })), _jsxs("div", { ref: railRef, tabIndex: -1, "data-focus-zone": "rail", "data-rail-focused": railFocused, "data-collapsed": railCollapsed || undefined, className: `${outletShown ? 'hidden' : active && !narrowWorkspace ? `flex ${railCollapsed ? 'md:hidden' : ''}` : `hidden ${railCollapsed ? '' : 'md:flex'}`} w-full md:w-[340px] xl:w-[440px] shrink-0 flex-col min-h-0 border-r border-gray-800 bg-gray-950/40 outline-none relative`, children: [railFocused && (_jsx("div", { "aria-hidden": "true", className: "pointer-events-none absolute inset-0 z-10 border-2 border-blue-300/80" })), _jsx(AgentFilterBar, { leading: _jsx(GroupingPicker, { grouping: settings.grouping, onGrouping: (grouping) => updateSettings({ grouping }) }), trailing: _jsx(FoldButtons, { groupsCollapsed: groupsCollapsed, onGroups: (collapse) => (collapse ? collapseAllGroups() : expandAllGroups()), groupsDisabled: filterActive, cardsExpanded: cardsExpanded, onCards: (expand) => rail.setSessionsExpanded(shownSessions.map((s) => s.id), expand), cardsDisabled: shownSessions.length === 0 }), sort: sort, onSort: setSort, active: quickFilters, onToggle: toggleQuickFilter, chipCounts: chipCounts, shown: shownSessions.length, total: sessions.length, filtered: filterActive || !!filter, onClear: () => {
+                                        : undefined }) }), panel === 'prs' && (_jsx(PullRequestsPanel, { rows: pullRows, sessions: sessions, contexts: contexts, repoFilter: prRepo, onClearRepo: () => setPrRepo(null), onSelectAgent: attach, onOpenCode: openPrCode, onMaximize: openPulls && (() => openPulls(prRepo)), onClose: () => setPanel(null) })), panel === 'servers' && (_jsx(ServersPanel, { rows: serverRows, onSelectAgent: attach, onClose: () => setPanel(null) })), _jsx("div", { className: "flex-1" }), _jsxs("div", { className: `hidden ${active ? 'md:flex' : ''} items-center gap-1.5 text-[11px] text-gray-300`, role: "status", title: t.focusSwitchTitle, children: [_jsx("span", { className: `px-1.5 py-0.5 rounded font-medium whitespace-nowrap ${focusZone === 'terminal' ? 'bg-blue-300 text-gray-950' : 'bg-gray-700 text-gray-100'}`, children: t.focusZones[focusZone === 'terminal' || focusZone === 'rail' ? focusZone : 'page'] }), _jsx("kbd", { className: "kbd", children: FOCUS_CHORD_LABEL }), _jsx("span", { className: "text-gray-400 hidden xl:inline", children: t.switches })] }), _jsxs("span", { className: "text-[11px] text-gray-500 font-mono", title: modelTitle, children: [t.modelPrefix, " ", modelLabel, _jsxs("span", { className: "sr-only", children: [" (", modelTitle, ")"] })] }), _jsxs("div", { className: "hidden xl:flex items-center gap-3 text-[11px] text-gray-500 font-mono", children: [settings.dispatch.effort && (_jsxs("span", { title: t.effortTitle, children: [t.effortPrefix, " ", settings.dispatch.effort] })), settings.dispatch.permissionMode && _jsx("span", { children: settings.dispatch.permissionMode }), settings.dispatch.skipPermissions && (_jsx("span", { className: "text-orange-400", children: t.bypassPermissions })), settings.scopeCwd && _jsxs("span", { title: t.scopeTitle, children: ["cwd ", settings.scopeCwd] }), !connected && _jsx("span", { className: "text-yellow-500", children: t.reconnecting })] }), manage && (_jsx("button", { onClick: copyJson, className: "p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800", title: t.copyJsonTitle, children: _jsx(Braces, { size: 15 }) })), _jsx("button", { onClick: refresh, className: "p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800", title: t.refresh, children: _jsx(RefreshCw, { size: 15, className: loading ? 'animate-spin' : '' }) }), _jsx("button", { onClick: () => setShowSettings(true), className: "p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800", title: t.settingsTitle, children: _jsx(Settings2, { size: 15 }) }), _jsx("button", { onClick: () => setShowHelp(true), className: "p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800", title: t.shortcutsTitle, children: _jsx(HelpCircle, { size: 15 }) })] }), error && received && (_jsxs("div", { className: "px-4 py-1.5 text-xs text-red-300 bg-red-900/20 border-b border-red-900/40 flex items-center gap-2", children: [_jsx(AlertTriangle, { size: 12 }), " ", error] })), _jsxs("div", { className: "flex-1 flex min-h-0", children: [outletShown && (_jsx("div", { ref: setOutlet, "data-collapsed": railCollapsed || undefined, className: `hidden ${railCollapsed ? '' : 'md:flex'} md:w-[340px] xl:w-[440px] shrink-0 flex-col min-h-0 border-r border-gray-800 bg-gray-950/40` })), _jsxs("div", { ref: railRef, tabIndex: -1, "data-focus-zone": "rail", "data-rail-focused": railFocused, "data-collapsed": railCollapsed || undefined, className: `${outletShown ? 'hidden' : active && !narrowWorkspace ? `flex ${railCollapsed ? 'md:hidden' : ''}` : `hidden ${railCollapsed ? '' : 'md:flex'}`} w-full md:w-[340px] xl:w-[440px] shrink-0 flex-col min-h-0 border-r border-gray-800 bg-gray-950/40 outline-none relative`, children: [railFocused && (_jsx("div", { "aria-hidden": "true", className: "pointer-events-none absolute inset-0 z-10 border-2 border-blue-300/80" })), _jsx(AgentFilterBar, { leading: _jsx(GroupingPicker, { grouping: settings.grouping, onGrouping: (grouping) => updateSettings({ grouping }) }), trailing: _jsx(FoldButtons, { groupsCollapsed: groupsCollapsed, onGroups: (collapse) => (collapse ? collapseAllGroups() : expandAllGroups()), groupsDisabled: filterActive, cardsExpanded: cardsExpanded, onCards: (expand) => rail.setSessionsExpanded(shownSessions.map((s) => s.id), expand), cardsDisabled: shownSessions.length === 0 }), sort: sort, onSort: setSort, active: quickFilters, onToggle: toggleQuickFilter, chipCounts: chipCounts, shown: shownSessions.length, total: sessions.length, filtered: filterActive || !!filter, onClear: () => {
                                             setQuickFilters(new Set());
                                             setLinkFilter(new Set());
                                             setTextQuery('');
                                             if (filter)
                                                 setInput('');
-                                        }, linkEntries: linkEntries, linkSelected: linkFilter, onToggleLink: toggleLinkFilter, query: textQuery, onQuery: setTextQuery }), error && !received ? (_jsx(ListError, { message: error, status: errorStatus, onRetry: refresh })) : loading && sessions.length === 0 ? (_jsxs("div", { className: "flex-1 flex items-center justify-center text-sm text-gray-500", children: [_jsx(RefreshCw, { size: 14, className: "animate-spin mr-2" }), " Loading sessions\u2026"] })) : (_jsx(AgentList, { railFocused: railFocused, items: items, selectedIndex: selectedIndex, onSelectIndex: (index) => setSelectedKey(itemKey(items[index])), onActivate: activateItem, onTogglePeek: peekAvailable ? togglePeek : undefined, peekId: peekId, openIds: railOpenIds, onFocusOpen: focusOpen, now: now, grouping: settings.grouping, cardDensity: settings.cardDensity, cardFields: settings.cardFields, lookup: lookup, contexts: contexts, servers: servers, filtered: filterActive || !!filter, onOpenPr: setPrModal, rowActions: rowActions, groupActions: groupActions, highlightedId: highlightedId, collapsedKeys: collapsed, activeSessionId: activeSessionId, onRevealActive: (id) => {
+                                        }, linkEntries: linkEntries, linkSelected: linkFilter, onToggleLink: toggleLinkFilter, query: textQuery, onQuery: setTextQuery }), error && !received ? (_jsx(ListError, { message: error, status: errorStatus, onRetry: refresh })) : loading && sessions.length === 0 ? (_jsxs("div", { className: "flex-1 flex items-center justify-center text-sm text-gray-500", children: [_jsx(RefreshCw, { size: 14, className: "animate-spin mr-2" }), " ", t.loadingSessions] })) : (_jsx(AgentList, { railFocused: railFocused, items: items, selectedIndex: selectedIndex, onSelectIndex: (index) => setSelectedKey(itemKey(items[index])), onActivate: activateItem, onTogglePeek: peekAvailable ? togglePeek : undefined, peekId: peekId, openIds: railOpenIds, onFocusOpen: focusOpen, now: now, grouping: settings.grouping, cardDensity: settings.cardDensity, cardFields: settings.cardFields, lookup: lookup, contexts: contexts, servers: servers, filtered: filterActive || !!filter, onOpenPr: setPrModal, rowActions: rowActions, groupActions: groupActions, highlightedId: highlightedId, collapsedKeys: collapsed, activeSessionId: activeSessionId, onRevealActive: (id) => {
                                             rail.revealSession(groups, id);
                                             if (isFoldedAway(groups, id))
                                                 setExpandedCompleted(true);
-                                        }, onToggleGroup: toggleCollapsed, favoriteGroupKeys: rail.favoriteGroups, favoriteSessionIds: rail.favoriteSessions, expandedSessionIds: rail.expandedSessions, onToggleExpanded: rail.toggleExpandedSession, onToggleFavoriteGroup: rail.toggleFavoriteGroup, onToggleFavoriteSession: rail.toggleFavoriteSession, onMoveGroup: rail.moveGroup, onMoveSession: sort.key === 'manual' ? rail.moveSession : undefined, appsById: appsById, nav: nav, issuesByAgent: issuesByAgent, onOpenIssue: renderIssueModal ? setIssueModalKey : undefined, orchestratorIds: settings.orchestrators, orchestratorRoles: settings.orchestratorRoles, top: settings.grouping === 'state' && nav ? (_jsx(ProjectsSection, { apps: apps, nav: nav, filtered: filterActive || !!filter })) : undefined })), filter && (_jsxs("div", { className: "px-3 py-1 text-[11px] text-blue-300 bg-blue-900/20 border-t border-blue-900/40 flex items-center gap-2", children: ["filter active \u2014 ", visibleSessions.length, " of ", sessions.length, " sessions", _jsx("button", { onClick: () => setInput(''), className: "ml-auto hover:text-white", "aria-label": "Clear filter", children: _jsx(X, { size: 11 }) })] })), _jsx(RailSwitch, { id: "interactive-sessions-label", label: "Interactive sessions", hint: interactiveCount > 0
-                                            ? `${interactiveCount} ${showInteractive ? 'shown' : 'hidden'}`
-                                            : 'not running in Orkumo', checked: showInteractive, onToggle: toggleInteractive }), cloud && _jsx(CloudSessionBar, { onOpen: openCloud }), _jsx("div", { role: "status", "aria-live": "polite", children: !composerOpen && (hint || dispatching) && (_jsx("p", { className: `px-3 py-2 text-xs border-t border-gray-700 ${hint?.tone === 'error'
+                                        }, onToggleGroup: toggleCollapsed, favoriteGroupKeys: rail.favoriteGroups, favoriteSessionIds: rail.favoriteSessions, expandedSessionIds: rail.expandedSessions, onToggleExpanded: rail.toggleExpandedSession, onToggleFavoriteGroup: rail.toggleFavoriteGroup, onToggleFavoriteSession: rail.toggleFavoriteSession, onMoveGroup: rail.moveGroup, onMoveSession: sort.key === 'manual' ? rail.moveSession : undefined, appsById: appsById, nav: nav, issuesByAgent: issuesByAgent, onOpenIssue: renderIssueModal ? setIssueModalKey : undefined, orchestratorIds: settings.orchestrators, orchestratorRoles: settings.orchestratorRoles, top: settings.grouping === 'state' && nav ? (_jsx(ProjectsSection, { apps: apps, nav: nav, filtered: filterActive || !!filter })) : undefined })), filter && (_jsxs("div", { className: "px-3 py-1 text-[11px] text-blue-300 bg-blue-900/20 border-t border-blue-900/40 flex items-center gap-2", children: [t.filterActive(visibleSessions.length, sessions.length), _jsx("button", { onClick: () => setInput(''), className: "ml-auto hover:text-white", "aria-label": t.clearFilter, children: _jsx(X, { size: 11 }) })] })), _jsx(RailSwitch, { id: "interactive-sessions-label", label: t.interactiveSessions, hint: interactiveCount > 0
+                                            ? t.interactiveCount(interactiveCount, showInteractive)
+                                            : t.interactiveNotRunning, checked: showInteractive, onToggle: toggleInteractive }), cloud && canSpawn && _jsx(CloudSessionBar, { onOpen: openCloud }), _jsx("div", { role: "status", "aria-live": "polite", children: !composerOpen && (hint || dispatching) && (_jsx("p", { className: `px-3 py-2 text-xs border-t border-gray-700 ${hint?.tone === 'error'
                                                 ? 'text-red-300'
                                                 : hint?.tone === 'success'
                                                     ? 'text-emerald-300'
-                                                    : 'text-gray-200'}`, children: hint?.text || 'Dispatching…' })) })] }), _jsx("div", { className: active ? 'hidden' : 'flex-1 min-w-0 min-h-0 relative', children: _jsx(PullRequestsDataContext.Provider, { value: pullsData, children: _jsx(RailOutletContext.Provider, { value: outletShown ? outlet : null, children: children }) }) }), _jsxs("div", { className: `flex-1 min-w-0 min-h-0 ${active ? (narrowWorkspace ? 'flex flex-col' : 'hidden md:flex') : 'hidden'} md:flex-row overflow-hidden`, children: [_jsxs("button", { type: "button", onClick: () => setNarrowWorkspace(false), className: "md:hidden flex items-center gap-1.5 px-3 py-2 text-sm text-blue-300 border-b border-gray-800 shrink-0", children: [_jsx(ArrowLeft, { size: 16, "aria-hidden": true }), " Agents"] }), _jsx("div", { className: "flex-1 min-w-0 min-h-0", children: [...Object.entries(parked), [contextId ?? '', workspace]].map(([id, ws]) => {
+                                                    : 'text-gray-200'}`, children: hint?.text || t.dispatching })) })] }), _jsx("div", { className: active ? 'hidden' : 'flex-1 min-w-0 min-h-0 relative', children: _jsx(PullRequestsDataContext.Provider, { value: pullsData, children: _jsx(RailOutletContext.Provider, { value: outletShown ? outlet : null, children: children }) }) }), _jsxs("div", { className: `flex-1 min-w-0 min-h-0 ${active ? (narrowWorkspace ? 'flex flex-col' : 'hidden md:flex') : 'hidden'} md:flex-row overflow-hidden`, children: [_jsxs("button", { type: "button", onClick: () => setNarrowWorkspace(false), className: "md:hidden flex items-center gap-1.5 px-3 py-2 text-sm text-blue-300 border-b border-gray-800 shrink-0", children: [_jsx(ArrowLeft, { size: 16, "aria-hidden": true }), " Agents"] }), _jsx("div", { className: "flex-1 min-w-0 min-h-0", children: [...Object.entries(parked), [contextId ?? '', workspace]].map(([id, ws]) => {
                                             const live = id === (contextId ?? '');
                                             const allSessions = allPanes;
                                             return (_jsx("div", { className: live ? 'h-full' : 'hidden', children: _jsx(AgentWorkspace, { hidden: !live, 
@@ -2232,15 +2284,17 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                     });
                     setInput('');
                     setComposerImages([]);
-                }, hiddenKinds: hiddenKinds, harness: composerHarness, onHarnessChange: (harness) => {
+                }, hiddenKinds: hiddenKinds, canAttach: canSpawn, 
+                // Other harnesses only run in a terminal this view starts: no picker without one
+                harness: canSpawn ? composerHarness : undefined, onHarnessChange: (harness) => {
                     setComposerHarness(harness);
                     // model names differ per CLI: a new harness starts from its default
                     setComposerModel('');
                     setComposerEffort('');
-                }, harnessInstalled: harnessInstalled, model: composerModel, onModelChange: setComposerModel, effort: composerEffort, onEffortChange: setComposerEffort, defaultModel: composerHarness === 'claude' ? settings.dispatch.model || null : null, images: composerImages, onImagesChange: setComposerImages, hint: hint?.text || (dispatching ? 'Dispatching…' : null), hintTone: hint?.tone, disabled: dispatching, subagents: subagents, repos: repos, commands: composerHarness === 'omp' ? ompCommands : composerHarness === 'claude' ? commands : [], inputRef: inputRef }), pendingCopy && (_jsx(CopyWarningDialog, { holder: pendingCopy.holder, handover: pendingCopy.handover, onClose: () => setPendingCopy(null), onConfirm: () => {
+                }, harnessInstalled: harnessInstalled, model: composerModel, onModelChange: setComposerModel, effort: composerEffort, onEffortChange: setComposerEffort, defaultModel: composerHarness === 'claude' ? settings.dispatch.model || null : null, images: composerImages, onImagesChange: setComposerImages, hint: hint?.text || (dispatching ? t.dispatching : null), hintTone: hint?.tone, disabled: dispatching, subagents: subagents, repos: repos, commands: composerHarness === 'omp' ? ompCommands : composerHarness === 'claude' ? commands : [], inputRef: inputRef }), pendingCopy && (_jsx(CopyWarningDialog, { holder: pendingCopy.holder, handover: pendingCopy.handover, onClose: () => setPendingCopy(null), onConfirm: () => {
                     setPendingCopy(null);
                     pendingCopy.run();
-                } })), confirmingStop && (_jsx(ConfirmDialog, { title: "Stop agent?", body: `${confirmingStop.session.name} ends its current work. This cannot be undone.`, confirm: "Stop", onCancel: () => setConfirmingStop(null), onConfirm: () => {
+                } })), confirmingStop && (_jsx(ConfirmDialog, { title: t.stopAgentTitle, body: t.stopAgentBody(confirmingStop.session.name), confirm: t.stop, onCancel: () => setConfirmingStop(null), onConfirm: () => {
                     setConfirmingStop(null);
                     confirmingStop.run();
                 } })), _jsx(ResumePicker, { open: resumePicker.open, initialQuery: resumePicker.query, cwd: targetCwd, onClose: () => setResumePicker({ open: false, query: '' }), onResume: (past) => {
@@ -2259,19 +2313,16 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             // A fixed project is a project: no free paths, no plain directories
             , { 
                 // A fixed project is a project: no free paths, no plain directories
-                choices: apps.map((a) => ({ name: a.name, path: a.path, source: 'project' })), current: null, home: homeDir, label: "Project to keep in the rail\u2026", allowPath: false, onCancel: () => setPickFixedOpen(false), onPick: (path) => {
+                choices: apps.map((a) => ({ name: a.name, path: a.path, source: 'project' })), current: null, home: homeDir, label: t.fixedProjectPicker, allowPath: false, onCancel: () => setPickFixedOpen(false), onPick: (path) => {
                     if (!rail.fixedProjects.includes(path))
                         rail.toggleFixedProject(path);
                     if (settings.grouping !== 'project')
                         updateSettings({ grouping: 'project' });
                     setPickFixedOpen(false);
                 } })), pickDirOpen && (_jsx(DirectoryPicker, { choices: composerMode === 'agent' && homeDir
-                    ? [{ name: '~ (home)', path: homeDir, source: 'home' }, ...directoryChoices]
+                    ? [{ name: t.homeChoice, path: homeDir, source: 'home' }, ...directoryChoices]
                     : composerMode === 'chat' && chatsDir
-                        ? [
-                            { name: 'Chats (no project)', path: chatsDir, source: 'chats' },
-                            ...directoryChoices,
-                        ]
+                        ? [{ name: t.chatsChoice, path: chatsDir, source: 'chats' }, ...directoryChoices]
                         : directoryChoices, current: composerCwd, home: homeDir, onCancel: () => setPickDirOpen(false), onPick: (path) => {
                     setPickedCwd(path);
                     if (composerMode === 'task')
@@ -2281,18 +2332,22 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 } }))] }));
 };
 /** The list failed before any arrived: why, the transport's message, and a retry */
-const ListError = ({ message, status, onRetry, }) => (_jsxs("div", { role: "alert", className: "flex gap-2 p-4 text-xs", children: [_jsx(AlertTriangle, { size: 14, className: "text-red-400 shrink-0 mt-px", "aria-hidden": true }), _jsxs("div", { className: "min-w-0 flex-1", children: [_jsx("div", { className: "text-gray-100", children: status === 401 || status === 403
-                        ? 'No access to the agents.'
-                        : status !== null && status >= 500
-                            ? 'The agent service is not available right now.'
-                            : 'Could not load the agents.' }), message && _jsx("div", { className: "text-gray-500 font-mono break-words mt-0.5", children: message }), _jsxs("button", { onClick: onRetry, className: "mt-2 flex items-center gap-1 px-2 py-1 rounded border border-gray-700 text-gray-200 hover:bg-gray-800", children: [_jsx(RefreshCw, { size: 11, "aria-hidden": true }), " Try again"] })] })] }));
+const ListError = ({ message, status, onRetry, }) => {
+    const t = useLabels().shell;
+    return (_jsxs("div", { role: "alert", className: "flex gap-2 p-4 text-xs", children: [_jsx(AlertTriangle, { size: 14, className: "text-red-400 shrink-0 mt-px", "aria-hidden": true }), _jsxs("div", { className: "min-w-0 flex-1", children: [_jsx("div", { className: "text-gray-100", children: status === 401 || status === 403
+                            ? t.listNoAccess
+                            : status !== null && status >= 500
+                                ? t.listUnavailable
+                                : t.listFailed }), message && _jsx("div", { className: "text-gray-500 font-mono break-words mt-0.5", children: message }), _jsxs("button", { onClick: onRetry, className: "mt-2 flex items-center gap-1 px-2 py-1 rounded border border-gray-700 text-gray-200 hover:bg-gray-800", children: [_jsx(RefreshCw, { size: 11, "aria-hidden": true }), " ", t.tryAgain] })] })] }));
+};
 /** Ctrl+G: larger prompt editor (browser stand-in for $VISUAL / $EDITOR) */
 const PromptEditor = ({ value, onCancel, onSave }) => {
+    const t = useLabels().shell;
     const [text, setText] = useState(value);
-    return (_jsx("div", { className: "fixed inset-0 z-[95] bg-black/60 flex items-center justify-center p-4", onClick: onCancel, role: "dialog", "aria-modal": "true", children: _jsxs("div", { className: "w-full max-w-3xl bg-gray-900 border border-gray-700 rounded-xl shadow-2xl flex flex-col", onClick: (e) => e.stopPropagation(), children: [_jsx("div", { className: "px-4 py-2 border-b border-gray-800 text-sm font-medium", children: "Edit dispatch prompt" }), _jsx("textarea", { autoFocus: true, value: text, onChange: (e) => setText(e.target.value), onKeyDown: (e) => {
+    return (_jsx("div", { className: "fixed inset-0 z-[95] bg-black/60 flex items-center justify-center p-4", onClick: onCancel, role: "dialog", "aria-modal": "true", children: _jsxs("div", { className: "w-full max-w-3xl bg-gray-900 border border-gray-700 rounded-xl shadow-2xl flex flex-col", onClick: (e) => e.stopPropagation(), children: [_jsx("div", { className: "px-4 py-2 border-b border-gray-800 text-sm font-medium", children: t.editPromptTitle }), _jsx("textarea", { autoFocus: true, value: text, onChange: (e) => setText(e.target.value), onKeyDown: (e) => {
                         if (e.key === 'Escape')
                             onCancel();
                         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey))
                             onSave(text);
-                    }, className: "flex-1 min-h-[40vh] bg-gray-950 text-sm text-gray-100 font-mono p-4 outline-none resize-y", spellCheck: false }), _jsxs("div", { className: "flex items-center justify-end gap-2 px-4 py-2 border-t border-gray-800 text-sm", children: [_jsx("span", { className: "text-xs text-gray-500 mr-auto", children: "Ctrl+Enter to apply \u00B7 Esc to cancel" }), _jsx("button", { onClick: onCancel, className: "px-3 py-1.5 rounded text-gray-300 hover:bg-gray-800", children: "Cancel" }), _jsx("button", { onClick: () => onSave(text), className: "px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white", children: "Use prompt" })] })] }) }));
+                    }, className: "flex-1 min-h-[40vh] bg-gray-950 text-sm text-gray-100 font-mono p-4 outline-none resize-y", spellCheck: false }), _jsxs("div", { className: "flex items-center justify-end gap-2 px-4 py-2 border-t border-gray-800 text-sm", children: [_jsx("span", { className: "text-xs text-gray-500 mr-auto", children: t.editPromptKeys }), _jsx("button", { onClick: onCancel, className: "px-3 py-1.5 rounded text-gray-300 hover:bg-gray-800", children: t.cancel }), _jsx("button", { onClick: () => onSave(text), className: "px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white", children: t.usePrompt })] })] }) }));
 };

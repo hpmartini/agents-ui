@@ -83,8 +83,7 @@ export type TabLayout = PaneLayout | 'custom';
  * rearranged, so the rendering keeps panels (and their sizes) that a change does not touch.
  */
 export type SplitNode =
-  | { id: string; pane: string }
-  | { id: string; dir: 'row' | 'column'; children: SplitNode[] };
+  { id: string; pane: string } | { id: string; dir: 'row' | 'column'; children: SplitNode[] };
 
 export interface WorkspaceTab {
   id: string;

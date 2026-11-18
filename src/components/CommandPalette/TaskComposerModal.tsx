@@ -6,6 +6,7 @@ import { useDialogA11y } from './useDialogA11y';
 import { ImageAttachments, imageDropHandlers } from '../ImageAttachments';
 import { attachableFiles } from '../../utils/composer';
 import { useTransport } from '../../host';
+import { useLabels } from '../../labels';
 
 type DispatchInputProps = React.ComponentProps<typeof DispatchInput>;
 
@@ -34,6 +35,7 @@ export const TaskComposerModal: React.FC<TaskComposerModalProps> = ({
   hiddenKinds,
   ...inputProps
 }) => {
+  const t = useLabels().shell;
   const dialogRef = useRef<HTMLDivElement>(null);
   const trapTab = useDialogA11y(open, dialogRef, () => inputProps.inputRef.current);
   const extensions = useTransport().uploads?.attachmentExtensions;
@@ -70,10 +72,10 @@ export const TaskComposerModal: React.FC<TaskComposerModalProps> = ({
         <div className="flex items-center mb-3">
           <h2 id="task-composer-title" className="text-sm font-semibold text-gray-50">
             {inputProps.variant === 'chat'
-              ? 'New chat'
+              ? t.newMenu.chat
               : inputProps.variant === 'agent'
-                ? 'New agent'
-                : 'New task'}
+                ? t.newMenu.agent
+                : t.newMenu.task}
           </h2>
           {onKindChange && (
             <div className="ml-3">
@@ -89,7 +91,7 @@ export const TaskComposerModal: React.FC<TaskComposerModalProps> = ({
             type="button"
             onClick={onClose}
             className="ml-auto p-1.5 rounded-md text-gray-200 hover:bg-gray-700 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400"
-            aria-label="Close"
+            aria-label={t.close}
           >
             <X size={15} />
           </button>
@@ -104,7 +106,7 @@ export const TaskComposerModal: React.FC<TaskComposerModalProps> = ({
                 onChange={onImagesChange}
                 disabled={inputProps.disabled}
                 files={extensions}
-                note={images.length ? 'Stays local, handed to the agent by path' : undefined}
+                note={images.length ? t.imagesNote : undefined}
               />
             )
           }

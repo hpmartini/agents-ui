@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useHost, useTransport } from '../host';
+import { useLabels } from '../labels';
 import type { OpenFileOptions } from '../transport';
 
 export type OpenFile = (path: string, cwd: string, options?: OpenFileOptions) => Promise<void>;
@@ -13,21 +14,19 @@ export type OpenFile = (path: string, cwd: string, options?: OpenFileOptions) =>
 export function useOpenFile(): OpenFile | null {
   const files = useTransport().files;
   const { toast } = useHost();
+  const t = useLabels().terminal;
   return useMemo(
     () =>
       files
         ? async (path, cwd, options = {}) => {
             try {
               const { action } = await files.openFile(path, cwd, options);
-              if (action === 'revealed' && !options.reveal)
-                toast.info(`Startbare Datei, im Finder gezeigt: ${path}`);
+              if (action === 'revealed' && !options.reveal) toast.info(t.launchableRevealed(path));
             } catch (err) {
-              toast.error(
-                `Datei öffnen fehlgeschlagen: ${err instanceof Error ? err.message : err}`
-              );
+              toast.error(t.openFileFailed(String(err instanceof Error ? err.message : err)));
             }
           }
         : null,
-    [files, toast]
+    [files, toast, t]
   );
 }

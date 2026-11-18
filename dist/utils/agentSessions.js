@@ -1,6 +1,7 @@
 /**
  * Grouping, sorting and formatting helpers for the agent view session list.
  */
+import { shellEn } from '../labels/shell';
 import { LOCAL_TARGETS } from '../transport';
 import { DEFAULT_AGENT_CARD_FIELDS } from '../types';
 import { isCacheWarning } from './agentCache';
@@ -15,15 +16,8 @@ export const STATE_GROUP_ORDER = [
     'completed',
     'interactive',
 ];
-const GROUP_TITLES = {
-    pinned: 'Pinned',
-    review: 'Ready for review',
-    'needs-input': 'Needs input',
-    working: 'Working',
-    completed: 'Completed',
-    app: 'Claude App',
-    interactive: 'Interactive',
-};
+/** Built-in group titles in `en`; the view swaps in the locale's (`ShellLabels.groupTitles`) */
+const GROUP_TITLES = shellEn.groupTitles;
 /** Maximum completed rows shown before folding into "… N more" */
 export const COMPLETED_VISIBLE_LIMIT = 6;
 const isOpenPr = (link) => !link.state || !/merged|closed/i.test(link.state);
@@ -70,7 +64,7 @@ function stateGroupOf(session) {
 export function groupSessions(sessions, grouping, options = {}) {
     const order = (list) => options.sort ? sortSessionsBy(list, options.sort, options.lookup) : sortSessions(list);
     if (grouping === 'none') {
-        return [{ key: 'all', title: 'All', sessions: order(sessions), hidden: [] }];
+        return [{ key: 'all', title: GROUP_TITLES.all, sessions: order(sessions), hidden: [] }];
     }
     if (grouping === 'project')
         return projectGroups(sessions, order, options.apps, options.lookup, options.fixedProjects);
@@ -154,7 +148,12 @@ export function withOrchestratorSessions(groups, ids) {
         return [{ ...g, sessions, hidden }];
     });
     return [
-        { key: ORCHESTRATORS_GROUP_KEY, title: 'Orchestrators', sessions: orchestrators, hidden: [] },
+        {
+            key: ORCHESTRATORS_GROUP_KEY,
+            title: GROUP_TITLES[ORCHESTRATORS_GROUP_KEY],
+            sessions: orchestrators,
+            hidden: [],
+        },
         ...rest,
     ];
 }
@@ -259,7 +258,7 @@ function projectGroups(sessions, order, apps = [], lookup, fixedProjects = []) {
     if (homeless.length)
         groups.push({
             key: NO_PROJECT_KEY,
-            title: 'No project',
+            title: GROUP_TITLES[NO_PROJECT_KEY],
             sessions: order(homeless),
             hidden: [],
         });
@@ -298,17 +297,18 @@ export function workflowIssue(session, lookup, issueKeys = []) {
         : null;
     return { key: fromLinks || fromSlug, number: parsed.number };
 }
+/** Sort choices; their names are `ShellLabels.sortOptions` */
 export const SORT_OPTIONS = [
-    { key: 'attention', label: 'Attention', dir: 'desc', directional: false },
-    { key: 'updated', label: 'Recently updated', dir: 'desc', directional: true },
-    { key: 'newest', label: 'Newest', dir: 'desc', directional: false },
-    { key: 'oldest', label: 'Oldest', dir: 'asc', directional: false },
-    { key: 'name', label: 'Name', dir: 'asc', directional: true },
-    { key: 'repo', label: 'Repository', dir: 'asc', directional: true },
-    { key: 'prs', label: 'Open PRs', dir: 'desc', directional: true },
-    { key: 'servers', label: 'Running servers', dir: 'desc', directional: true },
+    { key: 'attention', dir: 'desc', directional: false },
+    { key: 'updated', dir: 'desc', directional: true },
+    { key: 'newest', dir: 'desc', directional: false },
+    { key: 'oldest', dir: 'asc', directional: false },
+    { key: 'name', dir: 'asc', directional: true },
+    { key: 'repo', dir: 'asc', directional: true },
+    { key: 'prs', dir: 'desc', directional: true },
+    { key: 'servers', dir: 'desc', directional: true },
     // Order comes from the per-group manual order (useRailPreferences), newest first until moved
-    { key: 'manual', label: 'Manual', dir: 'desc', directional: false },
+    { key: 'manual', dir: 'desc', directional: false },
 ];
 export const DEFAULT_SORT = { key: 'attention', dir: 'desc' };
 const lastSegment = (path) => path.split('/').filter(Boolean).pop() || path;
@@ -424,25 +424,18 @@ export function sortSessionsBy(sessions, sort, lookup) {
         return (b.startedAt || 0) - (a.startedAt || 0);
     });
 }
+/** Quick filters in chip order; their texts are `ShellLabels.quickFilters` */
 export const QUICK_FILTERS = [
-    { key: 'needs-input', label: 'Needs input', title: 'Agents waiting for your input' },
-    { key: 'working', label: 'Working', title: 'Agents currently working' },
-    { key: 'completed', label: 'Completed', title: 'Agents that finished without failing' },
-    { key: 'failed', label: 'Failed', title: 'Agents that failed' },
-    { key: 'pr', label: 'Open PR', title: 'Agents with an open pull request' },
-    { key: 'server', label: 'Server', title: 'Agents with a running dev server in their directory' },
-    { key: 'subagents', label: 'Sub-agents', title: 'Agents with running sub-agents' },
-    { key: 'local', label: 'Local', title: 'Agents you started yourself' },
-    {
-        key: 'workflow',
-        label: 'Workflow',
-        title: 'Agents a workflow tool started for a GitHub issue',
-    },
-    {
-        key: 'cache-expiring',
-        label: 'Cache expiring',
-        title: 'Agents whose prompt cache expires within 10 minutes',
-    },
+    { key: 'needs-input' },
+    { key: 'working' },
+    { key: 'completed' },
+    { key: 'failed' },
+    { key: 'pr' },
+    { key: 'server' },
+    { key: 'subagents' },
+    { key: 'local' },
+    { key: 'workflow' },
+    { key: 'cache-expiring' },
 ];
 const STATE_FILTERS = ['needs-input', 'working', 'completed', 'failed'];
 const ORIGIN_FILTERS = ['local', 'workflow'];
@@ -725,66 +718,78 @@ export function sessionAgeMs(session, now = Date.now()) {
     const end = isFinished(session) && session.updatedAt ? session.updatedAt : now;
     return Math.max(0, end - (session.startedAt || end));
 }
-export function formatAge(ms) {
+/** `units` are the locale's unit suffixes (`ShellLabels.ageUnits`) */
+export function formatAge(ms, units = shellEn.ageUnits) {
     if (!Number.isFinite(ms))
         return '?';
     const seconds = Math.floor(ms / 1000);
     if (seconds < 60)
-        return `${seconds}s`;
+        return `${seconds}${units.s}`;
     const minutes = Math.floor(seconds / 60);
     if (minutes < 60)
-        return `${minutes}m`;
+        return `${minutes}${units.m}`;
     const hours = Math.floor(minutes / 60);
     if (hours < 24)
-        return `${hours}h`;
+        return `${hours}${units.h}`;
     const days = Math.floor(hours / 24);
-    return `${days}d`;
+    return `${days}${units.d}`;
 }
 /**
- * Icon glyph + colour for a display state, matching the TUI legend.
+ * Icon glyph + colour for a display state, matching the TUI legend; `labels` name the states
+ * (`ShellLabels.displayStates`).
  */
-export function stateGlyph(state) {
+export function stateGlyph(state, labels = shellEn.displayStates) {
     switch (state) {
         case 'working':
-            return { glyph: '✽', className: 'text-orange-400', animate: true, label: 'Working' };
+            return { glyph: '✽', className: 'text-orange-400', animate: true, label: labels.working };
         case 'needs-input':
-            return { glyph: '✻', className: 'text-yellow-400', animate: false, label: 'Needs input' };
-        case 'waiting':
             return {
-                glyph: '◷',
-                className: 'text-sky-400',
+                glyph: '✻',
+                className: 'text-yellow-400',
                 animate: false,
-                label: 'Waiting on background task',
+                label: labels['needs-input'],
             };
+        case 'waiting':
+            return { glyph: '◷', className: 'text-sky-400', animate: false, label: labels.waiting };
         case 'idle':
-            return { glyph: '∙', className: 'text-gray-500', animate: false, label: 'Idle' };
+            return { glyph: '∙', className: 'text-gray-500', animate: false, label: labels.idle };
         case 'completed':
-            return { glyph: '✻', className: 'text-emerald-400', animate: false, label: 'Completed' };
+            return {
+                glyph: '✻',
+                className: 'text-emerald-400',
+                animate: false,
+                label: labels.completed,
+            };
         case 'failed':
-            return { glyph: '✻', className: 'text-red-400', animate: false, label: 'Failed' };
+            return { glyph: '✻', className: 'text-red-400', animate: false, label: labels.failed };
         case 'stopped':
-            return { glyph: '✻', className: 'text-gray-500', animate: false, label: 'Stopped' };
+            return { glyph: '✻', className: 'text-gray-500', animate: false, label: labels.stopped };
         case 'loop':
-            return { glyph: '✢', className: 'text-blue-400', animate: false, label: 'Loop (sleeping)' };
+            return { glyph: '✢', className: 'text-blue-400', animate: false, label: labels.loop };
         case 'interactive':
-            return { glyph: '▪', className: 'text-purple-400', animate: false, label: 'Interactive' };
+            return {
+                glyph: '▪',
+                className: 'text-purple-400',
+                animate: false,
+                label: labels.interactive,
+            };
         default:
-            return { glyph: '∙', className: 'text-gray-500', animate: false, label: 'Unknown' };
+            return { glyph: '∙', className: 'text-gray-500', animate: false, label: labels.unknown };
     }
 }
-/** Card elements in display order within a slot, with their settings labels (#159) */
+/** Card elements in display order within a slot; settings names are `ShellLabels.cardElements` (#159) */
 export const CARD_ELEMENTS = [
-    { key: 'issue', label: 'Workflow issue (#nr)' },
-    { key: 'pr', label: 'Pull request' },
-    { key: 'project', label: 'Project name' },
-    { key: 'branch', label: 'Branch / worktree' },
-    { key: 'git', label: 'Git status (dirty, ahead, behind)' },
-    { key: 'metrics', label: 'Context and cache' },
-    { key: 'status', label: 'Status text (working on, waiting for)' },
-    { key: 'links', label: 'Linked issues' },
-    { key: 'servers', label: 'Dev servers' },
-    { key: 'subagents', label: 'Running sub-agents' },
-    { key: 'harness', label: 'Harness (Claude Code, Codex, …)' },
+    { key: 'issue' },
+    { key: 'pr' },
+    { key: 'project' },
+    { key: 'branch' },
+    { key: 'git' },
+    { key: 'metrics' },
+    { key: 'status' },
+    { key: 'links' },
+    { key: 'servers' },
+    { key: 'subagents' },
+    { key: 'harness' },
 ];
 /** Agent harnesses (#195) in picker order, with their display names */
 export const HARNESSES = [
@@ -851,14 +856,15 @@ export function appOriginLabel(session) {
         return null;
     return (session.app.origin && APP_ORIGINS[session.app.origin]) || 'Claude App';
 }
+/** Card slots; their names are `ShellLabels.cardSlots` */
 export const CARD_SLOTS = [
-    { key: 'left', label: 'Left, under the status icon' },
-    { key: 'title', label: 'After the name' },
-    { key: 'row2', label: 'Row 2' },
-    { key: 'row3', label: 'Row 3 (joins row 2 when compact)' },
-    { key: 'row4', label: 'Row 4' },
-    { key: 'details', label: 'Details (expanded card)' },
-    { key: 'hidden', label: 'Hidden' },
+    { key: 'left' },
+    { key: 'title' },
+    { key: 'row2' },
+    { key: 'row3' },
+    { key: 'row4' },
+    { key: 'details' },
+    { key: 'hidden' },
 ];
 /**
  * Sorts rendered card elements into their slots. Empty elements (null, false, empty list)
@@ -904,10 +910,10 @@ function prClass(state) {
     return 'text-yellow-400 border-yellow-500/40';
 }
 /**
- * Title for the browser tab: "2 awaiting input · claude agents".
+ * Title for the browser tab: "2 awaiting input · claude agents" (`ShellLabels.documentTitle`).
  */
-export function documentTitle(awaitingInput) {
-    return awaitingInput > 0 ? `${awaitingInput} awaiting input · claude agents` : 'claude agents';
+export function documentTitle(awaitingInput, title = shellEn.documentTitle) {
+    return title(awaitingInput);
 }
 export function shortenPath(cwd, max = 40) {
     if (cwd.length <= max)

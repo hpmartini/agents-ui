@@ -7,14 +7,15 @@ import { usePopover } from './PullRequestsPanel';
 import { registerPaneBrowser } from '../../utils/links';
 import { stateGlyph, resumableSessionId, sessionHarness, UI_VIEW_HARNESSES, } from '../../utils/agentSessions';
 import { useHost, useTransport } from '../../host';
+import { useLabels } from '../../labels';
 import { LOCAL_TARGETS } from '../../transport';
 import { AGENT_TAB_MIME, browserUrl, dropZone, prunedRoot, shellCwd, insertPosition, stepIndices, hiddenTabIds, tabTitle, } from '../../utils/agentWorkspace';
 import { AgentTerminal } from './AgentTerminal';
 import { ChatPane } from './Chat/ChatPane';
 const LAYOUTS = [
-    { id: 'columns', icon: _jsx(Columns2, { size: 14 }), label: 'Panes side by side' },
-    { id: 'rows', icon: _jsx(Rows2, { size: 14 }), label: 'Panes stacked' },
-    { id: 'grid', icon: _jsx(LayoutGrid, { size: 14 }), label: 'Panes in a grid' },
+    { id: 'columns', icon: _jsx(Columns2, { size: 14 }) },
+    { id: 'rows', icon: _jsx(Rows2, { size: 14 }) },
+    { id: 'grid', icon: _jsx(LayoutGrid, { size: 14 }) },
 ];
 const ZONE_HIGHLIGHT = {
     left: 'inset-y-0 left-0 w-1/2',
@@ -72,14 +73,15 @@ function shellSession(id) {
 /** Built-in browser next to the agent terminals: the host's (`renderBrowser`; Orkumo: the Coding view's preview) */
 export const BrowserPane = ({ url, active, onFocus, onClose, onMaximize, headerProps }) => {
     const { renderBrowser } = useHost();
+    const t = useLabels().terminal;
     if (!renderBrowser)
         return null;
     return (_jsx("div", { className: `h-full flex flex-col min-h-0 rounded border ${active ? 'border-blue-500/60' : 'border-gray-800'} bg-gray-900`, onMouseDownCapture: onFocus, children: _jsx("div", { className: "flex-1 min-h-0", children: renderBrowser({
                 url,
                 onClose,
-                closeLabel: 'Close browser',
+                closeLabel: t.closeBrowser,
                 dragHandleProps: headerProps,
-                actions: onMaximize && (_jsx("button", { onClick: onMaximize, className: "p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 shrink-0", title: "Own tab", "aria-label": "Move browser to its own tab", children: _jsx(Maximize2, { size: 14 }) })),
+                actions: onMaximize && (_jsx("button", { onClick: onMaximize, className: "p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 shrink-0", title: t.ownTab, "aria-label": t.moveBrowserToOwnTab, children: _jsx(Maximize2, { size: 14 }) })),
             }) }) }));
 };
 const isAgentDrag = (e) => e.dataTransfer.types.includes(AGENT_TAB_MIME);
@@ -120,6 +122,8 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
     const targets = transport.targets ?? LOCAL_TARGETS;
     // Without a built-in browser there are no browser panes: links go to the system browser
     const { renderBrowser } = useHost();
+    const labels = useLabels();
+    const t = labels.terminal;
     const onOpenLink = renderBrowser ? onOpenLinkProp : undefined;
     // Tabs whose sessions have not loaded yet stay in the stored workspace but are not shown
     const byId = new Map(sessions.map((s) => [s.id, s]));
@@ -255,7 +259,7 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
     if (tabs.length === 0) {
         if (emptyState)
             return _jsx(_Fragment, { children: emptyState });
-        return (_jsxs("div", { className: "h-full flex flex-col items-center justify-center text-gray-500 gap-3 p-8 text-center", children: [_jsx(Bot, { size: 40, className: "text-gray-700" }), _jsxs("div", { className: "text-sm", children: ["No agent attached. Select a session and press ", _jsx("kbd", { className: "kbd", children: "Enter" }), " or", ' ', _jsx("kbd", { className: "kbd", children: "\u2192" }), " to open it in a tab."] }), _jsx("div", { className: "text-xs text-gray-500", children: "Drag one tab onto another pane to work with several agents side by side." })] }));
+        return (_jsxs("div", { className: "h-full flex flex-col items-center justify-center text-gray-500 gap-3 p-8 text-center", children: [_jsx(Bot, { size: 40, className: "text-gray-700" }), _jsx("div", { className: "text-sm", children: t.noAgentAttached(_jsx("kbd", { className: "kbd", children: "Enter" }), _jsx("kbd", { className: "kbd", children: "\u2192" })) }), _jsx("div", { className: "text-xs text-gray-500", children: t.dragTabsHint })] }));
     }
     const renderPane = ({ tab, sessions: panes }, session, visible) => {
         const multi = panes.length > 1;
@@ -291,7 +295,7 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
                 // The terminal stays mounted under the UI view: its PTY is the agent
                 _jsx("div", { className: `h-full ${chatView ? 'invisible' : ''}`, "aria-hidden": chatView, children: _jsx(AgentTerminal, { session: session, visible: visible && !chatView, active: active && !chatView, focused: focused && !chatView, onFocus: () => onFocusPane(session.id), onClose: () => onClosePane(session.id), onPeek: onPeek && (() => onPeek(session.id)), onMaximize: multi ? () => onDetach(session.id) : undefined, solo: !multi, meta: renderPaneMeta?.(session), onOpenLink: onOpenLink && ((link) => onOpenLink(session.id, link)), onShowChat: viewable && onSetView ? () => onSetView(session.id, 'chat') : undefined, headerProps: dragHeader && {
                             ...dragHeader,
-                            title: 'Drag onto a pane edge to rearrange, or onto the tab strip for its own tab',
+                            title: t.dragPaneTitle,
                         } }) })), chatView && !custom && (_jsx("div", { className: "absolute inset-0", children: _jsx(ChatPane, { pane: session, agent: row ?? session, sessionId: viewSessionId, active: active, focused: focused, submitKey: chatSubmitKey, showSteps: chatShowSteps, onToggleSteps: () => onToggleChatSteps?.(), onFocus: () => onFocusPane(session.id), onClose: () => onClosePane(session.id), onMaximize: multi ? () => onDetach(session.id) : undefined, onShowTerminal: () => onSetView?.(session.id, 'terminal'), headerProps: dragHeader }) })), drag && drag.sessionId !== session.id && visible && (_jsx(SplitOverlay, { onDropZone: (zone) => (onSplit(drag.sessionId, session.id, zone), finishDrag()) }))] }));
     };
     /** One level of the split tree; `width` is the share of the body this node gets (estimate) */
@@ -310,11 +314,11 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
             onMoveTab(drag.id, targetId, position);
         finishDrag();
     };
-    return (_jsxs("div", { className: "h-full flex flex-col min-h-0", children: [_jsxs("div", { className: "flex items-center bg-gray-900 border-b border-gray-800 shrink-0 h-9", children: [_jsxs("div", { ref: stripRef, role: "tablist", "aria-label": "Attached agents", className: "flex-1 flex items-center overflow-x-auto scrollbar-hide h-full", children: [tabs.map(({ tab, sessions: panes }) => {
+    return (_jsxs("div", { className: "h-full flex flex-col min-h-0", children: [_jsxs("div", { className: "flex items-center bg-gray-900 border-b border-gray-800 shrink-0 h-9", children: [_jsxs("div", { ref: stripRef, role: "tablist", "aria-label": t.attachedAgents, className: "flex-1 flex items-center overflow-x-auto scrollbar-hide h-full", children: [tabs.map(({ tab, sessions: panes }) => {
                                 const isActive = tab.id === activeTabId;
                                 const lead = panes.find((s) => s.id === tab.activeSessionId) ?? panes[0];
                                 const needsInput = panes.some((s) => s.displayState === 'needs-input');
-                                const glyph = stateGlyph(needsInput ? 'needs-input' : lead.displayState);
+                                const glyph = stateGlyph(needsInput ? 'needs-input' : lead.displayState, labels.shell.displayStates);
                                 const title = tabTitle(panes.map((s) => s.name), paneNoun);
                                 const indicator = dropTarget?.id === tab.id ? dropTarget.position : null;
                                 return (_jsxs("div", { ...dragProps({ kind: 'tab', id: tab.id, sessionId: tab.activeSessionId }), onDragOver: (e) => {
@@ -337,9 +341,7 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
                                         }
                                     }, className: `group relative flex items-center pl-2.5 pr-1 h-full min-w-[120px] max-w-[220px] border-r border-gray-800 shrink-0 text-xs transition-colors ${isActive
                                         ? 'bg-gray-800 text-white'
-                                        : 'text-gray-400 hover:bg-gray-850 hover:text-gray-200'} ${drag?.kind === 'tab' && drag.id === tab.id ? 'opacity-40' : ''}`, title: panes
-                                        .map((s) => `${s.name} · ${s.cwd}${s.sessionId ? ` · session ${s.sessionId}` : ''}`)
-                                        .join('\n'), children: [isActive && _jsx("div", { className: "absolute top-0 left-0 right-0 h-0.5 bg-blue-500" }), indicator && (_jsx("div", { className: `absolute inset-y-1 w-0.5 rounded bg-blue-400 pointer-events-none ${indicator === 'before' ? 'left-0' : 'right-0'}` })), _jsxs("button", { type: "button", role: "tab", id: `agent-tab-${tab.id}`, "data-tab-id": tab.id, "aria-selected": isActive, "aria-controls": `agent-tabpanel-${tab.id}`, "aria-keyshortcuts": "Alt+Shift+ArrowLeft Alt+Shift+ArrowRight", "aria-label": `${title}, ${glyph.label}${panes.length > 1 ? `, ${panes.length} panes` : ''}${needsInput ? ', needs input' : ''}`, tabIndex: isActive ? 0 : -1, onClick: () => onActivateTab(tab.id), onKeyDown: (e) => {
+                                        : 'text-gray-400 hover:bg-gray-850 hover:text-gray-200'} ${drag?.kind === 'tab' && drag.id === tab.id ? 'opacity-40' : ''}`, title: panes.map((s) => t.tabPaneTitle(s.name, s.cwd, s.sessionId)).join('\n'), children: [isActive && _jsx("div", { className: "absolute top-0 left-0 right-0 h-0.5 bg-blue-500" }), indicator && (_jsx("div", { className: `absolute inset-y-1 w-0.5 rounded bg-blue-400 pointer-events-none ${indicator === 'before' ? 'left-0' : 'right-0'}` })), _jsxs("button", { type: "button", role: "tab", id: `agent-tab-${tab.id}`, "data-tab-id": tab.id, "aria-selected": isActive, "aria-controls": `agent-tabpanel-${tab.id}`, "aria-keyshortcuts": "Alt+Shift+ArrowLeft Alt+Shift+ArrowRight", "aria-label": t.tabAria(title, glyph.label, panes.length, needsInput), tabIndex: isActive ? 0 : -1, onClick: () => onActivateTab(tab.id), onKeyDown: (e) => {
                                                 if (e.altKey &&
                                                     e.shiftKey &&
                                                     (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
@@ -349,7 +351,7 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
                                                     if (step) {
                                                         refocusId.current = tab.id;
                                                         onMoveTab(tab.id, order[step.to], delta < 0 ? 'before' : 'after');
-                                                        setAnnouncement(`${title} moved to position ${step.to + 1} of ${order.length}`);
+                                                        setAnnouncement(t.tabMoved(title, step.to + 1, order.length));
                                                     }
                                                     return;
                                                 }
@@ -371,13 +373,13 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
                                             }, className: `flex items-center gap-1.5 flex-1 min-w-0 h-full text-left ${focusRing}`, children: [shellCwd(lead.id) !== null ? (_jsx(SquareTerminal, { size: 12, className: "text-gray-400 shrink-0", "aria-hidden": "true" })) : (_jsx("span", { className: `${glyph.className} ${glyph.animate ? 'animate-pulse motion-reduce:animate-none' : ''}`, "aria-hidden": "true", children: glyph.glyph })), _jsx("span", { className: "truncate flex-1", children: title }), browserUrl(lead.id) === null && tabSessionLabel(lead, targets) && (_jsx("span", { className: "shrink-0 font-mono text-[10px] text-gray-500", "data-testid": "tab-session-id", children: tabSessionLabel(lead, targets) })), panes.length > 1 && (_jsx("span", { className: "px-1 rounded bg-gray-700 text-[10px] leading-4 text-gray-300 shrink-0", "aria-hidden": "true", children: panes.length })), needsInput && (_jsx("span", { className: "w-2 h-2 rounded-full bg-yellow-400 shrink-0", "aria-hidden": "true" }))] }), _jsxs("span", { className: `flex items-center shrink-0 ${isActive ? '' : 'opacity-0'} group-hover:opacity-100 group-focus-within:opacity-100`, children: [isActive && panes.length === 1 && tabs.length > 1 && (_jsxs("span", { className: "hidden group-hover:flex group-focus-within:flex items-center", children: [_jsx("button", { onClick: (e) => {
                                                                 e.stopPropagation();
                                                                 splitOut(tab.id, 'right');
-                                                            }, className: `p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 ${focusRing}`, title: "Split right (into the neighbouring tab)", "aria-label": `Split ${title} right`, children: _jsx(Columns2, { size: 12 }) }), _jsx("button", { onClick: (e) => {
+                                                            }, className: `p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 ${focusRing}`, title: t.splitRightTitle, "aria-label": t.splitRight(title), children: _jsx(Columns2, { size: 12 }) }), _jsx("button", { onClick: (e) => {
                                                                 e.stopPropagation();
                                                                 splitOut(tab.id, 'bottom');
-                                                            }, className: `p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 ${focusRing}`, title: "Split down (into the neighbouring tab)", "aria-label": `Split ${title} down`, children: _jsx(Rows2, { size: 12 }) })] })), _jsx("button", { onClick: (e) => {
+                                                            }, className: `p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 ${focusRing}`, title: t.splitDownTitle, "aria-label": t.splitDown(title), children: _jsx(Rows2, { size: 12 }) })] })), _jsx("button", { onClick: (e) => {
                                                         e.stopPropagation();
                                                         onCloseTab(tab.id);
-                                                    }, className: `p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-white ${focusRing}`, "aria-label": `Close ${title}`, title: "Close", children: _jsx(X, { size: 12 }) })] })] }, tab.id));
+                                                    }, className: `p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-white ${focusRing}`, "aria-label": t.closeNamed(title), title: t.close, children: _jsx(X, { size: 12 }) })] })] }, tab.id));
                             }), _jsx("div", { className: `flex-1 min-w-8 h-full ${endHot ? 'bg-blue-500/20' : ''}`, onDragOver: (e) => {
                                     if (!isAgentDrag(e) || !drag)
                                         return;
@@ -396,7 +398,7 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
                                     if (drag.kind === 'pane')
                                         onDetach(drag.sessionId);
                                     dropOnTab(order[order.length - 1], 'after');
-                                } })] }), overflow && (_jsxs("div", { className: "relative shrink-0 h-full border-l border-gray-800", children: [_jsxs("button", { type: "button", "data-popover-trigger": true, "aria-expanded": tabListOpen, "aria-haspopup": "menu", onClick: () => setTabListOpen((o) => !o), className: `flex items-center gap-1 h-full px-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white ${focusRing}`, title: "All tabs", "aria-label": `All tabs, ${hiddenTabs.length} hidden`, children: [hiddenTabs.length > 0 && (_jsxs("span", { className: "tabular-nums text-[11px] text-gray-400", children: ["+", hiddenTabs.length] })), _jsx(ChevronDown, { size: 13, "aria-hidden": true })] }), tabListOpen && (_jsx(TabList, { items: tabs.map(({ tab, sessions: panes }) => ({
+                                } })] }), overflow && (_jsxs("div", { className: "relative shrink-0 h-full border-l border-gray-800", children: [_jsxs("button", { type: "button", "data-popover-trigger": true, "aria-expanded": tabListOpen, "aria-haspopup": "menu", onClick: () => setTabListOpen((o) => !o), className: `flex items-center gap-1 h-full px-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white ${focusRing}`, title: t.allTabs, "aria-label": t.allTabsHidden(hiddenTabs.length), children: [hiddenTabs.length > 0 && (_jsxs("span", { className: "tabular-nums text-[11px] text-gray-400", children: ["+", hiddenTabs.length] })), _jsx(ChevronDown, { size: 13, "aria-hidden": true })] }), tabListOpen && (_jsx(TabList, { items: tabs.map(({ tab, sessions: panes }) => ({
                                     id: tab.id,
                                     title: tabTitle(panes.map((s) => s.name), paneNoun),
                                     active: tab.id === activeTabId,
@@ -409,9 +411,9 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
                         const activeTab = tabs.find((t) => t.tab.id === activeTabId);
                         if (!activeTab || activeTab.sessions.length < 2)
                             return null;
-                        return (_jsx("div", { className: "flex items-center gap-0.5 px-1 shrink-0", role: "group", "aria-label": "Pane layout", children: LAYOUTS.map((item) => (_jsx("button", { onClick: () => onSetLayout(activeTab.tab.id, item.id), className: `p-1.5 rounded transition-colors ${focusRing} ${activeTab.tab.layout === item.id
+                        return (_jsx("div", { className: "flex items-center gap-0.5 px-1 shrink-0", role: "group", "aria-label": t.paneLayout, children: LAYOUTS.map((item) => (_jsx("button", { onClick: () => onSetLayout(activeTab.tab.id, item.id), className: `p-1.5 rounded transition-colors ${focusRing} ${activeTab.tab.layout === item.id
                                     ? 'bg-gray-700 text-white'
-                                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`, title: item.label, "aria-label": item.label, "aria-pressed": activeTab.tab.layout === item.id, children: item.icon }, item.id))) }));
+                                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`, title: t.layout(item.id), "aria-label": t.layout(item.id), "aria-pressed": activeTab.tab.layout === item.id, children: item.icon }, item.id))) }));
                     })(), _jsx("div", { className: "sr-only", "aria-live": "polite", children: announcement })] }), _jsx("div", { ref: bodyRef, className: "relative flex-1 min-h-0", children: tabs.map((resolved) => {
                     const { tab } = resolved;
                     const visible = !hidden && tab.id === activeTabId;
@@ -421,5 +423,6 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
 /** Every tab of the strip, marked visible or hidden (scrolled out); a pick activates it */
 const TabList = ({ items, onPick, onClose }) => {
     const ref = usePopover(onClose, true);
-    return (_jsx("div", { ref: ref, tabIndex: -1, role: "menu", "aria-label": "All tabs", className: "absolute right-0 top-full z-50 mt-1 w-72 max-h-[60vh] overflow-y-auto rounded-lg border border-gray-600 bg-gray-900 py-1 shadow-2xl outline-none", children: items.map((t) => (_jsxs("button", { type: "button", role: "menuitem", onClick: () => onPick(t.id), className: `flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-800 focus-visible:bg-gray-800 focus-visible:outline-none ${t.active ? 'text-white' : t.hidden ? 'text-gray-400' : 'text-gray-200'}`, children: [t.hidden ? (_jsx(EyeOff, { size: 12, "aria-hidden": true, className: "shrink-0 text-gray-500" })) : (_jsx(Eye, { size: 12, "aria-hidden": true, className: "shrink-0 text-emerald-400" })), _jsx("span", { className: "min-w-0 flex-1 truncate", title: t.title, children: t.title }), _jsx("span", { className: "shrink-0 text-[10px] text-gray-500", children: t.active ? 'active' : t.hidden ? 'hidden' : 'visible' })] }, t.id))) }));
+    const t = useLabels().terminal;
+    return (_jsx("div", { ref: ref, tabIndex: -1, role: "menu", "aria-label": t.allTabs, className: "absolute right-0 top-full z-50 mt-1 w-72 max-h-[60vh] overflow-y-auto rounded-lg border border-gray-600 bg-gray-900 py-1 shadow-2xl outline-none", children: items.map((item) => (_jsxs("button", { type: "button", role: "menuitem", onClick: () => onPick(item.id), className: `flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-800 focus-visible:bg-gray-800 focus-visible:outline-none ${item.active ? 'text-white' : item.hidden ? 'text-gray-400' : 'text-gray-200'}`, children: [item.hidden ? (_jsx(EyeOff, { size: 12, "aria-hidden": true, className: "shrink-0 text-gray-500" })) : (_jsx(Eye, { size: 12, "aria-hidden": true, className: "shrink-0 text-emerald-400" })), _jsx("span", { className: "min-w-0 flex-1 truncate", title: item.title, children: item.title }), _jsx("span", { className: "shrink-0 text-[10px] text-gray-500", children: item.active ? t.tabActive : item.hidden ? t.tabHidden : t.tabVisible })] }, item.id))) }));
 };

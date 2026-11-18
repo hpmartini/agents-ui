@@ -32,4 +32,6 @@ export declare function groupDirectories(choices: DirectoryChoice[], opts?: {
     home?: string | null;
     current?: string | null;
     query?: string;
+    /** Detail text of a worktree entry */
+    worktreeOf?: (repo: string) => string;
 }): DirectoryGroup[];

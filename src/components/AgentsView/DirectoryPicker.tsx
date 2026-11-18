@@ -6,6 +6,7 @@ import {
   shortenHome,
   type DirectoryChoice,
 } from '../../utils/directoryGroups';
+import { useLabels } from '../../labels';
 
 /** Collapsed parent directories (group keys), kept across openings of the picker */
 const DIRECTORY_PICKER_COLLAPSED_KEY = 'devOrbitDirectoryPickerCollapsed';
@@ -30,22 +31,15 @@ export const DirectoryPicker: React.FC<{
   label?: string;
   /** false: only the listed choices, no free path (fixed projects must be projects) */
   allowPath?: boolean;
-}> = ({
-  choices,
-  current,
-  home,
-  onCancel,
-  onPick,
-  label = 'Directory for new sessions…',
-  allowPath = true,
-}) => {
+}> = ({ choices, current, home, onCancel, onPick, label, allowPath = true }) => {
+  const t = useLabels().panels;
   const [query, setQuery] = useState('');
   const [custom, setCustom] = useState(current || '');
   const [collapsed, setCollapsed] = useState(loadCollapsed);
   const searching = query.trim() !== '';
   const groups = useMemo(
-    () => groupDirectories(choices, { home, current, query }),
-    [choices, home, current, query]
+    () => groupDirectories(choices, { home, current, query, worktreeOf: t.dirWorktreeOf }),
+    [choices, home, current, query, t]
   );
   // The pinned group has no header and never collapses; filtering shows every match
   const isOpen = (group: (typeof groups)[number]) =>
@@ -68,12 +62,12 @@ export const DirectoryPicker: React.FC<{
   };
   const bulkActions = [
     {
-      label: 'Collapse all directories',
+      label: t.dirCollapseAll,
       Icon: ChevronsDownUp,
       run: () => updateCollapsed(new Set(groups.filter((g) => g.label).map((g) => g.key))),
     },
     {
-      label: 'Expand all directories',
+      label: t.dirExpandAll,
       Icon: ChevronsUpDown,
       run: () => updateCollapsed(new Set()),
     },
@@ -102,7 +96,7 @@ export const DirectoryPicker: React.FC<{
             onKeyDown={(e) => {
               if (e.key === 'Enter' && first) onPick(first.path);
             }}
-            placeholder={label}
+            placeholder={label ?? t.dirPlaceholder}
             className="flex-1 min-w-0 bg-transparent text-sm text-gray-100 placeholder-gray-600 outline-none"
           />
           {bulkActions.map(({ label, Icon, run }) => (
@@ -112,7 +106,7 @@ export const DirectoryPicker: React.FC<{
               onClick={run}
               disabled={searching}
               className="shrink-0 p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-40 disabled:pointer-events-none"
-              title={searching ? 'All matches are shown while filtering' : label}
+              title={searching ? t.dirFiltering : label}
               aria-label={label}
             >
               <Icon size={14} />
@@ -124,7 +118,7 @@ export const DirectoryPicker: React.FC<{
             const open = isOpen(group);
             const listId = `dir-group-${group.key}`;
             return (
-              <div key={group.key} role="group" aria-label={group.label ?? 'Current and home'}>
+              <div key={group.key} role="group" aria-label={group.label ?? t.dirPinned}>
                 {group.label && (
                   <button
                     type="button"
@@ -158,7 +152,7 @@ export const DirectoryPicker: React.FC<{
                         {group.label ? entry.detail : shortenHome(entry.path, home)}
                       </span>
                       <span className="shrink-0 text-[10px] text-gray-500">
-                        {entry.sources.join(' · ')}
+                        {entry.sources.map(t.dirSource).join(' · ')}
                       </span>
                     </button>
                   ))}
@@ -167,7 +161,7 @@ export const DirectoryPicker: React.FC<{
             );
           })}
           {groups.length === 0 && (
-            <div className="px-4 py-4 text-sm text-gray-500">No matches.</div>
+            <div className="px-4 py-4 text-sm text-gray-500">{t.dirNoMatches}</div>
           )}
         </div>
         {allowPath && (
@@ -185,7 +179,7 @@ export const DirectoryPicker: React.FC<{
               onClick={() => custom.trim() && onPick(custom.trim())}
               className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs"
             >
-              Use path
+              {t.dirUsePath}
             </button>
           </div>
         )}

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Send, FolderOpen, PenSquare } from 'lucide-react';
 import type { AgentSubagent, AgentRepo, AgentSlashCommand, AgentHarness } from '../../types';
 import { HARNESSES, HARNESS_MODEL_FLAG } from '../../utils/agentSessions';
+import { useLabels } from '../../labels';
 import { computeSuggestions, Suggestion } from '../../utils/agentInput';
 import { submitIntent } from '../../utils/composer';
 import { useAutoGrowTextarea } from '../../hooks/useAutoGrowTextarea';
@@ -26,6 +27,8 @@ interface DispatchInputProps {
   variant?: 'task' | 'agent' | 'chat';
   /** Rendered below the textarea (image attachments) */
   attachments?: React.ReactNode;
+  /** false: no "dispatch and attach" (the transport cannot open a terminal for it) */
+  canAttach?: boolean;
   /** Harness picker (#195); omitted = no picker (chat) */
   harness?: AgentHarness;
   onHarnessChange?: (harness: AgentHarness) => void;
@@ -69,6 +72,7 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
   inputRef,
   variant = 'task',
   attachments,
+  canAttach = true,
   harness,
   onHarnessChange,
   harnessInstalled = {},
@@ -82,6 +86,7 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
   const otherHarness = harness !== undefined && harness !== 'claude';
   // Agent, chat and other harnesses start one session and attach it right away
   const isAgent = variant !== 'task' || otherHarness;
+  const t = useLabels().panels;
   const [caret, setCaret] = useState(0);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
@@ -162,7 +167,7 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
     const submit = submitIntent(e);
     if (submit) {
       e.preventDefault();
-      onSubmit({ attach: isAgent || submit.attach });
+      onSubmit({ attach: isAgent || (canAttach && submit.attach) });
       return;
     }
     if (e.key === 'Enter' && showSuggestions && !e.shiftKey) {
@@ -202,7 +207,7 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
         <ul
           id={listId}
           role="listbox"
-          aria-label="Suggestions"
+          aria-label={t.dispatchSuggestions}
           className="absolute top-full left-0 right-0 mt-1 max-h-80 overflow-y-auto bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-30"
         >
           {suggestions.map((s, index) => (
@@ -245,12 +250,12 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
           isAgent
             ? variant === 'chat'
               ? otherHarness
-                ? 'First message (optional) - /resume <id> picks up an earlier session'
-                : 'First message (optional) - /resume or /continue picks up an earlier session'
-              : 'Optional first prompt - leave empty to start an idle session'
-            : 'Describe the task for a new session'
+                ? t.dispatchChatHarness
+                : t.dispatchChatClaude
+              : t.dispatchAgentPrompt
+            : t.dispatchTaskPrompt
         }
-        aria-label="Task description"
+        aria-label={t.dispatchTaskLabel}
         aria-autocomplete="list"
         aria-controls={showSuggestions ? listId : undefined}
         aria-activedescendant={showSuggestions ? `${listId}-${highlighted}` : undefined}
@@ -262,18 +267,18 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
       <div className="flex flex-wrap items-center gap-2 mt-3">
         {harness !== undefined && (
           <label className="flex items-center gap-1.5 text-xs text-gray-200">
-            <span>Harness</span>
+            <span>{t.dispatchHarness}</span>
             <select
               value={harness}
               onChange={(e) => onHarnessChange?.(e.target.value as AgentHarness)}
               disabled={disabled}
               className="bg-gray-900 border border-gray-600 rounded-md px-1.5 py-1 text-xs text-gray-50 focus-visible:outline-2 focus-visible:outline-blue-400"
-              title="CLI the new agent or chat runs with"
+              title={t.dispatchHarnessTitle}
             >
               {HARNESSES.map((h) => (
                 <option key={h.id} value={h.id} disabled={harnessInstalled[h.id] === false}>
                   {h.label}
-                  {harnessInstalled[h.id] === false ? ' (not installed)' : ''}
+                  {harnessInstalled[h.id] === false ? t.dispatchNotInstalled : ''}
                 </option>
               ))}
             </select>
@@ -290,11 +295,7 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
               onModelChange(m);
               onEffortChange?.(e);
             }}
-            title={
-              harness === 'claude'
-                ? 'Model and effort (--model, --effort); default = the dispatch settings'
-                : 'Model and thinking level (--model, --thinking); default = the CLI default'
-            }
+            title={harness === 'claude' ? t.dispatchModelTitleClaude : t.dispatchModelTitleOmp}
           />
         )}
         {harness !== undefined &&
@@ -304,17 +305,17 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
           harness !== 'omp' &&
           HARNESS_MODEL_FLAG[harness] && (
             <label className="flex items-center gap-1.5 text-xs text-gray-200">
-              <span>Model</span>
+              <span>{t.dispatchModel}</span>
               <input
                 value={model}
                 onChange={(e) => onModelChange(e.target.value)}
                 disabled={disabled}
-                placeholder={defaultModel ? `default (${defaultModel})` : 'default'}
-                aria-label="Model"
+                placeholder={t.dispatchModelPlaceholder(defaultModel)}
+                aria-label={t.dispatchModel}
                 spellCheck={false}
                 maxLength={80}
                 className="w-36 bg-gray-900 border border-gray-600 rounded-md px-1.5 py-1 text-xs text-gray-50 placeholder-gray-400 font-mono focus-visible:outline-2 focus-visible:outline-blue-400"
-                title="Model of this chat, passed as --model; empty = the CLI default"
+                title={t.dispatchModelTitle}
               />
             </label>
           )}
@@ -323,20 +324,20 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
           type="button"
           onClick={onOpenEditor}
           className="p-1.5 rounded-md text-gray-200 hover:bg-gray-700 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400"
-          title="Edit in a larger editor (Ctrl+G)"
-          aria-label="Edit in a larger editor"
+          title={t.dispatchEditorTitle}
+          aria-label={t.dispatchEditor}
         >
           <PenSquare size={15} />
         </button>
-        {!isAgent && (
+        {!isAgent && canAttach && (
           <button
             type="button"
             onClick={() => onSubmit({ attach: true })}
             disabled={disabled}
             className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md text-sm text-gray-100 bg-gray-700 hover:bg-gray-600 focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50"
-            title="Dispatch and open the session (Cmd/Ctrl+Shift+Enter)"
+            title={t.dispatchAttachTitle}
           >
-            Dispatch and attach
+            {t.dispatchAttach}
           </button>
         )}
         <button
@@ -344,25 +345,25 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
           onClick={() => onSubmit({ attach: isAgent })}
           disabled={disabled}
           className="flex shrink-0 whitespace-nowrap items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
-          title={isAgent ? 'Start and attach (Cmd/Ctrl+Enter)' : 'Dispatch (Cmd/Ctrl+Enter)'}
+          title={isAgent ? t.dispatchStartTitle : t.dispatchSubmitTitle}
         >
           <Send size={13} aria-hidden />{' '}
-          {variant === 'chat' ? 'Start chat' : isAgent ? 'Start agent' : 'Dispatch'}
+          {variant === 'chat'
+            ? t.dispatchStartChat
+            : isAgent
+              ? t.dispatchStartAgent
+              : t.dispatchSubmit}
         </button>
       </div>
       <button
         type="button"
         onClick={onPickDirectory}
         className="mt-2 flex w-full items-start gap-1.5 px-2 py-1 rounded-md text-left text-xs text-gray-200 hover:bg-gray-700 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400"
-        title={
-          isAgent
-            ? 'Directory the agent starts in'
-            : 'Directory the new session starts in (mention @repo to override)'
-        }
+        title={isAgent ? t.dispatchDirAgent : t.dispatchDirTask}
       >
         <FolderOpen size={13} aria-hidden className="mt-0.5 shrink-0" />
         <span className="min-w-0 font-mono [overflow-wrap:anywhere]">
-          {targetCwd || 'Pick a directory'}
+          {targetCwd || t.dispatchPickDir}
         </span>
       </button>
       <div className="mt-1 min-h-[1.25rem] text-xs" role="status" aria-live="polite">
@@ -380,9 +381,7 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
           </span>
         ) : (
           <span className="text-gray-300">
-            {otherHarness
-              ? `Runs interactively in a terminal pane${harness === 'omp' ? ' · /skill' : ''} · Cmd/Ctrl+Enter to start · Enter for a new line`
-              : '@agent · @repo · /command · ! shell command · Cmd/Ctrl+Enter to send · Enter for a new line'}
+            {otherHarness ? t.dispatchHintHarness(harness === 'omp') : t.dispatchHintClaude}
           </span>
         )}
       </div>

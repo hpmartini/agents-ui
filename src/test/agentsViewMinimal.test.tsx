@@ -94,19 +94,42 @@ describe('AgentsView with the required transport groups only', () => {
       expect(items).not.toContain(hidden);
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
-    // New task menu: only what the transport can start
+    // New task menu: only what the transport can start (no `pty.spawn`: no agent, no chat)
     fireEvent.click(screen.getByRole('button', { name: /More: new agent/ }));
     const menu = screen.getByRole('menu', { name: 'Create' });
     expect(
       within(menu)
         .getAllByRole('menuitem')
         .map((b) => b.textContent)
-    ).toEqual(['New taskN', 'New agentinteractive, attached']);
+    ).toEqual(['New taskN']);
     fireEvent.click(within(menu).getByRole('menuitem', { name: /New task/ }));
     const composer = await screen.findByRole('dialog', { name: 'New task' });
     expect(within(composer).queryByRole('tab', { name: 'Issue' })).toBeNull();
     expect(within(composer).queryByRole('tab', { name: 'Chat' })).toBeNull();
     expect(within(composer).getByRole('tab', { name: 'Task' })).toBeInTheDocument();
+  });
+
+  it('without pty.spawn: no attach, agent, chat or other harness; dispatch runs in the background', async () => {
+    const transport = minimal();
+    expect(transport.pty.spawn).toBeUndefined();
+    renderWithAgents(<AgentsView />, { transport });
+    await screen.findByText('vault-worker');
+    fireEvent.click(screen.getByRole('button', { name: /^New task/ }));
+    const composer = await screen.findByRole('dialog', { name: 'New task' });
+    expect(within(composer).queryByRole('tab', { name: 'Agent' })).toBeNull();
+    expect(within(composer).queryByRole('tab', { name: 'Chat' })).toBeNull();
+    expect(within(composer).queryByRole('button', { name: 'Dispatch and attach' })).toBeNull();
+    expect(within(composer).queryByRole('combobox')).toBeNull();
+    expect(within(composer).queryByRole('option', { name: /Codex|OpenCode|Oh My Pi/ })).toBeNull();
+    fireEvent.change(within(composer).getByRole('textbox'), {
+      target: { value: 'Refactor the vault importer into smaller modules' },
+    });
+    fireEvent.click(within(composer).getByRole('button', { name: /^Dispatch$/ }));
+    await waitFor(() =>
+      expect(transport.agents.dispatchAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: 'Refactor the vault importer into smaller modules' })
+      )
+    );
   });
 
   it('canStop false: no Stop for that agent', async () => {

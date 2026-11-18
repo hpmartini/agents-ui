@@ -3,30 +3,26 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import { isSubmitKey } from '../../../utils/chatEvents';
 import { browseHistory, chatSuggestions, continueList, endKey, historyStep, homeKey, indentList, suggestionQuery, takesPath, } from '../../../utils/chatComposer';
 import { useTransport } from '../../../host';
+import { useLabels } from '../../../labels';
 import { useAutoGrowTextarea } from '../../../hooks/useAutoGrowTextarea';
 import { ResizeGrip } from '../../ResizeGrip';
 const MAX_HEIGHT = 320;
 // One full line: leading-6 + py-2 + border
 const MIN_HEIGHT = 42;
 export const CHAT_COMPOSER_HEIGHT_KEY = 'devOrbitChatComposerHeight';
-const KIND_LABEL = {
-    command: 'command',
-    agent: 'agent',
-    file: 'file',
-    dir: 'directory',
-};
 /** Chat input: grows with its content, TUI-like keys, `/` and `@` picker with details */
 export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, disabled, submitKey, history, commands, agents, suggestion, suggestionCut, takeSuggestion, inputRef, }) => {
+    const t = useLabels().terminal;
     // The suggestion the user typed over or took; a new one shows again
     const [dropped, setDropped] = useState(null);
     const ghost = !disabled && !value && suggestion && suggestion !== dropped ? suggestion : null;
     const placeholder = ghost
         ? `${ghost}${suggestionCut ? '…' : ''}  ⇥ Tab`
         : disabled
-            ? 'Terminal not connected'
+            ? t.composerDisconnected
             : submitKey === 'enter'
-                ? 'Message · Enter sends · / commands · @ files'
-                : 'Message · Cmd/Ctrl+Enter sends · / commands · @ files';
+                ? t.composerPlaceholderEnter
+                : t.composerPlaceholderModEnter;
     const valueRef = useRef(value);
     valueRef.current = value;
     const [caret, setCaret] = useState(0);
@@ -62,12 +58,12 @@ export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, 
         : null;
     const chat = useTransport().chat;
     useEffect(() => {
-        if (dirQuery === null || !chatId || !chat)
+        if (dirQuery === null || !chatId || !chat?.fetchChatDirs)
             return;
+        const fetchDirs = chat.fetchChatDirs;
         let cancelled = false;
         const timer = setTimeout(() => {
-            chat
-                .fetchChatDirs(chatId, dirQuery)
+            fetchDirs(chatId, dirQuery)
                 .then((list) => !cancelled && setDirs(list))
                 .catch(() => !cancelled && setDirs([]));
         }, 80);
@@ -77,12 +73,12 @@ export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, 
         };
     }, [chat, chatId, dirQuery]);
     useEffect(() => {
-        if (fileQuery === null || !chatId || !chat)
+        if (fileQuery === null || !chatId || !chat?.fetchChatFiles)
             return;
+        const fetchFiles = chat.fetchChatFiles;
         let cancelled = false;
         const timer = setTimeout(() => {
-            chat
-                .fetchChatFiles(chatId, fileQuery)
+            fetchFiles(chatId, fileQuery)
                 .then((list) => !cancelled && setFiles(list))
                 .catch(() => !cancelled && setFiles([]));
         }, 120);
@@ -222,17 +218,15 @@ export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, 
     };
     const domId = useId();
     const listId = `chat-suggestions-${domId}`;
-    return (_jsxs("div", { className: "relative flex-1 min-w-0", children: [open && current && (_jsxs("div", { className: "absolute bottom-full left-0 right-0 mb-1 flex max-h-72 overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-xl z-30", children: [_jsx("ul", { ref: listRef, id: listId, role: "listbox", "aria-label": query?.trigger === '/' ? 'Commands' : 'Files and agents', className: "w-1/2 min-w-0 overflow-y-auto py-1", children: suggestions.map((s, i) => (_jsxs("li", { id: `${listId}-${i}`, "data-index": i, role: "option", "aria-selected": s === current, onMouseDown: (e) => {
+    return (_jsxs("div", { className: "relative flex-1 min-w-0", children: [open && current && (_jsxs("div", { className: "absolute bottom-full left-0 right-0 mb-1 flex max-h-72 overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-xl z-30", children: [_jsx("ul", { ref: listRef, id: listId, role: "listbox", "aria-label": query?.trigger === '/' ? t.commands : t.filesAndAgents, className: "w-1/2 min-w-0 overflow-y-auto py-1", children: suggestions.map((s, i) => (_jsxs("li", { id: `${listId}-${i}`, "data-index": i, role: "option", "aria-selected": s === current, onMouseDown: (e) => {
                                 e.preventDefault();
                                 pick(s);
-                            }, onMouseEnter: () => setHighlighted(i), className: `flex items-center gap-2 px-2.5 py-1 text-sm cursor-pointer ${s === current ? 'bg-blue-500/25 text-white' : 'text-gray-200'}`, children: [_jsx("span", { className: "font-mono text-blue-300 truncate min-w-0", children: s.label }), _jsx("span", { className: "ml-auto shrink-0 text-[10px] text-gray-500", children: KIND_LABEL[s.kind] })] }, `${s.kind}:${s.label}`))) }), _jsxs("div", { className: "w-1/2 min-w-0 overflow-y-auto border-l border-gray-800 p-3 text-xs", "aria-live": "polite", children: [_jsx("div", { className: "font-mono text-sm text-blue-200 break-all", children: current.label }), current.hint && (_jsxs("div", { className: "mt-1.5 text-gray-400", children: [_jsx("span", { className: "text-gray-500", children: "Arguments: " }), _jsx("span", { className: "font-mono text-gray-200", children: current.hint })] })), current.kind !== 'file' && (_jsx("p", { className: "mt-2 text-gray-300 whitespace-pre-wrap leading-relaxed", children: current.description || 'No description' })), _jsx("p", { className: "mt-3 text-[11px] text-gray-500", children: current.kind === 'dir'
-                                    ? '↑↓ choose · Tab opens the folder · Enter on a finished path sends · Esc close'
-                                    : '↑↓ choose · Enter/Tab insert · Esc close' })] })] })), _jsxs("div", { className: "relative", children: [_jsx(ResizeGrip, { ...handleProps }), _jsx("textarea", { id: `chat-input-${domId}`, ref: inputRef, value: value, disabled: disabled, rows: 1, onChange: (e) => {
+                            }, onMouseEnter: () => setHighlighted(i), className: `flex items-center gap-2 px-2.5 py-1 text-sm cursor-pointer ${s === current ? 'bg-blue-500/25 text-white' : 'text-gray-200'}`, children: [_jsx("span", { className: "font-mono text-blue-300 truncate min-w-0", children: s.label }), _jsx("span", { className: "ml-auto shrink-0 text-[10px] text-gray-500", children: t.suggestionKind(s.kind) })] }, `${s.kind}:${s.label}`))) }), _jsxs("div", { className: "w-1/2 min-w-0 overflow-y-auto border-l border-gray-800 p-3 text-xs", "aria-live": "polite", children: [_jsx("div", { className: "font-mono text-sm text-blue-200 break-all", children: current.label }), current.hint && (_jsxs("div", { className: "mt-1.5 text-gray-400", children: [_jsx("span", { className: "text-gray-500", children: t.arguments }), _jsx("span", { className: "font-mono text-gray-200", children: current.hint })] })), current.kind !== 'file' && (_jsx("p", { className: "mt-2 text-gray-300 whitespace-pre-wrap leading-relaxed", children: current.description || t.noDescription })), _jsx("p", { className: "mt-3 text-[11px] text-gray-500", children: current.kind === 'dir' ? t.pickerHintDir : t.pickerHint })] })] })), _jsxs("div", { className: "relative", children: [_jsx(ResizeGrip, { ...handleProps }), _jsx("textarea", { id: `chat-input-${domId}`, ref: inputRef, value: value, disabled: disabled, rows: 1, onChange: (e) => {
                             // emptied again: the agent's suggestion shows once more, as in Claude Code
                             setDropped(e.target.value ? (ghost ?? dropped) : null);
                             historyIndex.current = -1;
                             setDismissed(null);
                             onChange(e.target.value);
                             setCaret(e.target.selectionStart);
-                        }, onSelect: (e) => setCaret(e.currentTarget.selectionStart), onKeyDown: onKeyDown, onBlur: () => setDismissed(queryKey), placeholder: placeholder, "aria-label": "Message", "aria-autocomplete": "list", "aria-controls": open ? listId : undefined, "aria-activedescendant": open ? `${listId}-${highlighted}` : undefined, style: { minHeight: MIN_HEIGHT }, className: "block w-full resize-none rounded-md bg-gray-900 border border-gray-700 px-2.5 py-2 text-sm leading-6 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-400 disabled:opacity-50" })] })] }));
+                        }, onSelect: (e) => setCaret(e.currentTarget.selectionStart), onKeyDown: onKeyDown, onBlur: () => setDismissed(queryKey), placeholder: placeholder, "aria-label": t.message, "aria-autocomplete": "list", "aria-controls": open ? listId : undefined, "aria-activedescendant": open ? `${listId}-${highlighted}` : undefined, style: { minHeight: MIN_HEIGHT }, className: "block w-full resize-none rounded-md bg-gray-900 border border-gray-700 px-2.5 py-2 text-sm leading-6 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-400 disabled:opacity-50" })] })] }));
 };

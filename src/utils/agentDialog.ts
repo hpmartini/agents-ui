@@ -42,8 +42,7 @@ export interface AgentDialog {
 }
 
 export type DialogAnswer =
-  | { type: 'pick'; row: number }
-  | { type: 'text'; row: number; text: string };
+  { type: 'pick'; row: number } | { type: 'text'; row: number; text: string };
 
 const OPTION_RE = /^\s*(❯\s*)?(\d+)\.\s(.*)$/;
 const RULE_RE = /^\s*─{10,}/;

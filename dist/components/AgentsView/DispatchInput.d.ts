@@ -21,6 +21,8 @@ interface DispatchInputProps {
     variant?: 'task' | 'agent' | 'chat';
     /** Rendered below the textarea (image attachments) */
     attachments?: React.ReactNode;
+    /** false: no "dispatch and attach" (the transport cannot open a terminal for it) */
+    canAttach?: boolean;
     /** Harness picker (#195); omitted = no picker (chat) */
     harness?: AgentHarness;
     onHarnessChange?: (harness: AgentHarness) => void;

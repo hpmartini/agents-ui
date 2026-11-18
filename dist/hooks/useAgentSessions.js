@@ -8,6 +8,7 @@ const withDefaults = (loaded) => ({
     cardFields: { ...DEFAULT_AGENT_VIEW_SETTINGS.cardFields, ...loaded.cardFields },
 });
 import { useHost, useTransport } from '../host';
+import { useLabels } from '../labels';
 import { LOCAL_TARGETS } from '../transport';
 import { summarizeSessions } from '../utils/agentSessions';
 import { pollWhileVisible } from '../utils/visiblePoll';
@@ -35,9 +36,12 @@ export function useAgentSessions({ active = true } = {}) {
     settingsRef.current = settings;
     const { agents, settings: settingsApi, targets = LOCAL_TARGETS } = useTransport();
     const { toast } = useHost();
-    // A ref: a host object rebuilt on every render must not resubscribe the stream
+    // Refs: a host object or labels rebuilt on every render must not resubscribe the stream
     const toastRef = useRef(toast);
     toastRef.current = toast;
+    const shellLabels = useLabels().shell;
+    const labelsRef = useRef(shellLabels);
+    labelsRef.current = shellLabels;
     // #220: the list belongs to the instance picked in the agents rail (transport `targets`)
     const target = targets.useAgentTarget();
     // Target the current `sessions` came from; null while a switch waits for the new list
@@ -62,7 +66,7 @@ export function useAgentSessions({ active = true } = {}) {
         catch (err) {
             if (asked !== targets.getAgentTarget())
                 return;
-            setError(err instanceof Error ? err.message : 'Failed to load agents');
+            setError(err instanceof Error ? err.message : labelsRef.current.loadAgentsFailed);
             setErrorStatus(err?.status ?? null);
         }
         setLoading(false);
@@ -107,7 +111,7 @@ export function useAgentSessions({ active = true } = {}) {
         }
         catch (err) {
             setSettings(previous);
-            toastRef.current.error(err instanceof Error ? err.message : 'Failed to save agent view settings');
+            toastRef.current.error(err instanceof Error ? err.message : labelsRef.current.saveSettingsFailed);
         }
     }, [settingsApi]);
     // Initial fetch and refetch when scope changes
@@ -134,10 +138,11 @@ export function useAgentSessions({ active = true } = {}) {
             if (!current.notifications)
                 return;
             const name = notification.session.name;
+            const t = labelsRef.current;
             const messages = {
-                agent_needs_input: { text: `${name} needs input`, icon: '✻' },
-                agent_completed: { text: `${name} finished`, icon: '✓' },
-                agent_failed: { text: `${name} failed`, icon: '✗' },
+                agent_needs_input: { text: t.notifyNeedsInput(name), icon: '✻' },
+                agent_completed: { text: t.notifyFinished(name), icon: '✓' },
+                agent_failed: { text: t.notifyFailed(name), icon: '✗' },
             };
             const message = messages[notification.type];
             const toast = toastRef.current;
@@ -156,7 +161,7 @@ export function useAgentSessions({ active = true } = {}) {
                 Notification.permission === 'granted' &&
                 document.visibilityState !== 'visible') {
                 try {
-                    new Notification('Claude agents', {
+                    new Notification(t.notificationTitle, {
                         body: message.text,
                         tag: `agent-${notification.session.id}`,
                     });

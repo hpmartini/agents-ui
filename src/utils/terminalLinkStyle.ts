@@ -72,7 +72,7 @@ export function styleTerminalLinks(terminal: Terminal): IDisposable {
       const { text, cells } = logicalLine(terminal, y, top - terminal.rows, bottom + terminal.rows);
       for (const [from, to] of findLinkRanges(text)) {
         // one decoration per row the link covers (soft-wrapped links)
-        for (let i = from; i < to; ) {
+        for (let i = from; i < to;) {
           const [x, row] = cells[i];
           let j = i;
           while (j + 1 < to && cells[j + 1][1] === row) j++;
