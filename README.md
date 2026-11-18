@@ -80,7 +80,10 @@ interface AgentsTransport {
   start(req: { cwd: string; prompt?: string; name?: string }): Promise<{ id: string }>;
   stop(id: string): Promise<void>;
   attach(id: string, size: { cols: number; rows: number }, h: PtyHandlers): PtyChannel;
+  // optional: the conversation, pushed now and on every change; without it panes show no "Transcript" switch
+  transcript?(id: string, onEntries: (e: TranscriptEntry[]) => void, onError?: (e: Error & { status?: number }) => void): () => void;
 }
+interface TranscriptEntry { id; role: 'user' | 'assistant' | 'tool'; text; at? }
 interface Agent { id; name; cwd; displayState; detail?; startedAt }
 interface PtyHandlers { onData(text); onExit(code | null); onError?(message); onOpen?() }
 interface PtyChannel { write(data); resize(cols, rows); close() }
@@ -113,6 +116,7 @@ Options: `baseUrl` (`'/api'`), `wsUrl` (derived from `baseUrl` and the page orig
 | `headers` | object, or a (async) function called per request (fresh token), e.g. a bearer token as below; on every HTTP call, the stream included |
 | `credentials` | fetch `credentials`, e.g. `'include'` for cookies across origins |
 | `wsParams` | object or function: extra query parameters on the PTY WebSocket URL. Browsers cannot set WebSocket headers; same-site cookies go along by themselves, a token has to travel here |
+| `transcriptPollMs` | turns the transcript view on: polls `GET {baseUrl}/agents/:id/transcript`, answer `{ entries: TranscriptEntry[] }`, at this interval while a pane shows it. Off by default; the endpoint is yours to provide (plain text only, nothing in it is rendered as markup) |
 
 ```ts
 createHttpTransport({
@@ -201,9 +205,17 @@ and move tabs with Alt+Shift+Arrow. Narrow panes stack below 400px each. The lay
 localStorage, and panes of agents that disappear are closed. Terminals survive split and unsplit
 without reattaching (a module-level registry per pane, as in Orkumo).
 
+Drag the line between the list and the panes (or focus it and use the arrow keys, Home, End) to
+resize the list; the width is kept under `<storageKey>:list`. The same handle is exported as
+`ResizeHandle` with `useStoredWidth` and `clampWidth`, e.g. for a side drawer around the panel.
+
+When the transport has `transcript`, each pane header switches between **Terminal** and
+**Transcript**: the conversation as plain text, following new entries while you are at the bottom.
+The terminal stays attached underneath.
+
 ## Left out on purpose
 
-PRs, cloud sessions, the projects rail, server panel, chat transcript view, browser and shell
+PRs, cloud sessions, the projects rail, server panel, browser and shell
 panes, Ghostty, file links, peek, settings, harness picker and multi-instance targets.
 
 ## Develop

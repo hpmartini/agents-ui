@@ -43,6 +43,16 @@ export interface Labels {
     closePane: (name: string) => string;
     closePaneTitle: string;
     detachedNote: string;
+    resizeList: string;
+    viewSwitch: string;
+    terminalView: string;
+    transcriptView: string;
+    transcriptLoading: string;
+    transcriptEmpty: string;
+    transcriptFailed: (message: string) => string;
+    you: string;
+    agentRole: string;
+    toolRole: string;
     detachedLine: (exitCode: number | null) => string;
     dragHint: string;
     splitRight: (name: string) => string;

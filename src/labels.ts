@@ -50,6 +50,17 @@ export interface Labels {
   closePane: (name: string) => string;
   closePaneTitle: string;
   detachedNote: string;
+  // views and sizes
+  resizeList: string;
+  viewSwitch: string;
+  terminalView: string;
+  transcriptView: string;
+  transcriptLoading: string;
+  transcriptEmpty: string;
+  transcriptFailed: (message: string) => string;
+  you: string;
+  agentRole: string;
+  toolRole: string;
   detachedLine: (exitCode: number | null) => string;
   dragHint: string;
   splitRight: (name: string) => string;
@@ -126,6 +137,16 @@ export const en: Labels = {
   closePane: (name) => `Close ${name}`,
   closePaneTitle: 'Close (the agent keeps running)',
   detachedNote: 'Detached. The agent keeps running.',
+  resizeList: 'Resize the agent list',
+  viewSwitch: 'View',
+  terminalView: 'Terminal',
+  transcriptView: 'Transcript',
+  transcriptLoading: 'Loading transcript …',
+  transcriptEmpty: 'No messages yet.',
+  transcriptFailed: (message) => `Transcript not readable: ${message}`,
+  you: 'You',
+  agentRole: 'Agent',
+  toolRole: 'Tool',
   detachedLine: (code) => `# detached${code === null ? '' : ` (exit code ${code})`}`,
   dragHint: 'Drag onto a pane edge to rearrange, or onto the tab strip for its own tab',
   splitRight: (name) => `Split ${name} right`,
@@ -202,6 +223,16 @@ export const de: Labels = {
   closePane: (name) => `${name} schließen`,
   closePaneTitle: 'Schließen (der Agent läuft weiter)',
   detachedNote: 'Abgekoppelt. Der Agent läuft weiter.',
+  resizeList: 'Breite der Agent-Liste ändern',
+  viewSwitch: 'Ansicht',
+  terminalView: 'Terminal',
+  transcriptView: 'Verlauf',
+  transcriptLoading: 'Verlauf lädt …',
+  transcriptEmpty: 'Noch keine Nachrichten.',
+  transcriptFailed: (message) => `Verlauf nicht lesbar: ${message}`,
+  you: 'Du',
+  agentRole: 'Agent',
+  toolRole: 'Werkzeug',
   detachedLine: (code) => `# abgekoppelt${code === null ? '' : ` (Exit-Code ${code})`}`,
   dragHint: 'Auf den Rand eines Bereichs ziehen zum Teilen, auf die Tab-Leiste für einen eigenen Tab',
   splitRight: (name) => `${name} rechts teilen`,

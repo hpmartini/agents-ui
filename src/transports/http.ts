@@ -1,4 +1,4 @@
-import type { Agent, AgentsTransport, PtyChannel, TransportError } from '../transport';
+import type { Agent, AgentsTransport, PtyChannel, TranscriptEntry, TransportError } from '../transport';
 
 type HeaderMap = Record<string, string>;
 
@@ -23,6 +23,12 @@ export interface HttpTransportOptions {
    * cookies go along by themselves (same site), a token has to travel here.
    */
   wsParams?: HeaderMap | (() => HeaderMap);
+  /**
+   * Turns on the transcript view: polls `GET {baseUrl}/agents/:id/transcript` (answer
+   * `{ entries: TranscriptEntry[] }`) every this many ms while a pane shows it. Off by default,
+   * since the endpoint is the host's to provide.
+   */
+  transcriptPollMs?: number;
   /** Injectable for tests */
   fetch?: typeof fetch;
   WebSocket?: typeof WebSocket;
@@ -106,7 +112,38 @@ export function createHttpTransport(options: HttpTransportOptions = {}): AgentsT
     return (await res.json().catch(() => null)) as T;
   };
 
+  const transcript: AgentsTransport['transcript'] = (id, onEntries, onError) => {
+    let closed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let last = '';
+    const poll = async () => {
+      try {
+        const res = await request(`/agents/${encodeURIComponent(id)}/transcript`, {
+          headers: { Accept: 'application/json' },
+        });
+        if (!res.ok) throw await errorFrom(res);
+        const { entries } = (await res.json()) as { entries?: TranscriptEntry[] };
+        const list = Array.isArray(entries) ? entries : [];
+        // unchanged window: no re-render, no scroll jump
+        const key = `${list.length}:${list.at(-1)?.id ?? ''}:${list.at(-1)?.text.length ?? 0}`;
+        if (!closed && key !== last) {
+          last = key;
+          onEntries(list);
+        }
+      } catch (err) {
+        if (!closed) onError?.(err instanceof Error ? (err as TransportError) : new Error(String(err)));
+      }
+      if (!closed) timer = setTimeout(poll, options.transcriptPollMs);
+    };
+    void poll();
+    return () => {
+      closed = true;
+      clearTimeout(timer);
+    };
+  };
+
   return {
+    ...(options.transcriptPollMs ? { transcript } : {}),
     subscribe(onAgents, onError) {
       let closed = false;
       let attempts = 0;

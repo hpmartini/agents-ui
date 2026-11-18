@@ -306,6 +306,51 @@ describe('http transport wire details', () => {
     expect(h.started().at(-1)).toMatchObject({ cwd: '/w', idle: true });
   });
 
+  it('has no transcript unless asked for, then polls it and pushes only changes', async () => {
+    expect(createHttpTransport({ baseUrl: 'http://h/api' }).transcript).toBeUndefined();
+    vi.useFakeTimers();
+    try {
+      const urls: string[] = [];
+      let entries = [{ id: '1', role: 'user', text: 'hi' }];
+      const t = createHttpTransport({
+        baseUrl: 'http://h/api',
+        transcriptPollMs: 1000,
+        fetch: (async (url: string) => {
+          urls.push(url);
+          return new Response(JSON.stringify({ ok: true, entries }));
+        }) as unknown as typeof fetch,
+      });
+      const seen: unknown[][] = [];
+      const off = t.transcript!('a b', (e) => seen.push(e));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(urls[0]).toBe('http://h/api/agents/a%20b/transcript');
+      expect(seen).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(seen).toHaveLength(1);
+      entries = [...entries, { id: '2', role: 'assistant', text: 'hello' }];
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(seen).toHaveLength(2);
+      off();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(urls).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports a transcript the server refuses, with its message', async () => {
+    const t = createHttpTransport({
+      baseUrl: 'http://h/api',
+      transcriptPollMs: 60000,
+      fetch: (async () =>
+        new Response(JSON.stringify({ error: 'no transcript' }), { status: 404 })) as unknown as typeof fetch,
+    });
+    const error = await new Promise<{ message: string; status?: number }>((resolve) => {
+      t.transcript!('a', () => {}, resolve);
+    });
+    expect(error).toMatchObject({ message: 'no transcript', status: 404 });
+  });
+
   it('rejects with the server error message', async () => {
     const t = createHttpTransport({
       baseUrl: 'http://h/api',

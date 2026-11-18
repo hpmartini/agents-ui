@@ -21,6 +21,12 @@ export interface HttpTransportOptions {
      * cookies go along by themselves (same site), a token has to travel here.
      */
     wsParams?: HeaderMap | (() => HeaderMap);
+    /**
+     * Turns on the transcript view: polls `GET {baseUrl}/agents/:id/transcript` (answer
+     * `{ entries: TranscriptEntry[] }`) every this many ms while a pane shows it. Off by default,
+     * since the endpoint is the host's to provide.
+     */
+    transcriptPollMs?: number;
     /** Injectable for tests */
     fetch?: typeof fetch;
     WebSocket?: typeof WebSocket;
