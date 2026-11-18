@@ -221,6 +221,7 @@ export interface AgentsTransport {
     messaging?: {
         replyToAgent: (id: string, text: string, mode?: 'auto' | 'attach' | 'resume') => Promise<{
             delivered: boolean;
+            queued?: boolean;
             mode: string;
             output?: string;
         }>;

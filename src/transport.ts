@@ -233,7 +233,7 @@ export interface AgentsTransport {
       id: string,
       text: string,
       mode?: 'auto' | 'attach' | 'resume'
-    ) => Promise<{ delivered: boolean; mode: string; output?: string }>;
+    ) => Promise<{ delivered: boolean; queued?: boolean; mode: string; output?: string }>;
     sendToPane: (paneId: string, text: string) => Promise<{ delivered: boolean }>;
     stopPane: (paneId: string) => Promise<{ stopped: number }>;
   };

@@ -169,7 +169,7 @@ The MAGOS features of the package stay as props of the full view: `canStop`, `co
 
 - **Delivery.** Hape decided on 18.11. to make this repo public, after a gitleaks scan of the
   whole history found only false positives. Orkumo (public) and MAGOS both pin the same git tag
-  (`github:hpmartini/agents-ui#v0.4.0`), and neither CI needs a key.
+  (`github:hpmartini/agents-ui#v0.4.1`), and neither CI needs a key.
 - **Styling.** Orkumo styles with the Tailwind v3 Play CDN, using its own `gray` scale. The moved
   components keep their classes unchanged. The package compiles them with Tailwind v4 (no
   preflight) for hosts without Orkumo's CDN, and its `gray` scale is Orkumo's, as
