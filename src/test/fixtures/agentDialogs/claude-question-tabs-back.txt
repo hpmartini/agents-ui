@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.328
+▝▜██████▀  Sonnet 5.5 · Claude Ultra
+ ▝▝   ▝▝   /private/tmp/q3 · /rc
+
+
+❯ Call AskUserQuestion once with three questions: Q1 header Farbe question "Welche Farbe?" options Rot, Blau.
+  Q2 header Form question "Welche Form?" options Kreis, Quadrat. Q3 header Groesse question "Welche
+  Groesse?" options Klein, Gross. Then echo my answers verbatim, nothing else.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Farbe  ☐ Form  ☐ Groesse  ✔ Submit  →
+
+Welche Farbe?
+
+  1. Rot
+     Rot
+❯ 2. Blau ✔
+     Blau
+  3. Type something.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

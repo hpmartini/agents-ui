@@ -19,7 +19,7 @@ import { splitImages } from '../../../utils/chatComposer';
 import { extractNumberedChoices, screenPrompt } from '../../../utils/agentInput';
 import { dialogKeys, parseAgentDialog } from '../../../utils/agentDialog';
 import { harnessLabel, sessionHarness } from '../../../utils/agentSessions';
-import { paneScreen, paneSuggestion, takePaneSuggestion, pressKeys, reattachPane, typeIntoPane, usePaneConnected, } from '../AgentTerminal';
+import { paneActiveTab, paneScreen, paneSuggestion, takePaneSuggestion, pressKeys, reattachPane, typeIntoPane, usePaneConnected, } from '../AgentTerminal';
 /** Sessions whose view shows only the user's prompts (answers hidden) */
 const PROMPTS_ONLY_KEY = 'devOrbitChatPromptsOnly';
 function readPromptsOnly() {
@@ -77,18 +77,25 @@ function usePaneSuggestion(paneId, active) {
     }, [paneId, active]);
     return active ? suggestion : null;
 }
-/** Screen tail of pane `paneId` while its agent waits on a question or permission (not in its transcript) */
+/**
+ * Screen tail of pane `paneId` while its agent waits on a question or permission (not in its
+ * transcript), with the question tab its dialog highlights
+ */
 function usePanePrompt(paneId, prompting) {
-    const [text, setText] = useState('');
+    const [text, setText] = useState({ screen: '', tab: null });
     useEffect(() => {
         if (!prompting)
             return;
-        const read = () => setText(paneScreen(paneId, PROMPT_LINES));
+        const read = () => setText((was) => {
+            const screen = paneScreen(paneId, PROMPT_LINES);
+            const tab = paneActiveTab(paneId);
+            return was.screen === screen && was.tab === tab ? was : { screen, tab };
+        });
         read();
         const timer = setInterval(read, PROMPT_POLL_MS);
         return () => {
             clearInterval(timer);
-            setText('');
+            setText({ screen: '', tab: null });
         };
     }, [paneId, prompting]);
     return prompting ? text : null;
@@ -288,11 +295,12 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
         return () => window.clearTimeout(t);
     }, [busy]);
     // The agent's state only says it may wait; the box needs a dialog on its screen
-    const screen = usePanePrompt(pane.id, prompting);
+    const panePrompt = usePanePrompt(pane.id, prompting);
+    const screen = panePrompt?.screen ?? null;
     const suggestion = usePaneSuggestion(pane.id, harness === 'claude' && connected && !busy && !prompting);
     const prompt = screen ? screenPrompt(screen) : null;
     // A dialog the parser knows becomes a card; any other prompt stays the screen excerpt below
-    const dialog = useMemo(() => (prompt ? parseAgentDialog(screen ?? '') : null), [prompt, screen]);
+    const dialog = useMemo(() => (prompt ? parseAgentDialog(screen ?? '', panePrompt?.tab) : null), [prompt, screen, panePrompt?.tab]);
     const dialogId = dialog ? JSON.stringify(dialog) : null;
     const [sentFor, setSentFor] = useState(null);
     useEffect(() => {
@@ -321,13 +329,15 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
     // Keys go to what is on the screen now: the card may be a poll old, and a click on "Yes"
     // must not approve a different command
     const answerDialog = (answer) => {
-        const now = parseAgentDialog(paneScreen(pane.id, PROMPT_LINES));
+        const now = parseAgentDialog(paneScreen(pane.id, PROMPT_LINES), paneActiveTab(pane.id));
         if (!now || JSON.stringify(now) !== dialogId)
             return setError(t.questionChanged);
         if (!pressKeys(pane.id, dialogKeys(now, answer)))
             return setError(notConnected);
         setError(null);
-        setSentFor(dialogId);
+        // moving between tabs answers nothing: the card stays usable on the step it lands on
+        if (answer.type !== 'tab' && answer.type !== 'step')
+            setSentFor(dialogId);
     };
     const submit = async () => {
         if (sending || !connected || (!text.trim() && images.length === 0))
