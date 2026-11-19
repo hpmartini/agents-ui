@@ -62,6 +62,8 @@ interface AgentTerminalProps {
   onOpenLink?: (url: string) => void;
   /** Present when the agent has a UI view: switches the pane to it, the process keeps running */
   onShowChat?: () => void;
+  /** Host buttons before the pane's own actions (`host.renderPaneActions`) */
+  hostActions?: React.ReactNode;
 }
 
 /**
@@ -449,6 +451,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
   meta,
   onOpenLink,
   onShowChat,
+  hostActions,
 }) => {
   const transport = useTransport();
   const host = useHost();
@@ -823,6 +826,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
             </span>
           )
         )}
+        {hostActions}
         {narrow ? (
           <div className="relative shrink-0">
             <button

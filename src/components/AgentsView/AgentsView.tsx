@@ -3231,6 +3231,18 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                             />
                           );
                         }}
+                        renderPaneActions={
+                          host.renderPaneActions &&
+                          ((pane) => {
+                            const x = sessions.find((s) => s.paneId === pane.id) ?? pane;
+                            return host.renderPaneActions?.({
+                              paneId: pane.id,
+                              session: x,
+                              orchestrator: isOrchestrator(x, settings.orchestrators),
+                              role: orchestratorRole(x, settings.orchestratorRoles),
+                            });
+                          })
+                        }
                       />
                     </div>
                   );
