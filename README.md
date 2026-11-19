@@ -17,7 +17,7 @@ How it was cut out of Orkumo, and what maps to what: [`docs/orkumo-inventory.md`
 ## Install
 
 ```sh
-bun add github:hpmartini/agents-ui#v0.4.3   # tagged release; dist/ is committed, no build on install
+bun add github:hpmartini/agents-ui#v0.4.4   # tagged release; dist/ is committed, no build on install
 bun add file:../agents-ui                   # local checkout
 ```
 
@@ -126,6 +126,8 @@ base rules apply only inside `.agents-ui`.
 | --- | --- | --- |
 | `--agents-gray-50` … `--agents-gray-950` (incl. 750, 850) | Orkumo's blue-tinted scale | every `*-gray-*` class; 950 is the darkest, 50 the lightest |
 | `--agents-sel`, `--agents-cursor` | `#3f6399`, `#8fd0ff` | selected rail row, focus outline |
+| `--agents-white` | `#fff` | `text-white`/`bg-white` on the view's surfaces (selected row, hover, headings); solid colour buttons keep white |
+| `--agents-{hue}-text` for blue, sky, indigo, violet, purple, fuchsia, pink, red, orange, amber, yellow, emerald | Tailwind's 100–400 | the light tints Orkumo uses as text and icon colours on dark surfaces; a light theme points them at darker colours. Tints of 500 and above (badges, buttons, `bg-*-500/20`) keep Tailwind's values |
 | `--agents-font`, `--agents-font-mono` | Inter, JetBrains Mono | |
 | `--agents-border`, `--agents-scrollbar`, `--agents-accent` | | kbd, scrollbars, width handle |
 | `--agents-bg`, `--agents-text`, `--agents-mono`, `--agents-term-*` | | terminal colours and font when the host passes no `terminalOptions` |

@@ -13,6 +13,15 @@
  *   --agents-border                        `.kbd` border and the width handle
  *   --agents-scrollbar                     scrollbar thumb
  *   --agents-accent                        width handle while hovered or dragged
+ *   --agents-white                         `text-white`/`bg-white` on the view's own surfaces
+ *                                         (strongest text: selected row, hover, headings);
+ *                                         on solid colour buttons it stays white
+ *   --agents-{hue}-text                    the light tints 100–400 of a hue, which Orkumo uses
+ *                                         as text and icon colours on its dark surfaces, for
+ *                                         hue = blue, sky, indigo, violet, purple, fuchsia,
+ *                                         pink, red, orange, amber, yellow, emerald. A light
+ *                                         theme points them at darker colours. Tints of 500+
+ *                                         (badges, buttons, `bg-*-500/20`) keep Tailwind's values.
  */
 @layer theme, base, utilities;
 @import 'tailwindcss/theme.css' layer(theme);
@@ -40,10 +49,75 @@
   --font-mono: var(--agents-font-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace);
   /* Tailwind v3 values where v4 changed them */
   --radius-sm: 0.125rem;
+  /* Strongest text on the view's surfaces (see the reset for solid colour buttons below) */
+  --color-white: var(--agents-white, #fff);
+  /* Light tints: Orkumo's text colours on dark surfaces; defaults are Tailwind's */
+  --color-blue-100: var(--agents-blue-text, oklch(93.2% 0.032 255.585));
+  --color-blue-200: var(--agents-blue-text, oklch(88.2% 0.059 254.128));
+  --color-blue-300: var(--agents-blue-text, oklch(80.9% 0.105 251.813));
+  --color-blue-400: var(--agents-blue-text, oklch(70.7% 0.165 254.624));
+  --color-sky-100: var(--agents-sky-text, oklch(95.1% 0.026 236.824));
+  --color-sky-200: var(--agents-sky-text, oklch(90.1% 0.058 230.902));
+  --color-sky-300: var(--agents-sky-text, oklch(82.8% 0.111 230.318));
+  --color-sky-400: var(--agents-sky-text, oklch(74.6% 0.16 232.661));
+  --color-indigo-100: var(--agents-indigo-text, oklch(93% 0.034 272.788));
+  --color-indigo-200: var(--agents-indigo-text, oklch(87% 0.065 274.039));
+  --color-indigo-300: var(--agents-indigo-text, oklch(78.5% 0.115 274.713));
+  --color-indigo-400: var(--agents-indigo-text, oklch(67.3% 0.182 276.935));
+  --color-violet-100: var(--agents-violet-text, oklch(94.3% 0.029 294.588));
+  --color-violet-200: var(--agents-violet-text, oklch(89.4% 0.057 293.283));
+  --color-violet-300: var(--agents-violet-text, oklch(81.1% 0.111 293.571));
+  --color-violet-400: var(--agents-violet-text, oklch(70.2% 0.183 293.541));
+  --color-purple-100: var(--agents-purple-text, oklch(94.6% 0.033 307.174));
+  --color-purple-200: var(--agents-purple-text, oklch(90.2% 0.063 306.703));
+  --color-purple-300: var(--agents-purple-text, oklch(82.7% 0.119 306.383));
+  --color-purple-400: var(--agents-purple-text, oklch(71.4% 0.203 305.504));
+  --color-fuchsia-100: var(--agents-fuchsia-text, oklch(95.2% 0.037 318.852));
+  --color-fuchsia-200: var(--agents-fuchsia-text, oklch(90.3% 0.076 319.62));
+  --color-fuchsia-300: var(--agents-fuchsia-text, oklch(83.3% 0.145 321.434));
+  --color-fuchsia-400: var(--agents-fuchsia-text, oklch(74% 0.238 322.16));
+  --color-pink-100: var(--agents-pink-text, oklch(94.8% 0.028 342.258));
+  --color-pink-200: var(--agents-pink-text, oklch(89.9% 0.061 343.231));
+  --color-pink-300: var(--agents-pink-text, oklch(82.3% 0.12 346.018));
+  --color-pink-400: var(--agents-pink-text, oklch(71.8% 0.202 349.761));
+  --color-red-100: var(--agents-red-text, oklch(93.6% 0.032 17.717));
+  --color-red-200: var(--agents-red-text, oklch(88.5% 0.062 18.334));
+  --color-red-300: var(--agents-red-text, oklch(80.8% 0.114 19.571));
+  --color-red-400: var(--agents-red-text, oklch(70.4% 0.191 22.216));
+  --color-orange-100: var(--agents-orange-text, oklch(95.4% 0.038 75.164));
+  --color-orange-200: var(--agents-orange-text, oklch(90.1% 0.076 70.697));
+  --color-orange-300: var(--agents-orange-text, oklch(83.7% 0.128 66.29));
+  --color-orange-400: var(--agents-orange-text, oklch(75% 0.183 55.934));
+  --color-amber-100: var(--agents-amber-text, oklch(96.2% 0.059 95.617));
+  --color-amber-200: var(--agents-amber-text, oklch(92.4% 0.12 95.746));
+  --color-amber-300: var(--agents-amber-text, oklch(87.9% 0.169 91.605));
+  --color-amber-400: var(--agents-amber-text, oklch(82.8% 0.189 84.429));
+  --color-yellow-100: var(--agents-yellow-text, oklch(97.3% 0.071 103.193));
+  --color-yellow-200: var(--agents-yellow-text, oklch(94.5% 0.129 101.54));
+  --color-yellow-300: var(--agents-yellow-text, oklch(90.5% 0.182 98.111));
+  --color-yellow-400: var(--agents-yellow-text, oklch(85.2% 0.199 91.936));
+  --color-emerald-100: var(--agents-emerald-text, oklch(95% 0.052 163.051));
+  --color-emerald-200: var(--agents-emerald-text, oklch(90.5% 0.093 164.15));
+  --color-emerald-300: var(--agents-emerald-text, oklch(84.5% 0.143 164.978));
+  --color-emerald-400: var(--agents-emerald-text, oklch(76.5% 0.177 163.223));
 }
 
 /* Below the utilities layer, so the utility classes win */
 @layer base {
+  /* Solid colour buttons and badges: their `text-white` (and a `bg-white` knob inside) stays
+     white whatever the host sets (`@theme inline` puts var(--agents-white) into the utilities) */
+  .agents-ui
+    :is(
+      [class~='bg-blue-500'],
+      [class~='bg-blue-600'],
+      [class~='bg-sky-500'],
+      [class~='bg-emerald-500'],
+      [class~='bg-red-500'],
+      [class~='bg-red-600'],
+      [class~='bg-yellow-500']
+    ) {
+    --agents-white: #fff;
+  }
   /* Tailwind v3 preflight, scoped */
   .agents-ui,
   .agents-ui *,
@@ -162,7 +236,7 @@
     border-bottom-width: 2px;
     border-radius: 0.25rem;
     background: var(--agents-gray-950, #1a274b);
-    color: #b9d6ff;
+    color: var(--agents-blue-text, #b9d6ff);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.7rem;
     line-height: 1.2rem;
