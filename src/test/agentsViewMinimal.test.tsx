@@ -6,6 +6,7 @@ import { STORAGE_KEY as WORKSPACE_KEY } from '../hooks/useAgentWorkspace';
 import type { AgentSession, AgentsResponse } from '../types';
 import type { AgentsTransport, TransportError } from '../transport';
 import { renderWithAgents, testHost, testTransport } from './agents';
+import { isMac } from '../utils/platform';
 
 // A host with only the required transport groups and toasts (MAPLE): the view works and hides
 // everything it has no capability for; plus the MAPLE props (stop guard, list errors, selection)
@@ -203,5 +204,50 @@ describe('AgentsView with the required transport groups only', () => {
     });
     await waitFor(() => expect(document.querySelector('[data-agent-pane="s1"]')).not.toBeNull());
     await waitFor(() => expect(onSelectedIdChange).toHaveBeenLastCalledWith('s1'));
+  });
+
+  it('without an activity bar: a header switch hides and shows the agent list, Cmd+B only inside the view', async () => {
+    localStorage.removeItem('orkumo.railCollapsed');
+    renderWithAgents(
+      <>
+        <input aria-label="host field" />
+        <AgentsView />
+      </>,
+      { transport: minimal() }
+    );
+    const toggle = await screen.findByRole('button', { name: 'Agent list' });
+    const list = () => document.querySelector('[data-agents-view] [data-collapsed]');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(list()).not.toBeNull();
+    expect(localStorage.getItem('orkumo.railCollapsed')).toBe('true');
+    // the host's own Cmd+B (MAPLE: its navigation) outside the view is left alone
+    const cmdB = { code: 'KeyB', key: 'b', metaKey: isMac, ctrlKey: !isMac };
+    fireEvent.keyDown(screen.getByLabelText('host field'), cmdB);
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.keyDown(toggle, cmdB);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(list()).toBeNull();
+  });
+
+  it('with an activity bar (Orkumo): no header switch, Cmd+B anywhere', async () => {
+    localStorage.removeItem('orkumo.railCollapsed');
+    renderWithAgents(
+      <>
+        <input aria-label="host field" />
+        <AgentsView />
+      </>,
+      { transport: minimal(), host: testHost({ renderActivityBar: () => null }) }
+    );
+    await screen.findByText('vault-worker');
+    expect(screen.queryByRole('button', { name: 'Agent list' })).toBeNull();
+    fireEvent.keyDown(screen.getByLabelText('host field'), {
+      code: 'KeyB',
+      key: 'b',
+      metaKey: isMac,
+      ctrlKey: !isMac,
+    });
+    expect(localStorage.getItem('orkumo.railCollapsed')).toBe('true');
   });
 });

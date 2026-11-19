@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Settings, Settings2, HelpCircle, RefreshCw, Braces, AlertTriangle, Power, X, ArrowLeft, Network, } from 'lucide-react';
+import { Bot, Settings, Settings2, HelpCircle, RefreshCw, Braces, AlertTriangle, Power, X, ArrowLeft, Network, PanelLeftClose, PanelLeftOpen, } from 'lucide-react';
 import { useAgentSessions } from '../../hooks/useAgentSessions';
 import { useAgentWorkspace } from '../../hooks/useAgentWorkspace';
 import { LOCAL_TARGETS } from '../../transport';
@@ -256,7 +256,10 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     const outletShown = railOutlet && !active;
     // Side panel (agents rail or a route's outlet) hidden from md up, like VS Code's sidebar
     const [railCollapsed, toggleRail] = useStoredToggle('orkumo.railCollapsed');
-    // Cmd+B on macOS, Ctrl+B elsewhere outside a terminal (Ctrl+B belongs to the shell there)
+    const viewRef = useRef(null);
+    // Cmd+B on macOS, Ctrl+B elsewhere outside a terminal (Ctrl+B belongs to the shell there).
+    // A host without an app shell (activity bar) keeps Cmd+B for itself outside this view.
+    const appShell = !!host.renderActivityBar;
     useEffect(() => {
         const onKey = (e) => {
             if (e.code !== 'KeyB' || e.altKey || e.shiftKey)
@@ -265,13 +268,15 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 return;
             if (!isMac && e.target instanceof HTMLElement && e.target.closest('.xterm'))
                 return;
+            if (!appShell && !(e.target instanceof Node && viewRef.current?.contains(e.target)))
+                return;
             e.preventDefault();
             e.stopPropagation();
             toggleRail();
         };
         window.addEventListener('keydown', onKey, { capture: true });
         return () => window.removeEventListener('keydown', onKey, { capture: true });
-    }, [toggleRail]);
+    }, [toggleRail, appShell]);
     const { zone: focusZone, focusZone: moveFocus } = useAgentFocusZone(active, railRef);
     const servers = useMemo(() => new Map(sessions.map((s) => [s.id, mergeServers(s, apps, contexts[s.id])])), [sessions, apps, contexts]);
     // Agent -> board issue chips from the host's board; none without it
@@ -2202,7 +2207,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     if (cliInstalled === false) {
         return (_jsxs("div", { className: `h-full flex flex-col items-center justify-center gap-3 text-gray-400 p-8 text-center agents-ui ${className}`, children: [_jsx(AlertTriangle, { size: 32, className: "text-yellow-500" }), _jsx("div", { className: "text-gray-200 font-medium", children: t.cliNotFound }), _jsxs("div", { className: "text-sm", children: [t.cliInstall[0], _jsx("code", { className: "text-blue-300", children: "claude" }), t.cliInstall[1]] }), _jsx("pre", { className: "text-xs bg-gray-950 border border-gray-800 rounded p-3", children: "npm install -g @anthropic-ai/claude-code" }), _jsx("button", { onClick: refresh, className: "px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 hover:text-white text-sm text-gray-200", children: t.checkAgain })] }));
     }
-    return (_jsxs("div", { className: `h-full flex min-h-0 bg-gray-900 text-gray-100 agents-ui ${className}`, "data-agents-view": true, children: [host.renderActivityBar && (_jsxs("nav", { "aria-label": t.activityBar, className: `${active ? 'flex' : 'hidden md:flex'} w-12 shrink-0 flex-col py-1 border-r border-gray-800 bg-gray-950`, children: [host.renderActivityBar({ onToggleRail: toggleRail }), nav && (_jsx("button", { onClick: nav.onOpenSettings, className: "mt-auto flex items-center justify-center h-11 text-gray-500 hover:text-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cursor", title: t.settings, "aria-label": t.settings, children: _jsx(Settings, { size: 20, strokeWidth: 1.75, "aria-hidden": true }) }))] })), _jsxs("div", { className: "flex-1 min-w-0 flex flex-col min-h-0", children: [_jsxs("div", { className: `relative ${active ? 'flex' : 'hidden md:flex'} flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 border-b border-gray-800 shrink-0`, children: [nav && (_jsx("button", { onClick: nav.onOpenContextDashboard, className: "p-1 -m-1 rounded text-blue-300 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor", title: t.contextDashboardTitle, "aria-label": t.contextDashboardLabel, children: _jsx(Bot, { size: 18 }) })), _jsx(NewTaskButton, { onNew: (kind, role) => kind === 'issue'
+    return (_jsxs("div", { ref: viewRef, className: `h-full flex min-h-0 bg-gray-900 text-gray-100 agents-ui ${className}`, "data-agents-view": true, children: [host.renderActivityBar && (_jsxs("nav", { "aria-label": t.activityBar, className: `${active ? 'flex' : 'hidden md:flex'} w-12 shrink-0 flex-col py-1 border-r border-gray-800 bg-gray-950`, children: [host.renderActivityBar({ onToggleRail: toggleRail }), nav && (_jsx("button", { onClick: nav.onOpenSettings, className: "mt-auto flex items-center justify-center h-11 text-gray-500 hover:text-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cursor", title: t.settings, "aria-label": t.settings, children: _jsx(Settings, { size: 20, strokeWidth: 1.75, "aria-hidden": true }) }))] })), _jsxs("div", { className: "flex-1 min-w-0 flex flex-col min-h-0", children: [_jsxs("div", { className: `relative ${active ? 'flex' : 'hidden md:flex'} flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 border-b border-gray-800 shrink-0`, children: [!appShell && (_jsx("button", { type: "button", onClick: toggleRail, "aria-pressed": !railCollapsed, className: "hidden md:inline-flex p-1 -m-1 rounded text-gray-400 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor", title: `${railCollapsed ? t.showAgentList : t.hideAgentList} (${isMac ? '⌘B' : 'Ctrl+B'})`, "aria-label": t.agentListToggle, children: railCollapsed ? (_jsx(PanelLeftOpen, { size: 18, "aria-hidden": true })) : (_jsx(PanelLeftClose, { size: 18, "aria-hidden": true })) })), nav && (_jsx("button", { onClick: nav.onOpenContextDashboard, className: "p-1 -m-1 rounded text-blue-300 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor", title: t.contextDashboardTitle, "aria-label": t.contextDashboardLabel, children: _jsx(Bot, { size: 18 }) })), _jsx(NewTaskButton, { onNew: (kind, role) => kind === 'issue'
                                     ? openIssueDialog(selectedRepo)
                                     : kind === 'orchestrator'
                                         ? void newOrchestrator(role)

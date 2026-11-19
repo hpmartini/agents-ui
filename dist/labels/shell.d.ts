@@ -310,6 +310,10 @@ export interface ShellLabels {
     activityBar: string;
     settings: string;
     contextDashboardTitle: string;
+    /** Header switch for the agent list, shown when the host has no activity bar */
+    agentListToggle: string;
+    showAgentList: string;
+    hideAgentList: string;
     contextDashboardLabel: string;
     focusSwitchTitle: string;
     focusZones: Record<'terminal' | 'rail' | 'page', string>;
