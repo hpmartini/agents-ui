@@ -10,12 +10,17 @@ import type { AgentDialog } from '../utils/agentDialog';
 
 const dialog: AgentDialog = {
   kind: 'question',
+  harness: 'claude',
   title: '',
   question: 'Which one?',
   detail: '',
   tabs: [],
+  tab: -1,
+  groups: [],
+  multi: false,
   options: [{ label: 'Other', role: 'other', number: 2 }],
-} as unknown as AgentDialog;
+  cursor: 0,
+};
 
 describe('terminal labels', () => {
   it('has a German text for every English key', () => {

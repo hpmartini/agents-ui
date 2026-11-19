@@ -56,6 +56,7 @@ import { extractNumberedChoices, screenPrompt } from '../../../utils/agentInput'
 import { dialogKeys, parseAgentDialog, type DialogAnswer } from '../../../utils/agentDialog';
 import { harnessLabel, sessionHarness } from '../../../utils/agentSessions';
 import {
+  paneActiveTab,
   paneScreen,
   paneSuggestion,
   takePaneSuggestion,
@@ -127,17 +128,28 @@ function usePaneSuggestion(paneId: string, active: boolean): PaneSuggestion {
   return active ? suggestion : null;
 }
 
-/** Screen tail of pane `paneId` while its agent waits on a question or permission (not in its transcript) */
-function usePanePrompt(paneId: string, prompting: boolean): string | null {
-  const [text, setText] = useState('');
+/**
+ * Screen tail of pane `paneId` while its agent waits on a question or permission (not in its
+ * transcript), with the question tab its dialog highlights
+ */
+function usePanePrompt(
+  paneId: string,
+  prompting: boolean
+): { screen: string; tab: string | null } | null {
+  const [text, setText] = useState({ screen: '', tab: null as string | null });
   useEffect(() => {
     if (!prompting) return;
-    const read = () => setText(paneScreen(paneId, PROMPT_LINES));
+    const read = () =>
+      setText((was) => {
+        const screen = paneScreen(paneId, PROMPT_LINES);
+        const tab = paneActiveTab(paneId);
+        return was.screen === screen && was.tab === tab ? was : { screen, tab };
+      });
     read();
     const timer = setInterval(read, PROMPT_POLL_MS);
     return () => {
       clearInterval(timer);
-      setText('');
+      setText({ screen: '', tab: null });
     };
   }, [paneId, prompting]);
   return prompting ? text : null;
@@ -404,14 +416,18 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     return () => window.clearTimeout(t);
   }, [busy]);
   // The agent's state only says it may wait; the box needs a dialog on its screen
-  const screen = usePanePrompt(pane.id, prompting);
+  const panePrompt = usePanePrompt(pane.id, prompting);
+  const screen = panePrompt?.screen ?? null;
   const suggestion = usePaneSuggestion(
     pane.id,
     harness === 'claude' && connected && !busy && !prompting
   );
   const prompt = screen ? screenPrompt(screen) : null;
   // A dialog the parser knows becomes a card; any other prompt stays the screen excerpt below
-  const dialog = useMemo(() => (prompt ? parseAgentDialog(screen ?? '') : null), [prompt, screen]);
+  const dialog = useMemo(
+    () => (prompt ? parseAgentDialog(screen ?? '', panePrompt?.tab) : null),
+    [prompt, screen, panePrompt?.tab]
+  );
   const dialogId = dialog ? JSON.stringify(dialog) : null;
   const [sentFor, setSentFor] = useState<string | null>(null);
   useEffect(() => {
@@ -439,11 +455,12 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   // Keys go to what is on the screen now: the card may be a poll old, and a click on "Yes"
   // must not approve a different command
   const answerDialog = (answer: DialogAnswer) => {
-    const now = parseAgentDialog(paneScreen(pane.id, PROMPT_LINES));
+    const now = parseAgentDialog(paneScreen(pane.id, PROMPT_LINES), paneActiveTab(pane.id));
     if (!now || JSON.stringify(now) !== dialogId) return setError(t.questionChanged);
     if (!pressKeys(pane.id, dialogKeys(now, answer))) return setError(notConnected);
     setError(null);
-    setSentFor(dialogId);
+    // moving between tabs answers nothing: the card stays usable on the step it lands on
+    if (answer.type !== 'tab' && answer.type !== 'step') setSentFor(dialogId);
   };
 
   const submit = async () => {

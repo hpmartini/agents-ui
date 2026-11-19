@@ -201,6 +201,11 @@ export interface TerminalLabels {
     reason: string;
     denyWithReason: string;
     submit: string;
+    /** A multi select's button on a question tab before the last */
+    next: string;
+    questionTabs: string;
+    /** The question tabs' last step, where Submit sends all answers */
+    reviewTab: string;
     removeAttachment: (name: string, index: number) => string;
     imageAlt: (index: number) => string;
     attachFilesTitle: string;
