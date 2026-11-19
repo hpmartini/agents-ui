@@ -329,6 +329,10 @@ export interface ShellLabels {
   activityBar: string;
   settings: string;
   contextDashboardTitle: string;
+  /** Header switch for the agent list, shown when the host has no activity bar */
+  agentListToggle: string;
+  showAgentList: string;
+  hideAgentList: string;
   contextDashboardLabel: string;
   focusSwitchTitle: string;
   focusZones: Record<'terminal' | 'rail' | 'page', string>;
@@ -807,6 +811,9 @@ export const shellEn: ShellLabels = {
   activityBar: 'Activity bar',
   settings: 'Settings',
   contextDashboardTitle: 'Dashboard of this context',
+  agentListToggle: 'Agent list',
+  showAgentList: 'Show agent list',
+  hideAgentList: 'Hide agent list',
   contextDashboardLabel: 'Open context dashboard',
   focusSwitchTitle: 'Switch with F6 or Ctrl+Alt+Left / Right',
   focusZones: { terminal: 'Keys: terminal', rail: 'Keys: agent list', page: 'Keys: page' },
@@ -1298,6 +1305,9 @@ export const shellDe: ShellLabels = {
   activityBar: 'Aktivitätsleiste',
   settings: 'Einstellungen',
   contextDashboardTitle: 'Dashboard dieses Kontexts',
+  agentListToggle: 'Agent-Liste',
+  showAgentList: 'Agent-Liste einblenden',
+  hideAgentList: 'Agent-Liste ausblenden',
   contextDashboardLabel: 'Kontext-Dashboard öffnen',
   focusSwitchTitle: 'Wechseln mit F6 oder Ctrl+Alt+Links / Rechts',
   focusZones: { terminal: 'Tasten: Terminal', rail: 'Tasten: Agent-Liste', page: 'Tasten: Seite' },

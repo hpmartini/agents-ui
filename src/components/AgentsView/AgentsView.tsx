@@ -11,6 +11,8 @@ import {
   X,
   ArrowLeft,
   Network,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import type { AgentConfigLike } from './types';
 import type {
@@ -494,19 +496,23 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const outletShown = railOutlet && !active;
   // Side panel (agents rail or a route's outlet) hidden from md up, like VS Code's sidebar
   const [railCollapsed, toggleRail] = useStoredToggle('orkumo.railCollapsed');
-  // Cmd+B on macOS, Ctrl+B elsewhere outside a terminal (Ctrl+B belongs to the shell there)
+  const viewRef = useRef<HTMLDivElement>(null);
+  // Cmd+B on macOS, Ctrl+B elsewhere outside a terminal (Ctrl+B belongs to the shell there).
+  // A host without an app shell (activity bar) keeps Cmd+B for itself outside this view.
+  const appShell = !!host.renderActivityBar;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'KeyB' || e.altKey || e.shiftKey) return;
       if (isMac ? !e.metaKey || e.ctrlKey : !e.ctrlKey || e.metaKey) return;
       if (!isMac && e.target instanceof HTMLElement && e.target.closest('.xterm')) return;
+      if (!appShell && !(e.target instanceof Node && viewRef.current?.contains(e.target))) return;
       e.preventDefault();
       e.stopPropagation();
       toggleRail();
     };
     window.addEventListener('keydown', onKey, { capture: true });
     return () => window.removeEventListener('keydown', onKey, { capture: true });
-  }, [toggleRail]);
+  }, [toggleRail, appShell]);
   const { zone: focusZone, focusZone: moveFocus } = useAgentFocusZone(active, railRef);
   const servers = useMemo(
     () => new Map(sessions.map((s) => [s.id, mergeServers(s, apps, contexts[s.id])])),
@@ -2801,6 +2807,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
 
   return (
     <div
+      ref={viewRef}
       className={`h-full flex min-h-0 bg-gray-900 text-gray-100 agents-ui ${className}`}
       data-agents-view
     >
@@ -2828,6 +2835,24 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         <div
           className={`relative ${active ? 'flex' : 'hidden md:flex'} flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 border-b border-gray-800 shrink-0`}
         >
+          {/* Without an activity bar the agent list needs its own switch (from md up; below
+            md the list and the workspace take turns) */}
+          {!appShell && (
+            <button
+              type="button"
+              onClick={toggleRail}
+              aria-pressed={!railCollapsed}
+              className="hidden md:inline-flex p-1 -m-1 rounded text-gray-400 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor"
+              title={`${railCollapsed ? t.showAgentList : t.hideAgentList} (${isMac ? '⌘B' : 'Ctrl+B'})`}
+              aria-label={t.agentListToggle}
+            >
+              {railCollapsed ? (
+                <PanelLeftOpen size={18} aria-hidden />
+              ) : (
+                <PanelLeftClose size={18} aria-hidden />
+              )}
+            </button>
+          )}
           {nav && (
             <button
               onClick={nav.onOpenContextDashboard}

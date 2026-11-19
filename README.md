@@ -17,7 +17,7 @@ How it was cut out of Orkumo, and what maps to what: [`docs/orkumo-inventory.md`
 ## Install
 
 ```sh
-bun add github:hpmartini/agents-ui#v0.4.2   # tagged release; dist/ is committed, no build on install
+bun add github:hpmartini/agents-ui#v0.4.3   # tagged release; dist/ is committed, no build on install
 bun add file:../agents-ui                   # local checkout
 ```
 
@@ -107,7 +107,7 @@ tests.
 | `toast` | `info`, `success`, `error`, `dismiss`; required |
 | `openCode`, `openBoard`, `openMode`, `openPulls`, `openProjectSettings`, `fetchRepoPath` | navigation to host pages; a missing one hides its entries |
 | `useRegisterCommands`, `usePaletteOpen` | the host's command palette (called as hooks) |
-| `renderActivityBar`, `headerSlot`, `onAttention` | app shell: mode rail, a slot after New task, window title |
+| `renderActivityBar`, `headerSlot`, `onAttention` | app shell: mode rail, a slot after New task, window title. Without `renderActivityBar` the header gets its own agent-list switch, and Cmd/Ctrl+B toggles the list only while focus is inside the view |
 | `useIssues`, `renderIssueModal`, `renderIssueCreate` | board issue chips and dialogs |
 | `onQuickPrompt`, `onQuickChat` | the desktop quick window |
 | `renderBrowser` | built-in browser pane; without it, links open in the system browser |
