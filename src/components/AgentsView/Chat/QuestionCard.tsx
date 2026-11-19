@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { Check, MessageCircleQuestion, ShieldAlert } from 'lucide-react';
 import type { AgentDialog, DialogAnswer } from '../../../utils/agentDialog';
 import { useLabels } from '../../../labels';
@@ -61,7 +61,9 @@ function TextAnswer({
 
 /**
  * A question or permission the agent waits on, as a card: the dialog's step on its screen,
- * structured, answered with clicks that the chat pane turns into the TUI's keys
+ * structured, answered with clicks that the chat pane turns into the TUI's keys. Claude's question
+ * tabs are buttons (and ←/→ on the card): back to an answered question shows its pick, and only
+ * Submit on the review sends the answers.
  */
 export function QuestionCard({
   dialog,
@@ -75,15 +77,33 @@ export function QuestionCard({
   const permission = dialog.kind === 'permission';
   const Icon = permission ? ShieldAlert : MessageCircleQuestion;
   const rows = dialog.options.map((option, row) => ({ option, row }));
-  const choices = rows.filter(({ option }) => option.role === 'option' || option.role === 'deny');
-  const other = rows.find(({ option }) => option.role === 'other');
   const deny = rows.find(({ option }) => option.role === 'deny');
   const submit = rows.find(({ option }) => option.role === 'submit');
+  // Claude: the question tabs plus the review (its tab row calls it Submit)
+  const steps =
+    dialog.harness === 'claude' && dialog.tabs.length > 1
+      ? [...dialog.tabs, { label: t.reviewTab, done: false }]
+      : [];
+  // omp: one box can ask several questions at once
+  const sections = dialog.groups.length
+    ? dialog.groups.map((question, group) => ({
+        question,
+        rows: rows.filter(({ option }) => option.group === group),
+      }))
+    : [{ question: dialog.question, rows }];
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (off || steps.length === 0 || e.target instanceof HTMLInputElement) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    onAnswer({ type: 'step', by: e.key === 'ArrowLeft' ? -1 : 1 });
+  };
 
   return (
     <div
       role="group"
       aria-label={permission ? t.permissionRequest : t.agentQuestion}
+      onKeyDown={onKeyDown}
       className="mb-2 rounded-md border border-amber-400/40 bg-amber-500/10 p-2 text-xs"
     >
       <div className="flex items-center gap-1.5 font-medium text-amber-200">
@@ -98,17 +118,30 @@ export function QuestionCard({
           </span>
         )}
       </div>
-      {dialog.tabs.length > 1 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {dialog.tabs.map((tab) => (
-            <span
-              key={tab.label}
-              data-done={tab.done}
-              className={`rounded-full border px-1.5 py-0.5 text-[11px] ${tab.done ? 'border-emerald-400/40 text-emerald-300' : 'border-gray-600 text-gray-400'}`}
-            >
-              {tab.label}
-            </span>
-          ))}
+      {steps.length > 0 && (
+        <div role="group" aria-label={t.questionTabs} className="mt-1.5 flex flex-wrap gap-1">
+          {steps.map((step, i) => {
+            const current = i === dialog.tab;
+            return (
+              <button
+                key={`${i}-${step.label}`}
+                type="button"
+                aria-current={current ? 'step' : undefined}
+                data-done={step.done}
+                disabled={off || current}
+                onClick={() => onAnswer({ type: 'tab', tab: i })}
+                className={`rounded-full border px-1.5 py-0.5 text-[11px] focus-visible:outline-2 focus-visible:outline-blue-400 ${
+                  current
+                    ? 'border-amber-300 bg-amber-500/25 text-amber-100'
+                    : step.done
+                      ? 'border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/10'
+                      : 'border-gray-600 text-gray-400 hover:bg-gray-700/40'
+                } disabled:cursor-default`}
+              >
+                {step.label}
+              </button>
+            );
+          })}
         </div>
       )}
       {dialog.detail && (
@@ -116,54 +149,64 @@ export function QuestionCard({
           {dialog.detail}
         </pre>
       )}
-      {dialog.question && <div className="mt-1.5 text-sm text-gray-100">{dialog.question}</div>}
-      <div className="mt-2 flex flex-col gap-1">
-        {choices.map(({ option, row }) =>
-          option.checked !== undefined ? (
-            <button
-              key={row}
-              type="button"
-              role="checkbox"
-              aria-checked={option.checked}
-              disabled={off}
-              onClick={() => pick(row)}
-              className={`${optionBtn} flex items-start gap-2`}
-            >
-              <span
-                aria-hidden
-                className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border ${option.checked ? 'border-amber-300 bg-amber-400/30' : 'border-gray-500'}`}
-              >
-                {option.checked && <Check className="h-3 w-3 text-amber-100" />}
-              </span>
-              <OptionText label={option.label} description={option.description} />
-            </button>
-          ) : (
-            <button
-              key={row}
-              type="button"
-              aria-pressed={option.selected || undefined}
-              disabled={off}
-              onClick={() => pick(row)}
-              className={`${optionBtn} ${option.selected ? 'border-amber-300 bg-amber-500/20' : ''}`}
-            >
-              <OptionText label={option.label} description={option.description} />
-            </button>
-          )
-        )}
-      </div>
-      {other && (
-        <div className="mt-1.5">
-          {other.option.description && (
-            <div className="mb-1 text-gray-400">{t.typed(other.option.description)}</div>
-          )}
-          <TextAnswer
-            label={t.otherAnswer}
-            button={t.send}
-            disabled={off}
-            onSend={(text) => onAnswer({ type: 'text', row: other.row, text })}
-          />
-        </div>
-      )}
+      {sections.map(({ question, rows: section }, s) => {
+        const choices = section.filter(
+          ({ option }) => option.role === 'option' || option.role === 'deny'
+        );
+        const other = section.find(({ option }) => option.role === 'other');
+        return (
+          <div key={s} className={s > 0 ? 'mt-3' : undefined}>
+            {question && <div className="mt-1.5 text-sm text-gray-100">{question}</div>}
+            <div className="mt-2 flex flex-col gap-1">
+              {choices.map(({ option, row }) =>
+                option.checked !== undefined ? (
+                  <button
+                    key={row}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={option.checked}
+                    disabled={off}
+                    onClick={() => pick(row)}
+                    className={`${optionBtn} flex items-start gap-2`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border ${option.checked ? 'border-amber-300 bg-amber-400/30' : 'border-gray-500'}`}
+                    >
+                      {option.checked && <Check className="h-3 w-3 text-amber-100" />}
+                    </span>
+                    <OptionText label={option.label} description={option.description} />
+                  </button>
+                ) : (
+                  <button
+                    key={row}
+                    type="button"
+                    aria-pressed={option.selected || undefined}
+                    disabled={off}
+                    onClick={() => pick(row)}
+                    className={`${optionBtn} ${option.selected ? 'border-amber-300 bg-amber-500/20' : ''}`}
+                  >
+                    <OptionText label={option.label} description={option.description} />
+                  </button>
+                )
+              )}
+            </div>
+            {other && (
+              <div className="mt-1.5">
+                {other.option.description && (
+                  <div className="mb-1 text-gray-400">{t.typed(other.option.description)}</div>
+                )}
+                <TextAnswer
+                  label={t.otherAnswer}
+                  button={t.send}
+                  disabled={off}
+                  onSend={(text) => onAnswer({ type: 'text', row: other.row, text })}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
       {deny && (
         <div className="mt-1.5">
           <TextAnswer
@@ -181,7 +224,7 @@ export function QuestionCard({
           onClick={() => pick(submit.row)}
           className={`${sendBtn} mt-2 bg-amber-500/20`}
         >
-          {t.submit}
+          {submit.option.label === 'Next' ? t.next : t.submit}
         </button>
       )}
     </div>

@@ -209,6 +209,9 @@ export const terminalEn = {
     reason: 'Reason',
     denyWithReason: 'No, with reason',
     submit: 'Submit',
+    next: 'Next',
+    questionTabs: 'Questions',
+    reviewTab: 'Review',
     // ImageAttachments
     removeAttachment: (name, index) => `Remove ${name || `attachment ${index}`}`,
     imageAlt: (index) => `Image ${index}`,
@@ -443,6 +446,9 @@ export const terminalDe = {
     reason: 'Begründung',
     denyWithReason: 'Nein, mit Begründung',
     submit: 'Absenden',
+    next: 'Weiter',
+    questionTabs: 'Fragen',
+    reviewTab: 'Übersicht',
     // ImageAttachments
     removeAttachment: (name, index) => `${name || `Anhang ${index}`} entfernen`,
     imageAlt: (index) => `Bild ${index}`,

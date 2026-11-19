@@ -83,6 +83,54 @@ describe('parseAgentDialog: Claude AskUserQuestion', () => {
   });
 });
 
+describe('Claude question tabs: back to an answered question, multi select moving on', () => {
+  const LEFT = '\x1b[D';
+  const RIGHT = '\x1b[C';
+
+  it('an answered tab shows its pick; the highlighted tab is the step', () => {
+    const d = parseAgentDialog(screen('claude-question-tabs-back'), 'Farbe');
+    expect(d).toMatchObject({ kind: 'question', question: 'Welche Farbe?', tab: 0, cursor: 1 });
+    expect(labels(d!)).toEqual(['option:Rot', 'option:Blau', 'other:Type something.']);
+    expect(d!.options.map((o) => !!o.selected)).toEqual([false, true, false]);
+    expect(d!.tabs.map((t) => t.done)).toEqual([true, false, false]);
+    // a different pick on the tab it is on: its digit
+    expect(dialogKeys(d!, { type: 'pick', row: 0 })).toBe('1');
+  });
+
+  it('to a tab: from the first row, ← or → by the distance; ←/→ one step', () => {
+    const d = parseAgentDialog(screen('claude-question-tabs-back'), 'Groesse')!;
+    expect(d.tab).toBe(2);
+    expect(dialogKeys(d, { type: 'tab', tab: 0 })).toBe(`${UP}${LEFT}${LEFT}`);
+    expect(dialogKeys(d, { type: 'tab', tab: 3 })).toBe(`${UP}${RIGHT}`);
+    expect(dialogKeys(d, { type: 'tab', tab: 2 })).toBe('');
+    expect(dialogKeys(d, { type: 'step', by: -1 })).toBe(`${UP}${LEFT}`);
+  });
+
+  it('to a tab while the step is unknown: back to the first tab, then forward', () => {
+    const d = parse('claude-question-tabs-back');
+    expect(d.tab).toBe(-1);
+    expect(dialogKeys(d, { type: 'tab', tab: 1 })).toBe(`${UP}${LEFT.repeat(3)}${RIGHT}`);
+  });
+
+  it('multi select before the last tab: Next row, checks kept', () => {
+    const d = parseAgentDialog(screen('claude-question-tabs-multi-next'), 'Extras')!;
+    expect(labels(d)).toEqual([
+      'option:Kaese',
+      'option:Salat',
+      'option:Zwiebeln',
+      'other:Type something',
+      'submit:Next',
+    ]);
+    expect(d.options.map((o) => o.checked)).toEqual([true, false, true, false, undefined]);
+    expect(d.tab).toBe(0);
+    expect(dialogKeys(d, { type: 'pick', row: 4 })).toBe(`${DOWN.repeat(4)}\r`);
+  });
+
+  it('review: the step after the last tab', () => {
+    expect(parse('claude-question-review').tab).toBe(1);
+  });
+});
+
 describe('parseAgentDialog: Claude permission', () => {
   it('Bash: tool, command, options by label, No takes a reason', () => {
     const d = parse('claude-permission-bash');
@@ -133,6 +181,42 @@ describe('parseAgentDialog: omp ask', () => {
     expect(d.multi).toBe(true);
     expect(d.options.map((o) => o.checked)).toEqual([false, false, false, false, undefined]);
     expect(dialogKeys({ ...d, cursor: 2 }, { type: 'pick', row: 0 })).toBe(`${UP}${UP} `);
+  });
+
+  it('several questions in one box: grouped, ↑/↓ run through all, Space or Enter per kind', () => {
+    const d = parse('omp-ask-fields');
+    expect(d.groups).toEqual(['Welche Farbe?', 'Welche Formen?', 'Welche Groesse?']);
+    expect(d.question).toBe('');
+    expect(d.options.map((o) => `${o.group ?? '-'}:${o.label}`)).toEqual([
+      '0:Rot',
+      '0:Blau',
+      '0:Other',
+      '1:Kreis',
+      '1:Quadrat',
+      '1:Other',
+      '2:Klein',
+      '2:Gross',
+      '2:Other',
+      '-:Submit',
+    ]);
+    expect(d.cursor).toBe(3);
+    expect(d.options.map((o) => o.checked ?? (o.selected ? 'picked' : null))).toEqual([
+      'picked',
+      null,
+      null,
+      true,
+      false,
+      false,
+      'picked',
+      null,
+      null,
+      null,
+    ]);
+    // a checkbox toggles with Space, a radio is picked with Enter, Submit sends all
+    expect(dialogKeys(d, { type: 'pick', row: 4 })).toBe(`${DOWN} `);
+    expect(dialogKeys(d, { type: 'pick', row: 1 })).toBe(`${UP}${UP}\r`);
+    expect(dialogKeys(d, { type: 'pick', row: 9 })).toBe(`${DOWN.repeat(6)}\r`);
+    expect(dialogKeys(d, { type: 'tab', tab: 0 })).toBe('');
   });
 });
 

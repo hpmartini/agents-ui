@@ -193,6 +193,29 @@ export function paneScreen(id: string, maxLines = 18): string {
 }
 
 /**
+ * The question tab Claude's dialog in pane `id` is on: its tab row marks it by background colour
+ * only, which the screen text loses. null without such a row or mark.
+ */
+export function paneActiveTab(id: string): string | null {
+  const terminal = paneTerminals.get(id)?.terminal;
+  if (!terminal) return null;
+  const buffer = terminal.buffer.active;
+  const cell = buffer.getNullCell();
+  for (let y = buffer.viewportY + terminal.rows - 1; y >= buffer.viewportY; y--) {
+    const line = buffer.getLine(y);
+    if (!line || !/^\s*←\s+[☐☒]/.test(line.translateToString(true))) continue;
+    let marked = '';
+    for (let x = 0; x < line.length; x++) {
+      line.getCell(x, cell);
+      if (!cell.isBgDefault() || cell.isInverse()) marked += cell.getChars() || ' ';
+      else if (marked.trim()) break;
+    }
+    return marked.replace(/[☐☒✔]/g, '').trim() || null;
+  }
+  return null;
+}
+
+/**
  * The full text of the suggestion in pane `id`, which the TUI cuts at the pane's width: Tab takes
  * it into the TUI's input, where it wraps over as many rows as it needs; read there, the input is
  * emptied again and the TUI shows the suggestion once more. null when the TUI took nothing.

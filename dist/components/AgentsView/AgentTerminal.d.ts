@@ -42,6 +42,11 @@ export declare function pressKeys(id: string, keys: string): boolean;
 /** Last `maxLines` non-empty lines of pane `id`'s visible screen ('' without a terminal) */
 export declare function paneScreen(id: string, maxLines?: number): string;
 /**
+ * The question tab Claude's dialog in pane `id` is on: its tab row marks it by background colour
+ * only, which the screen text loses. null without such a row or mark.
+ */
+export declare function paneActiveTab(id: string): string | null;
+/**
  * The full text of the suggestion in pane `id`, which the TUI cuts at the pane's width: Tab takes
  * it into the TUI's input, where it wraps over as many rows as it needs; read there, the input is
  * emptied again and the TUI shows the suggestion once more. null when the TUI took nothing.

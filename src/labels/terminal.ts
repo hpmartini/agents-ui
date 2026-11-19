@@ -224,6 +224,11 @@ export interface TerminalLabels {
   reason: string;
   denyWithReason: string;
   submit: string;
+  /** A multi select's button on a question tab before the last */
+  next: string;
+  questionTabs: string;
+  /** The question tabs' last step, where Submit sends all answers */
+  reviewTab: string;
 
   // ImageAttachments
   removeAttachment: (name: string, index: number) => string;
@@ -486,6 +491,9 @@ export const terminalEn: TerminalLabels = {
   reason: 'Reason',
   denyWithReason: 'No, with reason',
   submit: 'Submit',
+  next: 'Next',
+  questionTabs: 'Questions',
+  reviewTab: 'Review',
 
   // ImageAttachments
   removeAttachment: (name, index) => `Remove ${name || `attachment ${index}`}`,
@@ -757,6 +765,9 @@ export const terminalDe: TerminalLabels = {
   reason: 'Begründung',
   denyWithReason: 'Nein, mit Begründung',
   submit: 'Absenden',
+  next: 'Weiter',
+  questionTabs: 'Fragen',
+  reviewTab: 'Übersicht',
 
   // ImageAttachments
   removeAttachment: (name, index) => `${name || `Anhang ${index}`} entfernen`,
