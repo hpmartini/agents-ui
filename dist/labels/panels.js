@@ -229,8 +229,8 @@ export const panelsEn = {
     dirUsePath: 'Use path',
     dirWorktreeOf: (repo) => `worktree of ${repo}`,
     // CopyWarningDialog
-    copyHandoverTitle: 'Übernimmt Session',
-    copyTitle: 'Erzeugt Kopie',
+    copyHandoverTitle: 'Takes over the session',
+    copyTitle: 'Creates a copy',
     copyHolderBackground: (id) => `background job ${id}`,
     copyHolderPid: (pid) => `a terminal (PID ${pid})`,
     copyHolderTerminal: 'a running terminal',

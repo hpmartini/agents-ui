@@ -7,9 +7,9 @@ describe('formatResetIn', () => {
   const min = 60_000;
   it.each([
     [(2 * 60 + 53) * min, 'in 2 h 53 min'],
-    [(4 * 1440 + 6 * 60 + 10) * min, 'in 4 T 6 h'],
+    [(4 * 1440 + 6 * 60 + 10) * min, 'in 4 d 6 h'],
     [12 * min + 30_000, 'in 12 min'],
-    [-5 * min, 'jetzt'],
+    [-5 * min, 'now'],
   ])('%d ms -> %s', (delta, s) => expect(formatResetIn(NOW + delta, NOW)).toBe(s));
 });
 

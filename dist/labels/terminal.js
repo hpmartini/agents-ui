@@ -196,8 +196,8 @@ export const terminalEn = {
     cacheColdTitle: 'Prompt cache expired: the next turn writes it again',
     cacheCold: 'cache cold',
     limitFiveHours: '5h',
-    limitWeek: '7 Tage',
-    today: 'Heute',
+    limitWeek: '7 days',
+    today: 'Today',
     // QuestionCard
     permissionRequest: 'Permission request',
     agentQuestion: 'Agent question',
@@ -220,17 +220,17 @@ export const terminalEn = {
     attach: 'Attach',
     addImage: 'Add image',
     // LimitBar, formatResetIn
-    limitUnknown: 'Limit unbekannt',
-    limitUsed: (label) => `${label} genutzt`,
+    limitUnknown: 'Limit unknown',
+    limitUsed: (label) => `${label} used`,
     reset: 'Reset',
-    resetDone: 'erfolgt',
-    resetNow: 'jetzt',
-    resetInDays: (days, hours) => `in ${days} T ${hours} h`,
+    resetDone: 'done',
+    resetNow: 'now',
+    resetInDays: (days, hours) => `in ${days} d ${hours} h`,
     resetInHours: (hours, minutes) => `in ${hours} h ${minutes} min`,
     resetInMinutes: (minutes) => `in ${minutes} min`,
     // useOpenFile, relativeTime
-    launchableRevealed: (path) => `Startbare Datei, im Finder gezeigt: ${path}`,
-    openFileFailed: (message) => `Datei öffnen fehlgeschlagen: ${message}`,
+    launchableRevealed: (path) => `Launchable file, revealed in Finder: ${path}`,
+    openFileFailed: (message) => `Could not open file: ${message}`,
     justNow: 'now',
 };
 export const terminalDe = {
