@@ -38,6 +38,9 @@ interface DispatchInputProps {
     effort?: string;
     onEffortChange?: (effort: string) => void;
     defaultModel?: string | null;
+    /** New agent with Claude Code: start as orchestrator (Remote Control); omitted = no checkbox */
+    orchestrator?: boolean;
+    onOrchestratorChange?: (on: boolean) => void;
 }
 /**
  * The task composer body, rendered inside TaskComposerModal.
