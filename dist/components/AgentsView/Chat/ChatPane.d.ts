@@ -23,6 +23,8 @@ interface ChatPaneProps {
     headerProps?: React.HTMLAttributes<HTMLDivElement>;
     /** Host buttons before the pane's own actions (`host.renderPaneActions`) */
     hostActions?: React.ReactNode;
+    /** Host view over the chat body (`host.renderPaneView`) */
+    paneView?: React.ReactNode;
     /** Linked PRs, issues and running servers (same items as a terminal pane's header) */
     meta?: React.ReactNode;
 }

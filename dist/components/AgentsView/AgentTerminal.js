@@ -355,11 +355,12 @@ function createPaneTerminal(container, hostOptions, props) {
  * The xterm instance lives for the whole lifetime of the pane; the WebSocket/PTY can be
  * re-established with "Reattach" after the CLI detached (Ctrl+Z / ← / session end).
  */
-export const AgentTerminal = ({ session, visible, active, focused, onFocus, onClose, onPeek, onMaximize, headerProps, solo, meta, onOpenLink, onShowChat, hostActions, }) => {
+export const AgentTerminal = ({ session, visible, active, focused, onFocus, onClose, onPeek, onMaximize, headerProps, solo, meta, onOpenLink, onShowChat, hostActions, paneView = null, }) => {
     const transport = useTransport();
     const host = useHost();
     const openFile = useOpenFile();
     const containerRef = useRef(null);
+    const viewShown = paneView !== null && paneView !== undefined && paneView !== false;
     const [, rerender] = useReducer((n) => n + 1, 0);
     const pane = paneTerminals.get(session.id);
     const connected = pane?.connected ?? false;
@@ -586,12 +587,12 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
         if (visible) {
             const id = requestAnimationFrame(() => {
                 syncSize();
-                if (active && !document.querySelector('[aria-modal="true"]'))
+                if (active && !viewShown && !document.querySelector('[aria-modal="true"]'))
                     paneTerminals.get(session.id)?.terminal.focus();
             });
             return () => cancelAnimationFrame(id);
         }
-    }, [visible, active, syncSize, session.id]);
+    }, [visible, active, viewShown, syncSize, session.id]);
     const glyph = stateGlyph(session.displayState, labels.shell.displayStates);
     const reconnect = () => setGeneration((g) => g + 1);
     if (pane)
@@ -684,5 +685,5 @@ export const AgentTerminal = ({ session, visible, active, focused, onFocus, onCl
                                 }, children: actions.map((a) => (_jsxs("button", { role: "menuitem", onClick: () => {
                                         setMenuOpen(false);
                                         a.run();
-                                    }, className: `w-full flex items-center gap-2 px-3 py-1.5 text-left text-gray-200 hover:bg-gray-800 ${paneBtnFocus}`, children: [a.icon, " ", a.label] }, a.label))) }))] })) : (actions.map((a) => (_jsxs("button", { onClick: a.run, className: `flex items-center gap-1 p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 shrink-0 ${paneBtnFocus}`, title: a.title, "aria-label": a.label, children: [a.icon, a.showLabel && _jsx("span", { children: a.label })] }, a.label)))), _jsx("button", { onClick: onClose, className: `p-1.5 rounded text-gray-400 hover:text-red-300 hover:bg-gray-800 shrink-0 ${paneBtnFocus}`, title: shell ? t.closeShellTitle : t.closeAgentTitle, "aria-label": t.closeNamed(session.name), children: _jsx(X, { size: 12 }) })] }), _jsxs("div", { className: `relative flex-1 min-h-0 transition-opacity motion-reduce:transition-none ${focused ? '' : active ? 'opacity-80' : 'opacity-60'}`, children: [_jsx("div", { ref: containerRef, className: "absolute inset-0 p-1", style: { backgroundColor: terminalOptions?.theme?.background ?? CSS_TERMINAL_BG } }), exited && (_jsxs("div", { className: "absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-1.5 bg-gray-900/95 border-t border-gray-800 text-xs text-gray-400", children: [_jsx("span", { children: t.detachedNotice }), _jsxs("button", { onClick: () => setGeneration((g) => g + 1), className: "flex items-center gap-1 px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white shrink-0", children: [_jsx(RefreshCw, { size: 12 }), " ", t.reattach] })] }))] })] }));
+                                    }, className: `w-full flex items-center gap-2 px-3 py-1.5 text-left text-gray-200 hover:bg-gray-800 ${paneBtnFocus}`, children: [a.icon, " ", a.label] }, a.label))) }))] })) : (actions.map((a) => (_jsxs("button", { onClick: a.run, className: `flex items-center gap-1 p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 shrink-0 ${paneBtnFocus}`, title: a.title, "aria-label": a.label, children: [a.icon, a.showLabel && _jsx("span", { children: a.label })] }, a.label)))), _jsx("button", { onClick: onClose, className: `p-1.5 rounded text-gray-400 hover:text-red-300 hover:bg-gray-800 shrink-0 ${paneBtnFocus}`, title: shell ? t.closeShellTitle : t.closeAgentTitle, "aria-label": t.closeNamed(session.name), children: _jsx(X, { size: 12 }) })] }), _jsxs("div", { className: `relative flex-1 min-h-0 transition-opacity motion-reduce:transition-none ${focused ? '' : active ? 'opacity-80' : 'opacity-60'}`, children: [_jsx("div", { ref: containerRef, className: "absolute inset-0 p-1", style: { backgroundColor: terminalOptions?.theme?.background ?? CSS_TERMINAL_BG } }), exited && (_jsxs("div", { className: "absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-1.5 bg-gray-900/95 border-t border-gray-800 text-xs text-gray-400", children: [_jsx("span", { children: t.detachedNotice }), _jsxs("button", { onClick: () => setGeneration((g) => g + 1), className: "flex items-center gap-1 px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white shrink-0", children: [_jsx(RefreshCw, { size: 12 }), " ", t.reattach] })] })), viewShown && (_jsx("div", { "data-pane-view": true, className: "absolute inset-0 z-10 flex flex-col bg-gray-950", children: paneView }))] })] }));
 };

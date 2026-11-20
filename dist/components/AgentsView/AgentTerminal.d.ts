@@ -28,6 +28,8 @@ interface AgentTerminalProps {
     onShowChat?: () => void;
     /** Host buttons before the pane's own actions (`host.renderPaneActions`) */
     hostActions?: React.ReactNode;
+    /** Host view over the terminal body (`host.renderPaneView`); the terminal keeps no focus meanwhile */
+    paneView?: React.ReactNode;
 }
 /** Whether pane `id`'s PTY is connected, so its UI view can type into it */
 export declare function usePaneConnected(id: string): boolean;

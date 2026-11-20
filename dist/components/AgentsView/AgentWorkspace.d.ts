@@ -25,6 +25,8 @@ interface AgentWorkspaceProps {
     renderPaneMeta?: (session: AgentSession) => React.ReactNode;
     /** Host buttons in a pane's header (`host.renderPaneActions`) */
     renderPaneActions?: (session: AgentSession) => React.ReactNode;
+    /** Host view in place of a pane's body (`host.renderPaneView`); null: the pane as usual */
+    renderPaneView?: (session: AgentSession) => React.ReactNode;
     /** Parked workspace of another context: terminals stay connected but never count as visible */
     hidden?: boolean;
     /** UI views (#189): key that sends a message */
