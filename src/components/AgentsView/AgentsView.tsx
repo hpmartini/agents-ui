@@ -402,6 +402,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const [composerModel, setComposerModel] = useState('');
   // Effort picked in the model × effort matrix, '' = default
   const [composerEffort, setComposerEffort] = useState('');
+  // New agent "Orchestrator": Remote Control on (Claude app); workers start without
+  const [composerOrchestrator, setComposerOrchestrator] = useState(false);
   const [homeDir, setHomeDir] = useState<string | null>(null);
   // Where chats without a project run (#19 AK-1): `<data>/chats` of the agent target; `discovered`
   // once the discovery data is in (an older host has no chats folder)
@@ -739,6 +741,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       setComposerHarness(null);
       setComposerModel('');
       setComposerEffort('');
+      setComposerOrchestrator(false);
       setComposerOpen(true);
     },
     [canSpawn]
@@ -1344,6 +1347,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         idle?: boolean;
         model?: string;
         effort?: string;
+        profile?: 'orchestrator';
       },
       attachAfter = false,
       view: PaneView = 'terminal'
@@ -1361,6 +1365,9 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           agent: extra.agent === undefined ? settings.dispatch.agent : extra.agent,
           cwd,
         });
+        // marked like "New orchestrator": rail group, badge, and its resume keeps Remote Control
+        if (extra.profile === 'orchestrator')
+          await updateSettings({ orchestrators: [...settings.orchestrators, result.id] });
         setInput('');
         setComposerImages([]);
         setComposerOpen(false);
@@ -1391,6 +1398,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       agentsApi,
       targetCwd,
       settings.dispatch,
+      settings.orchestrators,
+      updateSettings,
       showHint,
       refresh,
       attachIn,
@@ -1540,18 +1549,31 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         return;
       }
       if (composerMode === 'agent' || chat) {
+        const orchestrator = composerMode === 'agent' && composerOrchestrator;
         // The CLI refuses `--bg` in ~ (trusted one session at a time): run it interactively there
         if (homeDir && composerCwd === homeDir) {
           if (input.trim() || composerImages.length > 0) {
             showHint(t.homeInteractiveOnly, 'error', 8000);
             return;
           }
-          openInteractiveClaude(homeDir, 'claude · ~', [], 'claude', undefined, view);
+          if (orchestrator) {
+            const sessionId = crypto.randomUUID();
+            await updateSettings({ orchestrators: [...settings.orchestrators, sessionId] });
+            openInteractiveClaude(
+              homeDir,
+              'home-orchestrator',
+              ['--session-id', sessionId, '--remote-control', 'home-orchestrator'],
+              'claude',
+              undefined,
+              view
+            );
+          } else openInteractiveClaude(homeDir, 'claude · ~', [], 'claude', undefined, view);
           return;
         }
         const stored = await uploadComposerImages();
         if (!stored) return;
         const prompt = promptWithAttachments(input, stored);
+        const folder = composerCwd?.split(/[\\/]/).filter(Boolean).pop() || 'agent';
         await doDispatch(
           {
             prompt: prompt || undefined,
@@ -1560,6 +1582,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
             // '' keeps the default: settings.dispatch.model / .effort
             ...(composerModel.trim() && { model: composerModel.trim() }),
             ...(composerEffort && { effort: composerEffort }),
+            ...(orchestrator && { profile: 'orchestrator', name: `${folder}-orchestrator` }),
           },
           true,
           view
@@ -1626,6 +1649,9 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       composerHarness,
       composerModel,
       composerEffort,
+      composerOrchestrator,
+      settings.orchestrators,
+      updateSettings,
       harnessInstalled,
       homeDir,
       composerImages.length,
@@ -3384,6 +3410,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         onModelChange={setComposerModel}
         effort={composerEffort}
         onEffortChange={setComposerEffort}
+        orchestrator={composerOrchestrator}
+        onOrchestratorChange={setComposerOrchestrator}
         defaultModel={composerHarness === 'claude' ? settings.dispatch.model || null : null}
         images={composerImages}
         onImagesChange={setComposerImages}

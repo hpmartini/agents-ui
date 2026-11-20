@@ -284,6 +284,8 @@ export interface AgentDispatchRequest extends Partial<AgentDispatchDefaults> {
   cwd: string;
   /** Start without a prompt ("New agent"); the session waits for input */
   idle?: boolean;
+  /** Server-known role profile; 'orchestrator' = Remote Control on, reachable from the Claude app */
+  profile?: 'worker' | 'orchestrator';
 }
 
 export interface AgentDispatchResult {
