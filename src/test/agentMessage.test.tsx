@@ -8,41 +8,51 @@ import { renderWithAgents } from './agents';
 
 describe('message from another agent (orkumo send)', () => {
   it('reads the sender line: id and name, id only, unknown sender, none', () => {
-    expect(agentMessage('[von Agent omp-u3 „playmaker“ via orkumo send]\n\nbitte prüfen')).toEqual({
+    expect(agentMessage('[from agent omp-u3 "playmaker" via orkumo send]\n\nbitte prüfen')).toEqual({
       id: 'omp-u3',
       name: 'playmaker',
       body: 'bitte prüfen',
     });
-    expect(agentMessage('[von Agent abc-1 via orkumo send]\n\nhi')).toEqual({
+    expect(agentMessage('[from agent abc-1 via orkumo send]\n\nhi')).toEqual({
       id: 'abc-1',
       name: null,
       body: 'hi',
     });
-    expect(agentMessage('[via orkumo send, Absender unbekannt]\n\nhi')).toEqual({
+    expect(agentMessage('[via orkumo send, sender unknown]\n\nhi')).toEqual({
       id: null,
       name: null,
       body: 'hi',
     });
-    expect(agentMessage('mach [von Agent x via orkumo send] weiter')).toBeNull();
+    expect(agentMessage('mach [from agent x via orkumo send] weiter')).toBeNull();
+  });
+
+  it('still reads the German sender line of older transcripts', () => {
+    expect(agentMessage('[von Agent omp-u3 „playmaker“ via orkumo send]\n\nhi')).toEqual({
+      id: 'omp-u3',
+      name: 'playmaker',
+      body: 'hi',
+    });
+    expect(agentMessage('[von Agent abc-1 via orkumo send]\n\nhi')?.id).toBe('abc-1');
+    expect(agentMessage('[via orkumo send, Absender unbekannt]\n\nhi')?.body).toBe('hi');
   });
 
   it("renders as the agent's bubble with a link to it, not as the user's", () => {
     const openAgent = vi.fn();
     const { container } = renderWithAgents(
       <ViewActionsContext.Provider value={{ openAgent }}>
-        <UserMessage text={'[von Agent omp-u3 „playmaker“ via orkumo send]\n\nbitte prüfen'} />
+        <UserMessage text={'[from agent omp-u3 "playmaker" via orkumo send]\n\nbitte prüfen'} />
       </ViewActionsContext.Provider>
     );
     expect(container.querySelector('[data-agent-message]')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'playmaker' }));
     expect(openAgent).toHaveBeenCalledWith('omp-u3');
     expect(screen.getByText('bitte prüfen')).toBeTruthy();
-    expect(screen.queryByText(/von Agent/)).toBeNull();
+    expect(screen.queryByText(/from agent/)).toBeNull();
   });
 
   it('outside the view the sender is plain text', () => {
     renderWithAgents(
-      <UserMessage text={'[von Agent omp-u3 „playmaker“ via orkumo send]\n\nbitte prüfen'} />
+      <UserMessage text={'[from agent omp-u3 "playmaker" via orkumo send]\n\nbitte prüfen'} />
     );
     expect(screen.getByText('playmaker').tagName).toBe('SPAN');
     expect(screen.queryByRole('button')).toBeNull();
