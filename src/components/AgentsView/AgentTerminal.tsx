@@ -896,7 +896,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
       </div>
       <div
         className={`relative flex-1 min-h-0 transition-opacity motion-reduce:transition-none ${
-          focused ? '' : active ? 'opacity-80' : 'opacity-60'
+          focused || viewShown ? '' : active ? 'opacity-80' : 'opacity-60'
         }`}
       >
         <div
