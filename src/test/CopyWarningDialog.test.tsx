@@ -34,7 +34,7 @@ describe('CopyWarningDialog (#236 AC-3)', () => {
 
   it('Cancel starts nothing', () => {
     const { run, close } = setup(false);
-    expect(screen.getByRole('alertdialog').textContent).toMatch(/Erzeugt Kopie/);
+    expect(screen.getByRole('alertdialog').textContent).toMatch(/Creates a copy/);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(close).toHaveBeenCalledTimes(1);
     expect(run).not.toHaveBeenCalled();
