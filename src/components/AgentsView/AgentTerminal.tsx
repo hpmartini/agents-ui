@@ -64,6 +64,8 @@ interface AgentTerminalProps {
   onShowChat?: () => void;
   /** Host buttons before the pane's own actions (`host.renderPaneActions`) */
   hostActions?: React.ReactNode;
+  /** Host view over the terminal body (`host.renderPaneView`); the terminal keeps no focus meanwhile */
+  paneView?: React.ReactNode;
 }
 
 /**
@@ -452,11 +454,13 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
   onOpenLink,
   onShowChat,
   hostActions,
+  paneView = null,
 }) => {
   const transport = useTransport();
   const host = useHost();
   const openFile = useOpenFile();
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewShown = paneView !== null && paneView !== undefined && paneView !== false;
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const pane = paneTerminals.get(session.id);
   const connected = pane?.connected ?? false;
@@ -679,12 +683,12 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
     if (visible) {
       const id = requestAnimationFrame(() => {
         syncSize();
-        if (active && !document.querySelector('[aria-modal="true"]'))
+        if (active && !viewShown && !document.querySelector('[aria-modal="true"]'))
           paneTerminals.get(session.id)?.terminal.focus();
       });
       return () => cancelAnimationFrame(id);
     }
-  }, [visible, active, syncSize, session.id]);
+  }, [visible, active, viewShown, syncSize, session.id]);
 
   const glyph = stateGlyph(session.displayState, labels.shell.displayStates);
   const reconnect = () => setGeneration((g) => g + 1);
@@ -892,7 +896,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
       </div>
       <div
         className={`relative flex-1 min-h-0 transition-opacity motion-reduce:transition-none ${
-          focused ? '' : active ? 'opacity-80' : 'opacity-60'
+          focused || viewShown ? '' : active ? 'opacity-80' : 'opacity-60'
         }`}
       >
         <div
@@ -909,6 +913,11 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
             >
               <RefreshCw size={12} /> {t.reattach}
             </button>
+          </div>
+        )}
+        {viewShown && (
+          <div data-pane-view className="absolute inset-0 z-10 flex flex-col bg-gray-950">
+            {paneView}
           </div>
         )}
       </div>

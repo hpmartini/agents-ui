@@ -2379,6 +2379,16 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   );
 
   const openProject = nav?.onOpenProject;
+  // What host.renderPaneActions/renderPaneView get: a pane started here resolves to its row
+  const paneInfo = (pane: AgentSession) => {
+    const x = sessions.find((s) => s.paneId === pane.id) ?? pane;
+    return {
+      paneId: pane.id,
+      session: x,
+      orchestrator: isOrchestrator(x, settings.orchestrators),
+      role: orchestratorRole(x, settings.orchestratorRoles),
+    };
+  };
   const groupActions = useCallback(
     (group: SessionGroup): AgentRowAction[] => [
       {
@@ -3259,15 +3269,10 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                         }}
                         renderPaneActions={
                           host.renderPaneActions &&
-                          ((pane) => {
-                            const x = sessions.find((s) => s.paneId === pane.id) ?? pane;
-                            return host.renderPaneActions?.({
-                              paneId: pane.id,
-                              session: x,
-                              orchestrator: isOrchestrator(x, settings.orchestrators),
-                              role: orchestratorRole(x, settings.orchestratorRoles),
-                            });
-                          })
+                          ((pane) => host.renderPaneActions?.(paneInfo(pane)))
+                        }
+                        renderPaneView={
+                          host.renderPaneView && ((pane) => host.renderPaneView?.(paneInfo(pane)))
                         }
                       />
                     </div>

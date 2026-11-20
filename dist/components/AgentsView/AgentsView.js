@@ -1905,6 +1905,16 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         assignRole,
     ]);
     const openProject = nav?.onOpenProject;
+    // What host.renderPaneActions/renderPaneView get: a pane started here resolves to its row
+    const paneInfo = (pane) => {
+        const x = sessions.find((s) => s.paneId === pane.id) ?? pane;
+        return {
+            paneId: pane.id,
+            session: x,
+            orchestrator: isOrchestrator(x, settings.orchestrators),
+            role: orchestratorRole(x, settings.orchestratorRoles),
+        };
+    };
     const groupActions = useCallback((group) => [
         {
             id: 'toggle',
@@ -2269,15 +2279,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                                                         const x = sessions.find((s) => s.paneId === pane.id) ?? pane;
                                                         return (_jsx(SessionLinks, { session: withBranchPullRequests(x, contexts[x.id]), ctx: contexts[x.id], servers: (servers.get(x.id) || []).filter((srv) => srv.running), issueKeys: issuesByAgent?.get(x.id) || [], onOpenIssue: renderIssueModal ? setIssueModalKey : undefined, onOpenPr: setPrModal }));
                                                     }, renderPaneActions: host.renderPaneActions &&
-                                                        ((pane) => {
-                                                            const x = sessions.find((s) => s.paneId === pane.id) ?? pane;
-                                                            return host.renderPaneActions?.({
-                                                                paneId: pane.id,
-                                                                session: x,
-                                                                orchestrator: isOrchestrator(x, settings.orchestrators),
-                                                                role: orchestratorRole(x, settings.orchestratorRoles),
-                                                            });
-                                                        }) }) }, id));
+                                                        ((pane) => host.renderPaneActions?.(paneInfo(pane))), renderPaneView: host.renderPaneView && ((pane) => host.renderPaneView?.(paneInfo(pane))) }) }, id));
                                         }) }), peekSession && (_jsx("div", { className: "w-[400px] xl:w-[460px] shrink-0 min-h-0", children: _jsx(PeekPanel, { session: peekSession, onClose: () => setPeekId(null), onAttach: () => openSession(peekSession), onReply: (text) => handleReply(peekSession, text) }) }))] })] })] }), peekSession && (_jsx("div", { className: "md:hidden fixed inset-0 z-40 bg-gray-950", children: _jsx(PeekPanel, { session: peekSession, onClose: () => setPeekId(null), onAttach: () => openSession(peekSession), onReply: (text) => handleReply(peekSession, text) }) })), mainAgentOpen && (_jsx(MainAgentDialog, { session: sessions.find((s) => s.kind === 'background' &&
                     s.name === settings.mainAgent.name &&
                     !sessions.some((o) => o.kind === 'background' && o.name === s.name && o.startedAt > s.startedAt)), config: settings.mainAgent, onConfig: (mainAgent) => updateSettings({ mainAgent }), onClose: () => setMainAgentOpen(false), onAttach: (session) => {
