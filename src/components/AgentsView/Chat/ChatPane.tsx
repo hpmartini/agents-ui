@@ -196,6 +196,8 @@ interface ChatPaneProps {
   /** Back to the terminal view of the same process */
   onShowTerminal: () => void;
   headerProps?: React.HTMLAttributes<HTMLDivElement>;
+  /** Host buttons before the pane's own actions (`host.renderPaneActions`) */
+  hostActions?: React.ReactNode;
   /** Linked PRs, issues and running servers (same items as a terminal pane's header) */
   meta?: React.ReactNode;
 }
@@ -218,6 +220,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   onMaximize,
   onShowTerminal,
   headerProps,
+  hostActions,
   meta,
 }) => {
   const [state, dispatch] = useReducer(reducer, initialChatState);
@@ -567,6 +570,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           </div>
         )}
         <span className="flex-1" />
+        {hostActions}
         <button
           type="button"
           onClick={onToggleSteps}

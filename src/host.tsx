@@ -117,6 +117,17 @@ export interface AgentsHost {
   /** Rendered in the header after the New task button (Orkumo: module UIs of slot `agents-rail`) */
   headerSlot?: ReactNode;
   /**
+   * Buttons in the header of every agent pane (terminal and UI view, tabs and splits), before
+   * the pane's own actions. `session` is the agent's row (a pane started here resolves to the row
+   * that claimed it); `orchestrator`/`role` as in the rail (`agentView.orchestrators`/`orchestratorRoles`)
+   */
+  renderPaneActions?: (pane: {
+    paneId: string;
+    session: AgentSession;
+    orchestrator: boolean;
+    role: string | null;
+  }) => ReactNode;
+  /**
    * Window title while the view is shown (agents awaiting input first, `documentTitle`); null
    * when it is no longer shown, so the host restores its own
    */

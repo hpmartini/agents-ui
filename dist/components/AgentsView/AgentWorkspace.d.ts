@@ -23,6 +23,8 @@ interface AgentWorkspaceProps {
     focusZone: FocusZone;
     /** Extra header content per pane (linked PRs, issues, processes) */
     renderPaneMeta?: (session: AgentSession) => React.ReactNode;
+    /** Host buttons in a pane's header (`host.renderPaneActions`) */
+    renderPaneActions?: (session: AgentSession) => React.ReactNode;
     /** Parked workspace of another context: terminals stay connected but never count as visible */
     hidden?: boolean;
     /** UI views (#189): key that sends a message */

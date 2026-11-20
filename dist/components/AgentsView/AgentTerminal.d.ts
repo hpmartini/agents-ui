@@ -26,6 +26,8 @@ interface AgentTerminalProps {
     onOpenLink?: (url: string) => void;
     /** Present when the agent has a UI view: switches the pane to it, the process keeps running */
     onShowChat?: () => void;
+    /** Host buttons before the pane's own actions (`host.renderPaneActions`) */
+    hostActions?: React.ReactNode;
 }
 /** Whether pane `id`'s PTY is connected, so its UI view can type into it */
 export declare function usePaneConnected(id: string): boolean;

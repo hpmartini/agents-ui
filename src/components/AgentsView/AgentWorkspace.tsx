@@ -67,6 +67,8 @@ interface AgentWorkspaceProps {
   focusZone: FocusZone;
   /** Extra header content per pane (linked PRs, issues, processes) */
   renderPaneMeta?: (session: AgentSession) => React.ReactNode;
+  /** Host buttons in a pane's header (`host.renderPaneActions`) */
+  renderPaneActions?: (session: AgentSession) => React.ReactNode;
   /** Parked workspace of another context: terminals stay connected but never count as visible */
   hidden?: boolean;
   /** UI views (#189): key that sends a message */
@@ -270,6 +272,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   onOpenLink: onOpenLinkProp,
   focusZone,
   renderPaneMeta,
+  renderPaneActions,
   chatSubmitKey = 'mod+enter',
   chatShowSteps = false,
   onToggleChatSteps,
@@ -481,6 +484,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
           className: drag?.id === session.id ? 'opacity-50' : '',
         }
       : undefined;
+    const hostActions = url === null ? renderPaneActions?.(session) : undefined;
     const custom = renderCustomPane?.(session, {
       active,
       visible,
@@ -516,6 +520,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               onMaximize={multi ? () => onDetach(session.id) : undefined}
               solo={!multi}
               meta={renderPaneMeta?.(session)}
+              hostActions={hostActions}
               onOpenLink={onOpenLink && ((link) => onOpenLink(session.id, link))}
               onShowChat={viewable && onSetView ? () => onSetView(session.id, 'chat') : undefined}
               headerProps={
@@ -542,6 +547,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               onClose={() => onClosePane(session.id)}
               onMaximize={multi ? () => onDetach(session.id) : undefined}
               onShowTerminal={() => onSetView?.(session.id, 'terminal')}
+              hostActions={hostActions}
               headerProps={dragHeader}
             />
           </div>
