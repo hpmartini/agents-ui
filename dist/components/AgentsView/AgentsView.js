@@ -170,6 +170,8 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     const [composerModel, setComposerModel] = useState('');
     // Effort picked in the model × effort matrix, '' = default
     const [composerEffort, setComposerEffort] = useState('');
+    // New agent "Orchestrator": Remote Control on (Claude app); workers start without
+    const [composerOrchestrator, setComposerOrchestrator] = useState(false);
     const [homeDir, setHomeDir] = useState(null);
     // Where chats without a project run (#19 AK-1): `<data>/chats` of the agent target; `discovered`
     // once the discovery data is in (an older host has no chats folder)
@@ -439,6 +441,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         setComposerHarness(null);
         setComposerModel('');
         setComposerEffort('');
+        setComposerOrchestrator(false);
         setComposerOpen(true);
     }, [canSpawn]);
     // Quick window (#251): its prompt opens the chat composer here, ready to send, without a project
@@ -957,6 +960,9 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 agent: extra.agent === undefined ? settings.dispatch.agent : extra.agent,
                 cwd,
             });
+            // marked like "New orchestrator": rail group, badge, and its resume keeps Remote Control
+            if (extra.profile === 'orchestrator')
+                await updateSettings({ orchestrators: [...settings.orchestrators, result.id] });
             setInput('');
             setComposerImages([]);
             setComposerOpen(false);
@@ -986,6 +992,8 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         agentsApi,
         targetCwd,
         settings.dispatch,
+        settings.orchestrators,
+        updateSettings,
         showHint,
         refresh,
         attachIn,
@@ -1126,19 +1134,27 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             return;
         }
         if (composerMode === 'agent' || chat) {
+            const orchestrator = composerMode === 'agent' && composerOrchestrator;
             // The CLI refuses `--bg` in ~ (trusted one session at a time): run it interactively there
             if (homeDir && composerCwd === homeDir) {
                 if (input.trim() || composerImages.length > 0) {
                     showHint(t.homeInteractiveOnly, 'error', 8000);
                     return;
                 }
-                openInteractiveClaude(homeDir, 'claude · ~', [], 'claude', undefined, view);
+                if (orchestrator) {
+                    const sessionId = crypto.randomUUID();
+                    await updateSettings({ orchestrators: [...settings.orchestrators, sessionId] });
+                    openInteractiveClaude(homeDir, 'home-orchestrator', ['--session-id', sessionId, '--remote-control', 'home-orchestrator'], 'claude', undefined, view);
+                }
+                else
+                    openInteractiveClaude(homeDir, 'claude · ~', [], 'claude', undefined, view);
                 return;
             }
             const stored = await uploadComposerImages();
             if (!stored)
                 return;
             const prompt = promptWithAttachments(input, stored);
+            const folder = composerCwd?.split(/[\\/]/).filter(Boolean).pop() || 'agent';
             await doDispatch({
                 prompt: prompt || undefined,
                 idle: true,
@@ -1146,6 +1162,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 // '' keeps the default: settings.dispatch.model / .effort
                 ...(composerModel.trim() && { model: composerModel.trim() }),
                 ...(composerEffort && { effort: composerEffort }),
+                ...(orchestrator && { profile: 'orchestrator', name: `${folder}-orchestrator` }),
             }, true, view);
             return;
         }
@@ -1203,6 +1220,9 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         composerHarness,
         composerModel,
         composerEffort,
+        composerOrchestrator,
+        settings.orchestrators,
+        updateSettings,
         harnessInstalled,
         homeDir,
         composerImages.length,
@@ -2307,7 +2327,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                     // model names differ per CLI: a new harness starts from its default
                     setComposerModel('');
                     setComposerEffort('');
-                }, harnessInstalled: harnessInstalled, model: composerModel, onModelChange: setComposerModel, effort: composerEffort, onEffortChange: setComposerEffort, defaultModel: composerHarness === 'claude' ? settings.dispatch.model || null : null, images: composerImages, onImagesChange: setComposerImages, hint: hint?.text || (dispatching ? t.dispatching : null), hintTone: hint?.tone, disabled: dispatching, subagents: subagents, repos: repos, commands: composerHarness === 'omp' ? ompCommands : composerHarness === 'claude' ? commands : [], inputRef: inputRef }), pendingCopy && (_jsx(CopyWarningDialog, { holder: pendingCopy.holder, handover: pendingCopy.handover, onClose: () => setPendingCopy(null), onConfirm: () => {
+                }, harnessInstalled: harnessInstalled, model: composerModel, onModelChange: setComposerModel, effort: composerEffort, onEffortChange: setComposerEffort, orchestrator: composerOrchestrator, onOrchestratorChange: setComposerOrchestrator, defaultModel: composerHarness === 'claude' ? settings.dispatch.model || null : null, images: composerImages, onImagesChange: setComposerImages, hint: hint?.text || (dispatching ? t.dispatching : null), hintTone: hint?.tone, disabled: dispatching, subagents: subagents, repos: repos, commands: composerHarness === 'omp' ? ompCommands : composerHarness === 'claude' ? commands : [], inputRef: inputRef }), pendingCopy && (_jsx(CopyWarningDialog, { holder: pendingCopy.holder, handover: pendingCopy.handover, onClose: () => setPendingCopy(null), onConfirm: () => {
                     setPendingCopy(null);
                     pendingCopy.run();
                 } })), confirmingStop && (_jsx(ConfirmDialog, { title: t.stopAgentTitle, body: t.stopAgentBody(confirmingStop.session.name), confirm: t.stop, onCancel: () => setConfirmingStop(null), onConfirm: () => {

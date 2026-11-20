@@ -139,6 +139,8 @@ export interface PanelsLabels {
     dispatchTaskLabel: string;
     dispatchHarness: string;
     dispatchHarnessTitle: string;
+    dispatchOrchestrator: string;
+    dispatchOrchestratorTitle: string;
     dispatchNotInstalled: string;
     dispatchModelTitleClaude: string;
     dispatchModelTitleOmp: string;

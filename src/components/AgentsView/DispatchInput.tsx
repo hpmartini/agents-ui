@@ -44,6 +44,9 @@ interface DispatchInputProps {
   effort?: string;
   onEffortChange?: (effort: string) => void;
   defaultModel?: string | null;
+  /** New agent with Claude Code: start as orchestrator (Remote Control); omitted = no checkbox */
+  orchestrator?: boolean;
+  onOrchestratorChange?: (on: boolean) => void;
 }
 
 const MIN_HEIGHT = 96;
@@ -81,6 +84,8 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
   effort = '',
   onEffortChange,
   defaultModel = null,
+  orchestrator = false,
+  onOrchestratorChange,
 }) => {
   // @agent, /command and ! are Claude Code syntax; other harnesses get the text as their first message
   const otherHarness = harness !== undefined && harness !== 'claude';
@@ -319,6 +324,21 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
               />
             </label>
           )}
+        {variant === 'agent' && harness === 'claude' && onOrchestratorChange && (
+          <label
+            className="flex items-center gap-1.5 text-xs text-gray-200"
+            title={t.dispatchOrchestratorTitle}
+          >
+            <input
+              type="checkbox"
+              checked={orchestrator}
+              onChange={(e) => onOrchestratorChange(e.target.checked)}
+              disabled={disabled}
+              className="accent-blue-400 focus-visible:outline-2 focus-visible:outline-blue-400"
+            />
+            <span>{t.dispatchOrchestrator}</span>
+          </label>
+        )}
         <span className="flex-1" />
         <button
           type="button"

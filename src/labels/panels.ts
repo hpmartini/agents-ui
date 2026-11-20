@@ -151,6 +151,8 @@ export interface PanelsLabels {
   dispatchTaskLabel: string;
   dispatchHarness: string;
   dispatchHarnessTitle: string;
+  dispatchOrchestrator: string;
+  dispatchOrchestratorTitle: string;
   dispatchNotInstalled: string;
   dispatchModelTitleClaude: string;
   dispatchModelTitleOmp: string;
@@ -430,6 +432,9 @@ export const panelsEn: PanelsLabels = {
   dispatchTaskLabel: 'Task description',
   dispatchHarness: 'Harness',
   dispatchHarnessTitle: 'CLI the new agent or chat runs with',
+  dispatchOrchestrator: 'Orchestrator',
+  dispatchOrchestratorTitle:
+    'Starts with Remote Control: the session shows up in the Claude app. Workers start without.',
   dispatchNotInstalled: ' (not installed)',
   dispatchModelTitleClaude: 'Model and effort (--model, --effort); default = the dispatch settings',
   dispatchModelTitleOmp:
@@ -730,6 +735,9 @@ export const panelsDe: PanelsLabels = {
   dispatchTaskLabel: 'Aufgabenbeschreibung',
   dispatchHarness: 'Harness',
   dispatchHarnessTitle: 'CLI, mit der der neue Agent oder Chat läuft',
+  dispatchOrchestrator: 'Orchestrator',
+  dispatchOrchestratorTitle:
+    'Startet mit Remote Control: die Session erscheint in der Claude-App. Worker starten ohne.',
   dispatchNotInstalled: ' (nicht installiert)',
   dispatchModelTitleClaude:
     'Modell und Effort (--model, --effort); Standard = die Start-Einstellungen',
