@@ -157,3 +157,34 @@ describe('host.renderPaneActions', () => {
     expect(screen.getAllByRole('button', { name: 'Close agent-s1' }).length).toBeGreaterThan(0);
   });
 });
+
+describe('host.renderPaneView', () => {
+  it('shows the host view in place of the pane body, header and terminal kept, per pane', () => {
+    const renderPaneView = vi.fn((p: Parameters<NonNullable<AgentsHost['renderPaneView']>>[0]) =>
+      p.paneId === 's3' ? null : <div data-host-view={p.paneId}>{`view ${p.role}`}</div>
+    );
+    render(
+      orkumoHost({
+        renderPaneActions: (p) => <button type="button" data-host-action={p.paneId} />,
+        renderPaneView,
+      })
+    );
+
+    // s1 (terminal) and s2 (UI view) of the split each show their own view
+    expect(pane('s1').querySelector('[data-host-view="s1"]')).toHaveTextContent('view planner');
+    expect(document.querySelector('[data-host-view="s2"]')).toBeInTheDocument();
+    // the header with the host button stays; the terminal body stays mounted under the view
+    expect(pane('s1').querySelector('[data-host-action="s1"]')).toBeInTheDocument();
+    expect(pane('s1').querySelector('[data-pane-view]')).toBeInTheDocument();
+    // null: the pane as before
+    expect(pane('s3').querySelector('[data-pane-view]')).toBeNull();
+    expect(renderPaneView).toHaveBeenCalledWith(
+      expect.objectContaining({ paneId: 's1', orchestrator: true, role: 'planner' })
+    );
+  });
+
+  it('changes nothing without the hook', () => {
+    render(orkumoHost());
+    expect(document.querySelector('[data-pane-view]')).toBeNull();
+  });
+});

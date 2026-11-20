@@ -69,6 +69,8 @@ interface AgentWorkspaceProps {
   renderPaneMeta?: (session: AgentSession) => React.ReactNode;
   /** Host buttons in a pane's header (`host.renderPaneActions`) */
   renderPaneActions?: (session: AgentSession) => React.ReactNode;
+  /** Host view in place of a pane's body (`host.renderPaneView`); null: the pane as usual */
+  renderPaneView?: (session: AgentSession) => React.ReactNode;
   /** Parked workspace of another context: terminals stay connected but never count as visible */
   hidden?: boolean;
   /** UI views (#189): key that sends a message */
@@ -273,6 +275,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   focusZone,
   renderPaneMeta,
   renderPaneActions,
+  renderPaneView,
   chatSubmitKey = 'mod+enter',
   chatShowSteps = false,
   onToggleChatSteps,
@@ -485,6 +488,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
         }
       : undefined;
     const hostActions = url === null ? renderPaneActions?.(session) : undefined;
+    const paneView = url === null ? (renderPaneView?.(session) ?? null) : null;
     const custom = renderCustomPane?.(session, {
       active,
       visible,
@@ -521,6 +525,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               solo={!multi}
               meta={renderPaneMeta?.(session)}
               hostActions={hostActions}
+              paneView={chatView ? null : paneView}
               onOpenLink={onOpenLink && ((link) => onOpenLink(session.id, link))}
               onShowChat={viewable && onSetView ? () => onSetView(session.id, 'chat') : undefined}
               headerProps={
@@ -548,6 +553,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               onMaximize={multi ? () => onDetach(session.id) : undefined}
               onShowTerminal={() => onSetView?.(session.id, 'terminal')}
               hostActions={hostActions}
+              paneView={paneView}
               headerProps={dragHeader}
             />
           </div>

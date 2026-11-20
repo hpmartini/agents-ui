@@ -198,6 +198,8 @@ interface ChatPaneProps {
   headerProps?: React.HTMLAttributes<HTMLDivElement>;
   /** Host buttons before the pane's own actions (`host.renderPaneActions`) */
   hostActions?: React.ReactNode;
+  /** Host view over the chat body (`host.renderPaneView`) */
+  paneView?: React.ReactNode;
   /** Linked PRs, issues and running servers (same items as a terminal pane's header) */
   meta?: React.ReactNode;
 }
@@ -221,6 +223,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   onShowTerminal,
   headerProps,
   hostActions,
+  paneView = null,
   meta,
 }) => {
   const [state, dispatch] = useReducer(reducer, initialChatState);
@@ -640,256 +643,263 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         </button>
       </div>
 
-      {starts.length > 0 && (
-        <div className="shrink-0 border-b border-gray-800 bg-gray-900/60 text-xs">
-          <button
-            type="button"
-            onClick={() => setStartsOpen((o) => !o)}
-            className="flex w-full items-center gap-1 px-3 py-1 text-gray-400 hover:text-gray-200"
-            aria-expanded={startsOpen}
-            data-chat-starts
-          >
-            <ChevronRight
-              size={12}
-              aria-hidden
-              className={`transition-transform ${startsOpen ? 'rotate-90' : ''}`}
-            />
-            {t.startPrompts(starts.length)}
-            <span className="text-gray-600">{t.startPromptsHint}</span>
-          </button>
-          {startsOpen && (
-            <ol className="max-h-40 overflow-y-auto pb-1">
-              {starts.map((m, i) => (
-                <li key={m.key}>
+      <div className="relative flex-1 min-h-0 flex flex-col">
+        {paneView !== null && paneView !== false && (
+          <div data-pane-view className="absolute inset-0 z-20 flex flex-col bg-gray-950">
+            {paneView}
+          </div>
+        )}
+        {starts.length > 0 && (
+          <div className="shrink-0 border-b border-gray-800 bg-gray-900/60 text-xs">
+            <button
+              type="button"
+              onClick={() => setStartsOpen((o) => !o)}
+              className="flex w-full items-center gap-1 px-3 py-1 text-gray-400 hover:text-gray-200"
+              aria-expanded={startsOpen}
+              data-chat-starts
+            >
+              <ChevronRight
+                size={12}
+                aria-hidden
+                className={`transition-transform ${startsOpen ? 'rotate-90' : ''}`}
+              />
+              {t.startPrompts(starts.length)}
+              <span className="text-gray-600">{t.startPromptsHint}</span>
+            </button>
+            {startsOpen && (
+              <ol className="max-h-40 overflow-y-auto pb-1">
+                {starts.map((m, i) => (
+                  <li key={m.key}>
+                    <button
+                      type="button"
+                      onClick={() => jumpTo(m.key)}
+                      className="block w-full truncate px-3 py-0.5 pl-7 text-left text-gray-300 hover:bg-gray-800 hover:text-white"
+                      title={m.text}
+                    >
+                      <span className="mr-1.5 text-gray-600">{i + 1}.</span>
+                      {splitImages(m.text).text || m.text}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        )}
+
+        <div
+          ref={listRef}
+          role="log"
+          aria-label={t.chatLog(pane.name)}
+          className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+            // Only a scroll up by the user lets go; layout shifts never do
+            if (nearBottom) stickToBottom.current = true;
+            else if (el.scrollTop < lastScrollTop.current - 2) stickToBottom.current = false;
+            lastScrollTop.current = el.scrollTop;
+            if (el.scrollTop < LOAD_OLDER_PX) loadOlder();
+          }}
+        >
+          <div ref={contentRef}>
+            {state.older?.more && (
+              <div className="flex justify-center py-2" role="status">
+                {loadingOlder ? (
+                  <span className="text-xs text-gray-500">{t.loadingEarlier}</span>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => jumpTo(m.key)}
-                    className="block w-full truncate px-3 py-0.5 pl-7 text-left text-gray-300 hover:bg-gray-800 hover:text-white"
-                    title={m.text}
+                    onClick={loadOlder}
+                    className="text-xs text-gray-400 hover:text-gray-200 underline-offset-2 hover:underline"
                   >
-                    <span className="mr-1.5 text-gray-600">{i + 1}.</span>
-                    {splitImages(m.text).text || m.text}
+                    {t.loadEarlier}
                   </button>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      )}
-
-      <div
-        ref={listRef}
-        role="log"
-        aria-label={t.chatLog(pane.name)}
-        className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2"
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-          // Only a scroll up by the user lets go; layout shifts never do
-          if (nearBottom) stickToBottom.current = true;
-          else if (el.scrollTop < lastScrollTop.current - 2) stickToBottom.current = false;
-          lastScrollTop.current = el.scrollTop;
-          if (el.scrollTop < LOAD_OLDER_PX) loadOlder();
-        }}
-      >
-        <div ref={contentRef}>
-          {state.older?.more && (
-            <div className="flex justify-center py-2" role="status">
-              {loadingOlder ? (
-                <span className="text-xs text-gray-500">{t.loadingEarlier}</span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={loadOlder}
-                  className="text-xs text-gray-400 hover:text-gray-200 underline-offset-2 hover:underline"
+                )}
+              </div>
+            )}
+            {state.messages.length === 0 && (
+              <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                {sessionId ? t.emptyChat(harnessName, !!uploads) : t.waitingForSession(harnessName)}
+              </div>
+            )}
+            <ChatFileContext.Provider value={pane.cwd}>
+              {shown.map((item, i) => (
+                // content-visibility keeps long chats (hundreds of messages) cheap to scroll
+                <div
+                  key={item.key}
+                  data-chat-key={item.key}
+                  className="[content-visibility:auto] [contain-intrinsic-size:auto_60px]"
                 >
-                  {t.loadEarlier}
-                </button>
-              )}
-            </div>
-          )}
-          {state.messages.length === 0 && (
-            <div className="h-full flex items-center justify-center text-sm text-gray-500">
-              {sessionId ? t.emptyChat(harnessName, !!uploads) : t.waitingForSession(harnessName)}
-            </div>
-          )}
-          <ChatFileContext.Provider value={pane.cwd}>
-            {shown.map((item, i) => (
-              // content-visibility keeps long chats (hundreds of messages) cheap to scroll
-              <div
-                key={item.key}
-                data-chat-key={item.key}
-                className="[content-visibility:auto] [contain-intrinsic-size:auto_60px]"
-              >
+                  <ChatItemView
+                    item={item}
+                    showSteps={showSteps}
+                    live={busy && item.kind === 'answer' && i === shown.length - 1}
+                    harness={harnessName}
+                    model={state.model}
+                  />
+                </div>
+              ))}
+              {pending.map((p, i) => (
+                <UserMessage key={`q${i}`} text={p} queued />
+              ))}
+              {busy && !promptsOnly && pending.length === 0 && items.at(-1)?.kind === 'user' && (
                 <ChatItemView
-                  item={item}
+                  item={null}
                   showSteps={showSteps}
-                  live={busy && item.kind === 'answer' && i === shown.length - 1}
+                  live
                   harness={harnessName}
                   model={state.model}
                 />
-              </div>
-            ))}
-            {pending.map((p, i) => (
-              <UserMessage key={`q${i}`} text={p} queued />
-            ))}
-            {busy && !promptsOnly && pending.length === 0 && items.at(-1)?.kind === 'user' && (
-              <ChatItemView
-                item={null}
-                showSteps={showSteps}
-                live
-                harness={harnessName}
-                model={state.model}
-              />
-            )}
-          </ChatFileContext.Provider>
+              )}
+            </ChatFileContext.Provider>
+          </div>
         </div>
-      </div>
 
-      <div className="shrink-0 border-t border-gray-800 p-2">
-        {recap && (
-          <section
-            aria-label={t.recap}
-            data-chat-recap
-            className="mb-2 flex gap-2 rounded-md border border-gray-700/70 bg-gray-900/70 px-3 py-2 text-sm text-gray-300"
-          >
-            <History size={14} aria-hidden className="mt-0.5 shrink-0 text-gray-500" />
-            <p className="max-h-24 min-w-0 overflow-y-auto whitespace-pre-wrap">
-              <span className="text-gray-500">{t.recapPrefix}</span>
-              {recap.text}
-            </p>
-          </section>
-        )}
-        {dialog && (
-          <QuestionCard
-            dialog={dialog}
-            sent={sentFor === dialogId}
-            disabled={!connected}
-            onAnswer={answerDialog}
-          />
-        )}
-        {prompt !== null && !dialog && (
-          <div
-            role="status"
-            className="mb-2 rounded-md border border-amber-400/40 bg-amber-500/10 p-2"
-          >
-            <div className="text-xs font-medium text-amber-200">{t.agentAskingPrompt}</div>
-            <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-gray-200 font-mono">
-              {prompt}
-            </pre>
-            {choices.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {choices.map((c) => (
-                  <button
-                    key={c.number}
-                    type="button"
-                    disabled={!connected}
-                    onClick={() => answerPrompt(String(c.number))}
-                    className="rounded border border-amber-400/40 bg-gray-900 px-2 py-1 text-xs text-gray-100 hover:bg-amber-500/20 focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50"
-                  >
-                    {c.number}. {c.label}
-                  </button>
-                ))}
+        <div className="shrink-0 border-t border-gray-800 p-2">
+          {recap && (
+            <section
+              aria-label={t.recap}
+              data-chat-recap
+              className="mb-2 flex gap-2 rounded-md border border-gray-700/70 bg-gray-900/70 px-3 py-2 text-sm text-gray-300"
+            >
+              <History size={14} aria-hidden className="mt-0.5 shrink-0 text-gray-500" />
+              <p className="max-h-24 min-w-0 overflow-y-auto whitespace-pre-wrap">
+                <span className="text-gray-500">{t.recapPrefix}</span>
+                {recap.text}
+              </p>
+            </section>
+          )}
+          {dialog && (
+            <QuestionCard
+              dialog={dialog}
+              sent={sentFor === dialogId}
+              disabled={!connected}
+              onAnswer={answerDialog}
+            />
+          )}
+          {prompt !== null && !dialog && (
+            <div
+              role="status"
+              className="mb-2 rounded-md border border-amber-400/40 bg-amber-500/10 p-2"
+            >
+              <div className="text-xs font-medium text-amber-200">{t.agentAskingPrompt}</div>
+              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-gray-200 font-mono">
+                {prompt}
+              </pre>
+              {choices.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {choices.map((c) => (
+                    <button
+                      key={c.number}
+                      type="button"
+                      disabled={!connected}
+                      onClick={() => answerPrompt(String(c.number))}
+                      className="rounded border border-amber-400/40 bg-gray-900 px-2 py-1 text-xs text-gray-100 hover:bg-amber-500/20 focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50"
+                    >
+                      {c.number}. {c.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {chatId && (
+            <ChatActivity
+              chatId={chatId}
+              messages={state.messages}
+              sub={state.sub}
+              busy={busy}
+              endedTasks={state.endedTasks}
+            />
+          )}
+          {error && (
+            <div role="alert" className="mb-1 text-xs text-red-300">
+              {error}
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <ChatComposer
+              chatId={chatId}
+              value={text}
+              onChange={setText}
+              onSubmit={submit}
+              onStop={stopTurn}
+              busy={busy}
+              disabled={!connected}
+              submitKey={submitKey}
+              history={history}
+              commands={state.commands}
+              agents={state.agents}
+              suggestion={suggestion?.text}
+              suggestionCut={suggestion?.truncated}
+              takeSuggestion={() => takePaneSuggestion(pane.id)}
+              inputRef={inputRef}
+            />
+            <button
+              type="button"
+              onClick={submit}
+              disabled={sending || !connected}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
+              aria-label={t.sendMessage}
+            >
+              <Send size={13} aria-hidden />
+              <span className="hidden sm:inline">{t.send}</span>
+            </button>
+          </div>
+          {uploads && (
+            <ImageAttachments
+              images={images}
+              onChange={setImages}
+              disabled={sending || !connected}
+              files={uploads.attachmentExtensions}
+            />
+          )}
+          {chatId && (
+            <div className="flex items-end gap-3">
+              <div className="flex-1 min-w-0">
+                <ChatStatusLine
+                  chatId={chatId}
+                  turns={turns}
+                  visible={active}
+                  picker={
+                    (harness === 'claude' || harness === 'omp') && (
+                      <ModelEffortPicker
+                        harness={harness}
+                        model=""
+                        effort=""
+                        keepLabel={t.keepCurrent}
+                        currentModel={state.model}
+                        currentEffort={state.effort}
+                        placement="up"
+                        disabled={busy || !connected}
+                        onPick={switchModel}
+                        title={
+                          busy
+                            ? t.switchModelBusy
+                            : t.switchModel(
+                                harness === 'omp' ? '/switch, /effort' : '/model, /effort'
+                              )
+                        }
+                      />
+                    )
+                  }
+                />
               </div>
-            )}
-          </div>
-        )}
-        {chatId && (
-          <ChatActivity
-            chatId={chatId}
-            messages={state.messages}
-            sub={state.sub}
-            busy={busy}
-            endedTasks={state.endedTasks}
-          />
-        )}
-        {error && (
-          <div role="alert" className="mb-1 text-xs text-red-300">
-            {error}
-          </div>
-        )}
-        <div className="flex items-end gap-2">
-          <ChatComposer
-            chatId={chatId}
-            value={text}
-            onChange={setText}
-            onSubmit={submit}
-            onStop={stopTurn}
-            busy={busy}
-            disabled={!connected}
-            submitKey={submitKey}
-            history={history}
-            commands={state.commands}
-            agents={state.agents}
-            suggestion={suggestion?.text}
-            suggestionCut={suggestion?.truncated}
-            takeSuggestion={() => takePaneSuggestion(pane.id)}
-            inputRef={inputRef}
-          />
-          <button
-            type="button"
-            onClick={submit}
-            disabled={sending || !connected}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
-            aria-label={t.sendMessage}
-          >
-            <Send size={13} aria-hidden />
-            <span className="hidden sm:inline">{t.send}</span>
-          </button>
+              <div className="mt-2">
+                <ChatArtifactsButton artifacts={artifacts} onOpen={() => setArtifactsOpen(true)} />
+              </div>
+            </div>
+          )}
+          {chatId && artifactsOpen && (
+            <ChatArtifactsModal
+              chatId={chatId}
+              cwd={pane.cwd}
+              title={pane.name}
+              artifacts={artifacts}
+              onClose={() => setArtifactsOpen(false)}
+            />
+          )}
         </div>
-        {uploads && (
-          <ImageAttachments
-            images={images}
-            onChange={setImages}
-            disabled={sending || !connected}
-            files={uploads.attachmentExtensions}
-          />
-        )}
-        {chatId && (
-          <div className="flex items-end gap-3">
-            <div className="flex-1 min-w-0">
-              <ChatStatusLine
-                chatId={chatId}
-                turns={turns}
-                visible={active}
-                picker={
-                  (harness === 'claude' || harness === 'omp') && (
-                    <ModelEffortPicker
-                      harness={harness}
-                      model=""
-                      effort=""
-                      keepLabel={t.keepCurrent}
-                      currentModel={state.model}
-                      currentEffort={state.effort}
-                      placement="up"
-                      disabled={busy || !connected}
-                      onPick={switchModel}
-                      title={
-                        busy
-                          ? t.switchModelBusy
-                          : t.switchModel(
-                              harness === 'omp' ? '/switch, /effort' : '/model, /effort'
-                            )
-                      }
-                    />
-                  )
-                }
-              />
-            </div>
-            <div className="mt-2">
-              <ChatArtifactsButton artifacts={artifacts} onOpen={() => setArtifactsOpen(true)} />
-            </div>
-          </div>
-        )}
-        {chatId && artifactsOpen && (
-          <ChatArtifactsModal
-            chatId={chatId}
-            cwd={pane.cwd}
-            title={pane.name}
-            artifacts={artifacts}
-            onClose={() => setArtifactsOpen(false)}
-          />
-        )}
       </div>
     </div>
   );

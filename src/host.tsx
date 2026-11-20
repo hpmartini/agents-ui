@@ -128,6 +128,17 @@ export interface AgentsHost {
     role: string | null;
   }) => ReactNode;
   /**
+   * A view of the host in place of a pane's body (same argument as `renderPaneActions`), e.g. a
+   * mode toggled by one of its buttons; null shows the pane as usual. Header stays, the terminal
+   * stays mounted underneath (its PTY is the agent) and takes no focus meanwhile.
+   */
+  renderPaneView?: (pane: {
+    paneId: string;
+    session: AgentSession;
+    orchestrator: boolean;
+    role: string | null;
+  }) => ReactNode;
+  /**
    * Window title while the view is shown (agents awaiting input first, `documentTitle`); null
    * when it is no longer shown, so the host restores its own
    */
