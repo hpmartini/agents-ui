@@ -65,12 +65,17 @@ export const pendingPrompts = (state) => [
 ];
 /** Prompts that start a context: the session's first and each first after compaction / `/clear` */
 export const initialPrompts = (messages) => messages.filter((m) => m.kind === 'user' && !!m.initial);
-/** First line `orkumo send` puts before a message (server/orchestrator/orkumo.mjs senderLine) */
-const AGENT_MESSAGE_RE = /^\[(?:von Agent (\S+)(?: „([^“]*)“)? via orkumo send|via orkumo send, Absender unbekannt)\]\n*/;
+/**
+ * First line `orkumo send` puts before a message (server/orchestrator/orkumo.mjs senderLine).
+ * The German form is what Orkumo wrote before its English UI; old transcripts still carry it.
+ */
+const AGENT_MESSAGE_RE = /^\[(?:(?:from agent|von Agent) (\S+)(?: "([^"]*)"| „([^“]*)“)? via orkumo send|via orkumo send, (?:sender unknown|Absender unbekannt))\]\n*/;
 /** A user turn another agent sent with `orkumo send`: its sender (null = unknown) and text */
 export function agentMessage(text) {
     const m = AGENT_MESSAGE_RE.exec(text);
-    return m ? { id: m[1] ?? null, name: m[2] ?? null, body: text.slice(m[0].length) } : null;
+    return m
+        ? { id: m[1] ?? null, name: m[2] ?? m[3] ?? null, body: text.slice(m[0].length) }
+        : null;
 }
 const isObj = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v) => (typeof v === 'string' ? v : '');
