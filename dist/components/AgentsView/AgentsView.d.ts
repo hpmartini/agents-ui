@@ -43,7 +43,11 @@ export interface AgentsViewProps {
     contextAppIds?: string[] | null;
     /** Main area of the other routes (dashboard, board, code, ...): replaces the workspace while not active */
     children?: React.ReactNode;
-    /** The route below lists its own items in the rail column (Chats mode): agents hidden meanwhile */
+    /**
+     * The route below lists its own items in the rail column (Chats mode): agents hidden meanwhile.
+     * Also while `active`: the workspace then shows beside the route's rail column, and `children`
+     * stay mounted (hidden) so the route keeps its rail items (a mode that opens agents in tabs).
+     */
     railOutlet?: boolean;
     /**
      * Opens this agent (in its tab, or a new one) whenever the value changes and the agent is

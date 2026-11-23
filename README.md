@@ -59,7 +59,7 @@ Every prop is optional. The shell props are those of Orkumo's app shell.
 | Prop | |
 | --- | --- |
 | `active` | the view is shown (keys, workspace); default `true` |
-| `apps`, `nav`, `onExit`, `onOpenView`, `contextId`, `contextAppIds`, `children`, `railOutlet` | Orkumo's app shell: projects, activity rail, context switch. Other routes render as `children` while not `active` |
+| `apps`, `nav`, `onExit`, `onOpenView`, `contextId`, `contextAppIds`, `children`, `railOutlet` | Orkumo's app shell: projects, activity rail, context switch. Other routes render as `children` while not `active`. `railOutlet`: the route lists its own items in the rail column (`RailOutletContext`); also while `active`, then the workspace shows beside it and `children` stay mounted, hidden |
 | `selectedId` / `onSelectedIdChange` | opens this agent whenever the value changes and the agent is listed; reports the agent of the active pane |
 | `prefill` / `onPrefillConsumed` | opens the composer with a prepared task |
 | `canStop` | `(session) => boolean`; `false` hides Stop |
