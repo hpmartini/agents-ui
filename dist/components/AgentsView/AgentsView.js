@@ -253,9 +253,9 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     }, [sessions, cloudSessions, targets]);
     const visibleSessions = useMemo(() => applySessionFilter(listedSessions, filter), [listedSessions, filter]);
     const railRef = useRef(null);
-    // Rail column handed to `children` while `railOutlet` (RailOutletContext)
+    // Rail column handed to `children` while `railOutlet` (RailOutletContext), with or without workspace
     const [outlet, setOutlet] = useState(null);
-    const outletShown = railOutlet && !active;
+    const outletShown = railOutlet;
     // Side panel (agents rail or a route's outlet) hidden from md up, like VS Code's sidebar
     const [railCollapsed, toggleRail] = useStoredToggle('orkumo.railCollapsed');
     const viewRef = useRef(null);
