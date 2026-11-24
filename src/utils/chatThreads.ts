@@ -143,13 +143,13 @@ export function routeThreads(
     return m;
   };
   const parents = new Map(threads.filter((t) => t.parentKey).map((t) => [t.parentKey, t.id]));
-  const open = new Set(threads.filter((t) => !t.closed).map((t) => t.id));
   let prev: string | null = null;
   for (const item of items) {
     // An answer without a tag (orchestrators started before the tag rule, tool steps only) is the
     // turn of the thread message before it; a tag of its own, known or not, decides instead
     const untagged = item.kind === 'answer' && !firstText(item).startsWith(TAG_START);
-    const turn: string | null = prev && open.has(prev) ? prev : null;
+    // closed threads too: closing must not move their answers back into the main chat
+    const turn: string | null = prev;
     const id: string | null = !threads.length
       ? null
       : untagged

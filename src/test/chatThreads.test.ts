@@ -188,13 +188,14 @@ describe('an answer follows the turn it answers (orchestrators that never write 
     ]);
   });
 
-  it('a closed thread does not catch the answer', () => {
+  it('closing a thread keeps its untagged answers in it', () => {
     const closed = { ...shop, closed: true };
     const r = route(
       [user('[Thread: Shop · Checkout]\nhow far?', min(1)), answer('Form is done.', min(2))],
       [closed, weather]
     );
-    expect(r.main.filter((i) => i.kind === 'answer')).toHaveLength(1);
+    expect(r.byThread.get('t1')).toHaveLength(2);
+    expect(r.main.filter((i) => i.kind === 'answer')).toHaveLength(0);
   });
 });
 
