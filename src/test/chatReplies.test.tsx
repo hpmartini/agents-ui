@@ -160,6 +160,19 @@ describe('threads panel', () => {
     expect(screen.getByText('Closed (1)')).toBeTruthy();
   });
 
+  it('a bound thread whose report task has no repo is not shown as unbound', () => {
+    panel({
+      threads: [
+        thread('t1', { repo: null, binding: { project: 'shop', task: 't1' } }),
+        thread('t2', { repo: null, binding: null }),
+      ],
+    });
+    expect(screen.getByRole('button', { name: /Task t1/ }).textContent).not.toContain(
+      'Not bound'
+    );
+    expect(screen.getByRole('button', { name: /Task t2/ }).textContent).toContain('Not bound');
+  });
+
   it('new thread: bind to a report task or start without one', () => {
     const onNewTask = vi.fn();
     panel({

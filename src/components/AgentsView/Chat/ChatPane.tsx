@@ -1204,7 +1204,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                       </div>
                       <div className="shrink-0 px-2 pb-1 text-[11px] text-gray-500">
                         <span className="truncate">
-                          {thread?.repo ? t.boundTo(thread.repo) : t.notBound}
+                          {thread?.binding ? t.boundTo(thread.repo ?? null) : t.notBound}
                         </span>
                       </div>
                       <ThreadComposer

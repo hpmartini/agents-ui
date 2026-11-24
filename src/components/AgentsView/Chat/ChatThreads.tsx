@@ -404,10 +404,12 @@ const ThreadListRow: React.FC<{
             {hhmm(lastTime(thread, items))}
           </span>
         </span>
-        <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-gray-500">
-          <FolderGit2 size={10} aria-hidden className="shrink-0" />
-          <span className="truncate">{thread.repo ?? t.notBound}</span>
-        </span>
+        {(thread.repo || !thread.binding) && (
+          <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-gray-500">
+            <FolderGit2 size={10} aria-hidden className="shrink-0" />
+            <span className="truncate">{thread.repo ?? t.notBound}</span>
+          </span>
+        )}
         {thread.summary && (
           <span className="mt-0.5 block truncate text-xs text-gray-400">{thread.summary}</span>
         )}

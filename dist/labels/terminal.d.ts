@@ -179,7 +179,7 @@ export interface TerminalLabels {
     reopenThread: string;
     replyInThread: string;
     firstThreadMessage: (tag: string) => string;
-    boundTo: (repo: string) => string;
+    boundTo: (repo: string | null) => string;
     notBound: string;
     resizeThreads: string;
     threadLog: (name: string) => string;
