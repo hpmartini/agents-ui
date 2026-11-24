@@ -11,7 +11,7 @@ const MAX_HEIGHT = 320;
 const MIN_HEIGHT = 42;
 export const CHAT_COMPOSER_HEIGHT_KEY = 'devOrbitChatComposerHeight';
 /** Chat input: grows with its content, TUI-like keys, `/` and `@` picker with details */
-export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, disabled, submitKey, history, commands, agents, suggestion, suggestionCut, takeSuggestion, inputRef, }) => {
+export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, disabled, submitKey, history, commands, agents, suggestion, suggestionCut, takeSuggestion, inputRef, label, placeholders, heightKey = CHAT_COMPOSER_HEIGHT_KEY, }) => {
     const t = useLabels().terminal;
     // The suggestion the user typed over or took; a new one shows again
     const [dropped, setDropped] = useState(null);
@@ -21,8 +21,8 @@ export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, 
         : disabled
             ? t.composerDisconnected
             : submitKey === 'enter'
-                ? t.composerPlaceholderEnter
-                : t.composerPlaceholderModEnter;
+                ? (placeholders?.enter ?? t.composerPlaceholderEnter)
+                : (placeholders?.modEnter ?? t.composerPlaceholderModEnter);
     const valueRef = useRef(value);
     valueRef.current = value;
     const [caret, setCaret] = useState(0);
@@ -38,7 +38,7 @@ export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, 
     const { handleProps } = useAutoGrowTextarea(inputRef, value || placeholder, {
         min: MIN_HEIGHT,
         max: MAX_HEIGHT,
-        storageKey: CHAT_COMPOSER_HEIGHT_KEY,
+        storageKey: heightKey,
     });
     useLayoutEffect(() => {
         const el = inputRef.current;
@@ -228,5 +228,5 @@ export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, 
                             setDismissed(null);
                             onChange(e.target.value);
                             setCaret(e.target.selectionStart);
-                        }, onSelect: (e) => setCaret(e.currentTarget.selectionStart), onKeyDown: onKeyDown, onBlur: () => setDismissed(queryKey), placeholder: placeholder, "aria-label": t.message, "aria-autocomplete": "list", "aria-controls": open ? listId : undefined, "aria-activedescendant": open ? `${listId}-${highlighted}` : undefined, style: { minHeight: MIN_HEIGHT }, className: "block w-full resize-none rounded-md bg-gray-900 border border-gray-700 px-2.5 py-2 text-sm leading-6 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-400 disabled:opacity-50" })] })] }));
+                        }, onSelect: (e) => setCaret(e.currentTarget.selectionStart), onKeyDown: onKeyDown, onBlur: () => setDismissed(queryKey), placeholder: placeholder, "aria-label": label ?? t.message, "aria-autocomplete": "list", "aria-controls": open ? listId : undefined, "aria-activedescendant": open ? `${listId}-${highlighted}` : undefined, style: { minHeight: MIN_HEIGHT }, className: "block w-full resize-none rounded-md bg-gray-900 border border-gray-700 px-2.5 py-2 text-sm leading-6 text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-400 disabled:opacity-50" })] })] }));
 };

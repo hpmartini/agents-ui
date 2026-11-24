@@ -179,6 +179,13 @@ export interface TerminalLabels {
     closedThreads: (count: number) => string;
     reopenThread: string;
     replyInThread: string;
+    threadPlaceholderEnter: string;
+    threadPlaceholderModEnter: string;
+    maximizeThreads: string;
+    restoreThreads: string;
+    maximizeThreadsTitle: (shortcut: string) => string;
+    restoreThreadsTitle: (shortcut: string) => string;
+    threadsSidebar: string;
     firstThreadMessage: (tag: string) => string;
     boundTo: (repo: string | null) => string;
     notBound: string;
