@@ -497,7 +497,8 @@ export const terminalEn: TerminalLabels = {
   closedThreads: (count) => `Closed (${count})`,
   reopenThread: 'Reopen',
   replyInThread: 'Reply in thread',
-  firstThreadMessage: (tag) => `Write the first message. It goes to the orchestrator tagged ${tag}.`,
+  firstThreadMessage: (tag) =>
+    `Write the first message. It goes to the orchestrator tagged ${tag}.`,
   boundTo: (repo) => `Bound to status task${repo ? ` · ${repo}` : ''}`,
   notBound: 'Not bound to a status task',
   resizeThreads: 'Resize threads panel',
@@ -806,7 +807,8 @@ export const terminalDe: TerminalLabels = {
   closedThreads: (count) => `Geschlossen (${count})`,
   reopenThread: 'Wieder öffnen',
   replyInThread: 'Im Thread antworten',
-  firstThreadMessage: (tag) => `Erste Nachricht schreiben. Sie geht mit der Kennung ${tag} an den Orchestrator.`,
+  firstThreadMessage: (tag) =>
+    `Erste Nachricht schreiben. Sie geht mit der Kennung ${tag} an den Orchestrator.`,
   boundTo: (repo) => `An Status-Aufgabe gebunden${repo ? ` · ${repo}` : ''}`,
   notBound: 'Nicht an eine Status-Aufgabe gebunden',
   resizeThreads: 'Breite des Thread-Panels ändern',

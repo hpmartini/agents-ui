@@ -109,6 +109,35 @@ describe('routing into threads', () => {
   });
 });
 
+const steps = (ts?: number): ChatMessage => ({
+  kind: 'assistant',
+  key: `a${n++}`,
+  streaming: false,
+  blocks: [{ type: 'tool', id: `x${n}`, name: 'Bash', input: {} }],
+  ...(ts ? { ts } : {}),
+});
+
+describe('an answer of tool steps only continues the turn it belongs to', () => {
+  it('joins the thread of the item right before it (prompt or worker message)', () => {
+    const r = route([
+      user('[Thread: Shop · Checkout]\nask the worker', min(1)),
+      steps(min(2)),
+      worker('omp-aaaa0000-0000-0000-0000-000000000001', 'ready', min(3)),
+      steps(min(4)),
+      answer('[Thread: Shop · Checkout]\nWorker is ready.', min(5)),
+    ]);
+    // the last steps and the tagged text are one answer
+    expect(r.byThread.get('t1')).toHaveLength(4);
+    expect(r.main.filter((i) => i.kind === 'answer')).toHaveLength(0);
+  });
+
+  it('stays in the main chat after a main-chat prompt or at the start', () => {
+    const r = route([steps(min(1)), user('status?', min(2)), steps(min(3))]);
+    expect(r.byThread.size).toBe(0);
+    expect(r.main.filter((i) => i.kind === 'answer')).toHaveLength(2);
+  });
+});
+
 describe('unclear stays in the main chat (never guessed)', () => {
   it('an answer without a tag, even right after a thread prompt', () => {
     const r = route([

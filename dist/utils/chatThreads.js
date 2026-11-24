@@ -76,7 +76,8 @@ export function threadOf(item, threads) {
 }
 /**
  * Splits the chat: thread items go to their thread, the main chat keeps the rest plus one marker
- * per thread (after the answer it was opened on, else where its first message was)
+ * per thread (after the answer it was opened on, else where its first message was). An answer of
+ * tool steps only follows the item before it
  */
 export function routeThreads(items, threads) {
     const byThread = new Map();
@@ -91,8 +92,12 @@ export function routeThreads(items, threads) {
         return m;
     };
     const parents = new Map(threads.filter((t) => t.parentKey).map((t) => [t.parentKey, t.id]));
+    let prev = null;
     for (const item of items) {
-        const id = threads.length ? threadOf(item, threads) : null;
+        // tool steps without text are the same turn as the item before them (no tag to read)
+        const stepsOnly = item.kind === 'answer' && !firstText(item);
+        const id = !threads.length ? null : stepsOnly ? prev : threadOf(item, threads);
+        prev = id;
         if (id) {
             byThread.set(id, [...(byThread.get(id) ?? []), item]);
             const m = marker(id);

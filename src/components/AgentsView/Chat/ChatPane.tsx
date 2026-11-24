@@ -71,7 +71,6 @@ import {
   itemTime,
   quoteHeader,
   routeThreads,
-  threadOf,
   unreadCount,
 } from '../../../utils/chatThreads';
 import { ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
@@ -628,7 +627,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const threadItems = openThread ? (routed.byThread.get(openThread.id) ?? NO_ITEMS) : NO_ITEMS;
   // The running turn: its answer (or the working card) shows where its last item went
   const lastItem = items.at(-1);
-  const lastThread = lastItem && threadList.length ? threadOf(lastItem, threadList) : null;
+  const lastThread = lastItem
+    ? ([...routed.byThread].find(([, xs]) => xs.at(-1) === lastItem)?.[0] ?? null)
+    : null;
   const isLive = (item: ChatItem) => busy && item.kind === 'answer' && item === lastItem;
   const workingCard = busy && pending.length === 0 && lastItem?.kind === 'user';
   // Read what the open thread shows, while the pane is on screen

@@ -167,9 +167,7 @@ describe('threads panel', () => {
         thread('t2', { repo: null, binding: null }),
       ],
     });
-    expect(screen.getByRole('button', { name: /Task t1/ }).textContent).not.toContain(
-      'Not bound'
-    );
+    expect(screen.getByRole('button', { name: /Task t1/ }).textContent).not.toContain('Not bound');
     expect(screen.getByRole('button', { name: /Task t2/ }).textContent).toContain('Not bound');
   });
 

@@ -174,9 +174,7 @@ export function agentMessage(
   text: string
 ): { id: string | null; name: string | null; body: string } | null {
   const m = AGENT_MESSAGE_RE.exec(text);
-  return m
-    ? { id: m[1] ?? null, name: m[2] ?? m[3] ?? null, body: text.slice(m[0].length) }
-    : null;
+  return m ? { id: m[1] ?? null, name: m[2] ?? m[3] ?? null, body: text.slice(m[0].length) } : null;
 }
 
 type Json = Record<string, unknown>;

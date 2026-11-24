@@ -73,9 +73,7 @@ const AGENT_MESSAGE_RE = /^\[(?:(?:from agent|von Agent) (\S+)(?: "([^"]*)"| „
 /** A user turn another agent sent with `orkumo send`: its sender (null = unknown) and text */
 export function agentMessage(text) {
     const m = AGENT_MESSAGE_RE.exec(text);
-    return m
-        ? { id: m[1] ?? null, name: m[2] ?? m[3] ?? null, body: text.slice(m[0].length) }
-        : null;
+    return m ? { id: m[1] ?? null, name: m[2] ?? m[3] ?? null, body: text.slice(m[0].length) } : null;
 }
 const isObj = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v) => (typeof v === 'string' ? v : '');

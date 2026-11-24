@@ -64,7 +64,8 @@ export declare const itemTime: (item: ChatItem) => number | undefined;
 export declare function threadOf(item: ChatItem, threads: ChatThread[]): string | null;
 /**
  * Splits the chat: thread items go to their thread, the main chat keeps the rest plus one marker
- * per thread (after the answer it was opened on, else where its first message was)
+ * per thread (after the answer it was opened on, else where its first message was). An answer of
+ * tool steps only follows the item before it
  */
 export declare function routeThreads(items: ChatItem[], threads: ChatThread[]): {
     main: (ChatItem | ChatThreadMarker)[];
