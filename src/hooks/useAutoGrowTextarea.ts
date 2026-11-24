@@ -44,9 +44,25 @@ function savePinned(key: string | undefined, value: number | null) {
 export function useAutoGrowTextarea(
   ref: React.RefObject<HTMLTextAreaElement | null>,
   value: string,
-  { min, max, storageKey }: { min: number; max: number; storageKey?: string }
+  {
+    min,
+    max,
+    storageKey,
+    pinMax,
+  }: {
+    min: number;
+    max: number;
+    storageKey?: string;
+    /** Tallest a dragged height may be, read at use (default 70 % of the window) */
+    pinMax?: (el: HTMLTextAreaElement) => number;
+  }
 ) {
   const [pinned, setPinned] = useState(() => readPinned(storageKey));
+  const capOf = useCallback(
+    (el: HTMLTextAreaElement | null) =>
+      Math.max(min, el && pinMax ? pinMax(el) : window.innerHeight * 0.7),
+    [min, pinMax]
+  );
 
   const fit = useCallback(() => {
     const el = ref.current;
@@ -54,10 +70,15 @@ export function useAutoGrowTextarea(
     el.style.height = 'auto';
     // border-box: scrollHeight excludes the border, so add it or the text scrolls by 2px
     const content = el.scrollHeight + el.offsetHeight - el.clientHeight;
-    const { height, scroll } = fitHeight(content, { min, max, pinned });
+    // a stored height above the cap (smaller pane or window since) shows capped, stays stored
+    const { height, scroll } = fitHeight(content, {
+      min,
+      max,
+      pinned: pinned === null ? null : Math.min(pinned, capOf(el)),
+    });
     el.style.height = `${height}px`;
     el.style.overflowY = scroll ? 'auto' : 'hidden';
-  }, [ref, min, max, pinned]);
+  }, [ref, min, max, pinned, capOf]);
 
   useLayoutEffect(fit, [fit, value]);
 
@@ -77,12 +98,11 @@ export function useAutoGrowTextarea(
 
   const pin = useCallback(
     (next: number | null) => {
-      const clamped =
-        next === null ? null : Math.min(Math.max(next, min), window.innerHeight * 0.7);
+      const clamped = next === null ? null : Math.min(Math.max(next, min), capOf(ref.current));
       setPinned(clamped);
       savePinned(storageKey, clamped);
     },
-    [min, storageKey]
+    [min, storageKey, capOf, ref]
   );
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {

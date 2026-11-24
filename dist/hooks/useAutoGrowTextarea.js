@@ -39,8 +39,9 @@ function savePinned(key, value) {
  * Returns props for a drag handle that pins the height (remembered under storageKey);
  * double-click, Delete or Backspace on the handle goes back to auto-grow.
  */
-export function useAutoGrowTextarea(ref, value, { min, max, storageKey }) {
+export function useAutoGrowTextarea(ref, value, { min, max, storageKey, pinMax, }) {
     const [pinned, setPinned] = useState(() => readPinned(storageKey));
+    const capOf = useCallback((el) => Math.max(min, el && pinMax ? pinMax(el) : window.innerHeight * 0.7), [min, pinMax]);
     const fit = useCallback(() => {
         const el = ref.current;
         if (!el || !el.clientWidth)
@@ -48,10 +49,15 @@ export function useAutoGrowTextarea(ref, value, { min, max, storageKey }) {
         el.style.height = 'auto';
         // border-box: scrollHeight excludes the border, so add it or the text scrolls by 2px
         const content = el.scrollHeight + el.offsetHeight - el.clientHeight;
-        const { height, scroll } = fitHeight(content, { min, max, pinned });
+        // a stored height above the cap (smaller pane or window since) shows capped, stays stored
+        const { height, scroll } = fitHeight(content, {
+            min,
+            max,
+            pinned: pinned === null ? null : Math.min(pinned, capOf(el)),
+        });
         el.style.height = `${height}px`;
         el.style.overflowY = scroll ? 'auto' : 'hidden';
-    }, [ref, min, max, pinned]);
+    }, [ref, min, max, pinned, capOf]);
     useLayoutEffect(fit, [fit, value]);
     useLayoutEffect(() => {
         const el = ref.current;
@@ -69,10 +75,10 @@ export function useAutoGrowTextarea(ref, value, { min, max, storageKey }) {
         return () => observer.disconnect();
     }, [ref, fit]);
     const pin = useCallback((next) => {
-        const clamped = next === null ? null : Math.min(Math.max(next, min), window.innerHeight * 0.7);
+        const clamped = next === null ? null : Math.min(Math.max(next, min), capOf(ref.current));
         setPinned(clamped);
         savePinned(storageKey, clamped);
-    }, [min, storageKey]);
+    }, [min, storageKey, capOf, ref]);
     const onPointerDown = (e) => {
         const el = ref.current;
         if (!el || e.button !== 0)

@@ -158,6 +158,8 @@ export interface TerminalLabels {
     threads: string;
     showThreads: string;
     hideThreads: string;
+    hideThreadsPanel: string;
+    collapseThread: string;
     newThread: string;
     bindToTask: string;
     threadWithoutTask: string;

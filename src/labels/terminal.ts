@@ -177,6 +177,8 @@ export interface TerminalLabels {
   threads: string;
   showThreads: string;
   hideThreads: string;
+  hideThreadsPanel: string;
+  collapseThread: string;
   newThread: string;
   bindToTask: string;
   threadWithoutTask: string;
@@ -483,6 +485,8 @@ export const terminalEn: TerminalLabels = {
   threads: 'Threads',
   showThreads: 'Show threads',
   hideThreads: 'Hide threads',
+  hideThreadsPanel: 'Hide threads panel',
+  collapseThread: 'Back to the list (thread stays open)',
   newThread: 'New thread',
   bindToTask: 'Bind to a task from the status report',
   threadWithoutTask: 'Thread without a task',
@@ -800,6 +804,8 @@ export const terminalDe: TerminalLabels = {
   threads: 'Threads',
   showThreads: 'Threads einblenden',
   hideThreads: 'Threads ausblenden',
+  hideThreadsPanel: 'Thread-Panel ausblenden',
+  collapseThread: 'Zurück zur Liste (Thread bleibt offen)',
   newThread: 'Neuer Thread',
   bindToTask: 'An eine Aufgabe aus dem Status-Bericht binden',
   threadWithoutTask: 'Thread ohne Aufgabe',

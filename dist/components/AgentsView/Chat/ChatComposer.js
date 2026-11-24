@@ -11,7 +11,7 @@ const MAX_HEIGHT = 320;
 const MIN_HEIGHT = 42;
 export const CHAT_COMPOSER_HEIGHT_KEY = 'devOrbitChatComposerHeight';
 /** Chat input: grows with its content, TUI-like keys, `/` and `@` picker with details */
-export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, disabled, submitKey, history, commands, agents, suggestion, suggestionCut, takeSuggestion, inputRef, label, placeholders, heightKey = CHAT_COMPOSER_HEIGHT_KEY, }) => {
+export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, disabled, submitKey, history, commands, agents, suggestion, suggestionCut, takeSuggestion, inputRef, label, placeholders, heightKey = CHAT_COMPOSER_HEIGHT_KEY, pinMax, }) => {
     const t = useLabels().terminal;
     // The suggestion the user typed over or took; a new one shows again
     const [dropped, setDropped] = useState(null);
@@ -39,6 +39,7 @@ export const ChatComposer = ({ chatId, value, onChange, onSubmit, onStop, busy, 
         min: MIN_HEIGHT,
         max: MAX_HEIGHT,
         storageKey: heightKey,
+        pinMax,
     });
     useLayoutEffect(() => {
         const el = inputRef.current;

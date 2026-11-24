@@ -113,6 +113,8 @@ const panel = (props: Partial<React.ComponentProps<typeof ThreadsPanel>> = {}) =
     },
   ]);
   const onMaximize = vi.fn();
+  const onHide = vi.fn();
+  const onOpen = vi.fn();
   const view = renderWithAgents(
     <ThreadsPanel
       status="ready"
@@ -120,7 +122,7 @@ const panel = (props: Partial<React.ComponentProps<typeof ThreadsPanel>> = {}) =
       tasks={[]}
       byThread={new Map([['t1', items]])}
       openId="t1"
-      onOpen={vi.fn()}
+      onOpen={onOpen}
       onRetry={vi.fn()}
       onNewTask={vi.fn()}
       onNewFree={vi.fn()}
@@ -128,10 +130,11 @@ const panel = (props: Partial<React.ComponentProps<typeof ThreadsPanel>> = {}) =
       renderThread={() => <textarea aria-label="thread input" />}
       maximized={false}
       onMaximize={onMaximize}
+      onHide={onHide}
       {...props}
     />
   );
-  return { ...view, onMaximize };
+  return { ...view, onMaximize, onHide, onOpen };
 };
 
 describe('maximised threads panel', () => {
@@ -156,6 +159,7 @@ describe('maximised threads panel', () => {
         renderThread={() => null}
         maximized
         onMaximize={onMaximize}
+        onHide={vi.fn()}
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Restore threads' }));
@@ -197,5 +201,14 @@ describe('maximised threads panel', () => {
     expect(
       screen.getByRole('button', { name: 'Thread list on the left' }).getAttribute('aria-pressed')
     ).toBe('true');
+  });
+
+  it('the header hides the panel; the thread header goes back to the list, named apart', () => {
+    const { onHide, onOpen } = panel();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide threads panel' }));
+    expect(onHide).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the list (thread stays open)' }));
+    expect(onOpen).toHaveBeenCalledWith(null);
+    expect(screen.getByRole('button', { name: 'Close thread' })).toBeTruthy();
   });
 });
