@@ -1048,18 +1048,6 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const awaiting = useRef<string | null>(null);
   if (selectedId && selectedId !== appliedSelection.current && selectedId !== awaiting.current)
     awaiting.current = selectedId;
-  useEffect(() => {
-    if (!selectedId) {
-      appliedSelection.current = selectedId;
-      return;
-    }
-    if (selectedId === appliedSelection.current || loading) return;
-    const target = sessions.find((s) => s.id === selectedId);
-    if (!target) return;
-    appliedSelection.current = selectedId;
-    if (target.app) openInSystemBrowser(target.app.url);
-    else if (selectedId !== activeSessionId) attach(selectedId);
-  }, [selectedId, loading, sessions, activeSessionId, attach]);
   const reportSelection = useRef(onSelectedIdChange);
   reportSelection.current = onSelectedIdChange;
   const lastReported = useRef<string | null | undefined>(undefined);
@@ -1209,6 +1197,20 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     },
     [openIdSet, setPaneView, attach]
   );
+
+  // selectedId (above): opens in the view a rail click would use
+  useEffect(() => {
+    if (!selectedId) {
+      appliedSelection.current = selectedId;
+      return;
+    }
+    if (selectedId === appliedSelection.current || loading) return;
+    const target = sessions.find((s) => s.id === selectedId);
+    if (!target) return;
+    appliedSelection.current = selectedId;
+    if (target.app) openInSystemBrowser(target.app.url);
+    else if (selectedId !== activeSessionId) attachIn(selectedId, preferredView(target));
+  }, [selectedId, loading, sessions, activeSessionId, attachIn, preferredView]);
 
   /**
    * Opens an interactive PTY in `cwd`: `claude` (for ~ and folders whose trust prompt is pending)

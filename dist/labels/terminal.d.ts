@@ -173,6 +173,7 @@ export interface TerminalLabels {
     threadsFailed: string;
     threadsFailedHint: string;
     tryAgain: string;
+    uiViewFailed: (reason: string) => string;
     noThreads: string;
     noThreadsHint: string;
     pickThread: string;

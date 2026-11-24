@@ -1,4 +1,4 @@
-import { resumableSessionId, sessionHarness } from './agentSessions';
+import { resumableSessionId, sessionHarness, transcriptId } from './agentSessions';
 /**
  * Session copies (#236). `claude -p --resume <id>` keeps the session id, so a second process on
  * a transcript another process still writes is a second writer in the same worktree: the rail
@@ -71,9 +71,9 @@ targets) {
     return sessionHarness(session) === 'claude' ? { type: 'resume', sessionId } : { type: 'attach' };
 }
 /** Session id shown on a workspace tab: the job id for background jobs, else the transcript id */
-export function tabSessionLabel(session, targets) {
+export function tabSessionLabel(session) {
     if (session.kind === 'background' && !session.ptyArgs)
         return session.id;
-    const id = resumableSessionId(session, targets);
+    const id = transcriptId(session);
     return id ? id.slice(0, 8) : null;
 }

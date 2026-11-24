@@ -304,6 +304,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [images, setImages] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The transcript view could not open (e.g. a peer's relay): reason and a retry, this pane only
+  const [openError, setOpenError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -322,8 +324,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     let cancelled = false;
     chat
       .openTranscriptView(pane.id, { harness, sessionId, cwd: pane.cwd, name: pane.name })
-      .then((view) => !cancelled && setChatId(view.id))
-      .catch((e: Error) => !cancelled && setError(e.message));
+      .then((view) => !cancelled && (setOpenError(null), setChatId(view.id)))
+      .catch((e: Error) => !cancelled && setOpenError(e.message));
     return () => {
       cancelled = true;
       setChatId(null);
@@ -1134,6 +1136,18 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 busy={busy}
                 endedTasks={state.endedTasks}
               />
+            )}
+            {openError && (
+              <div role="alert" className="mb-1 flex items-center gap-2 text-xs text-red-300">
+                <span className="min-w-0">{t.uiViewFailed(openError)}</span>
+                <button
+                  type="button"
+                  onClick={() => (setOpenError(null), setGeneration((g) => g + 1))}
+                  className="shrink-0 rounded border border-red-400/40 px-2 py-0.5 text-red-200 hover:bg-red-500/10 focus-visible:outline focus-visible:outline-1 focus-visible:outline-red-300"
+                >
+                  {t.tryAgain}
+                </button>
+              </div>
             )}
             {error && (
               <div role="alert" className="mb-1 text-xs text-red-300">

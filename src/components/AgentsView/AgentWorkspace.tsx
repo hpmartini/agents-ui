@@ -18,13 +18,12 @@ import { registerPaneBrowser } from '../../utils/links';
 import type { AgentSession } from '../../types';
 import {
   stateGlyph,
-  resumableSessionId,
+  transcriptId,
   sessionHarness,
   UI_VIEW_HARNESSES,
 } from '../../utils/agentSessions';
 import { useHost, useTransport } from '../../host';
 import { useLabels } from '../../labels';
-import { LOCAL_TARGETS } from '../../transport';
 import type { PaneView } from '../../hooks/useAgentWorkspace';
 import {
   AGENT_TAB_MIME,
@@ -297,7 +296,6 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   const bodyRef = useRef<HTMLDivElement>(null);
   const [bodyWidth, setBodyWidth] = useState(Infinity);
   const transport = useTransport();
-  const targets = transport.targets ?? LOCAL_TARGETS;
   // Without a built-in browser there are no browser panes: links go to the system browser
   const { renderBrowser } = useHost();
   const labels = useLabels();
@@ -468,16 +466,15 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     const url = browserUrl(session.id);
     // A harness pane started here (#195): the server row that claimed it knows its state and session
     const row = sessions.find((s) => s.paneId === session.id);
-    const viewSessionId =
-      resumableSessionId(session, targets) ?? (row ? resumableSessionId(row, targets) : null);
+    // #220: the transcript lives on the pane's instance; the transport routes the view there by
+    // pane id, so a picker on another instance changes nothing here
+    const viewSessionId = transcriptId(session) ?? (row ? transcriptId(row) : null);
     const viewable =
       !!transport.chat &&
       url === null &&
       shellCwd(session.id) === null &&
       UI_VIEW_HARNESSES[sessionHarness(session)] &&
-      !session.ptyArgs?.includes('--cloud') &&
-      // #220: the transcript lives on the instance the pane runs on
-      targets.targetOf(session.id) === targets.getAgentTarget();
+      !session.ptyArgs?.includes('--cloud');
     const chatView = viewable && views[session.id] === 'chat';
     const active = session.id === tab.activeSessionId;
     const focused = visible && focusZone === 'terminal' && active;
@@ -738,12 +735,12 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                   )}
                   <span className="truncate flex-1">{title}</span>
                   {/* a browser pane's id is its url, which the title already shows */}
-                  {browserUrl(lead.id) === null && tabSessionLabel(lead, targets) && (
+                  {browserUrl(lead.id) === null && tabSessionLabel(lead) && (
                     <span
                       className="shrink-0 font-mono text-[10px] text-gray-500"
                       data-testid="tab-session-id"
                     >
-                      {tabSessionLabel(lead, targets)}
+                      {tabSessionLabel(lead)}
                     </span>
                   )}
                   {panes.length > 1 && (
