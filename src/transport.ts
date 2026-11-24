@@ -7,6 +7,7 @@
  * transport is those functions, grouped. Errors are thrown as `Error`, with the HTTP status as
  * `status` where there is one (`TransportError`).
  */
+import type { ChatThread } from './utils/chatThreads';
 import type {
   AgentContext,
   AgentDispatchRequest,
@@ -168,6 +169,23 @@ export interface OrchestratorWorkspace {
   briefing: string;
 }
 
+/** A task of the orchestrator's latest status report: what "New thread" binds to */
+export interface ChatThreadTask {
+  project: string;
+  projectName: string;
+  task: string;
+  title: string;
+  state?: string;
+  repo: string | null;
+}
+
+/** `orchestrator: null`: the session is no orchestrator (no threads panel) */
+export interface ChatThreadList {
+  orchestrator: string | null;
+  threads: ChatThread[];
+  tasks: ChatThreadTask[];
+}
+
 /** A role file `<workspace>/roles/<id>.md`; briefing assigns it to a running orchestrator */
 export interface OrchestratorRole {
   id: string;
@@ -320,6 +338,24 @@ export interface AgentsTransport {
     fetchOrchestratorRoles: () => Promise<{ roles: OrchestratorRole[] }>;
     fetchOrchestratorWorkspace: () => Promise<OrchestratorWorkspace>;
     startOrchestrator: (role?: string) => Promise<QuickAgent>;
+  };
+  /**
+   * Threads of an orchestrator chat (the UI view's right panel); without it the view has no
+   * threads, only the reply button. `session`: the pane's listed session id
+   */
+  threads?: {
+    fetchThreads: (session: string) => Promise<ChatThreadList>;
+    createThread: (
+      session: string,
+      body:
+        | { task: { project: string; task: string } }
+        | { name: { project: string; task: string }; parentKey?: string }
+    ) => Promise<ChatThread>;
+    updateThread: (
+      session: string,
+      id: string,
+      patch: { closed?: boolean; readAt?: number }
+    ) => Promise<ChatThread>;
   };
   /** Opening a clicked file path on the agents' machine; resolves with what the server did */
   files?: {

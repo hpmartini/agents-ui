@@ -38,6 +38,8 @@ export type ChatMessage =
     streaming: boolean;
     /** Model that wrote this message, if the transcript names it */
     model?: string;
+    /** When it was written (ms), if the transcript says */
+    ts?: number;
 } | {
     kind: 'result';
     key: string;

@@ -35,9 +35,10 @@ export function useStoredWidth(key, initial, min, max) {
 }
 /**
  * Drag handle for a box's width: pointer drag (captured, so a terminal under the pointer cannot
- * swallow the moves), arrow keys in 16 px steps, Home/End for min/max. A vertical separator.
+ * swallow the moves), arrow keys in 16 px steps, Home/End for min/max, double click resets.
+ * A vertical separator.
  */
-export const ResizeHandle = ({ width, min, max, onChange, edge, label, className = '', scale = 1, }) => {
+export const ResizeHandle = ({ width, min, max, onChange, edge, label, className = '', scale = 1, onReset, }) => {
     const drag = useRef(null);
     const [dragging, setDragging] = useState(false);
     const sign = edge === 'right' ? 1 : -1;
@@ -57,7 +58,7 @@ export const ResizeHandle = ({ width, min, max, onChange, edge, label, className
             drag.current = null;
             setDragging(false);
             e.currentTarget.releasePointerCapture?.(e.pointerId);
-        }, onPointerCancel: () => {
+        }, onDoubleClick: onReset, onPointerCancel: () => {
             drag.current = null;
             setDragging(false);
         }, onKeyDown: (e) => {

@@ -14,6 +14,7 @@ import {
   Maximize2,
   MessageSquare,
   MessagesSquare,
+  PanelRight,
   RefreshCw,
   Send,
   Square,
@@ -29,6 +30,8 @@ import {
   prependHistory,
   agentMessage,
   reduceChat,
+  type ChatAnswer,
+  type ChatItem,
   type ChatState,
   type ChatSubmitKey,
 } from '../../../utils/chatEvents';
@@ -37,7 +40,6 @@ import { useTransport } from '../../../host';
 import { useLabels } from '../../../labels';
 import type { ChatHistoryPage } from '../../../transport';
 import { ImageAttachments, imageDropHandlers } from '../../ImageAttachments';
-import { ChatIdContext, ChatItemView, UserMessage } from './ChatMessages';
 import { ChatFileContext } from './ChatMarkdown';
 import {
   ChatArtifactsButton,
@@ -46,6 +48,32 @@ import {
   useChatArtifacts,
 } from './ChatArtifacts';
 import { ChatComposer } from './ChatComposer';
+import {
+  ChatIdContext,
+  ChatItemView,
+  ChatRepliesContext,
+  UserMessage,
+  type ChatQuote,
+  type ChatReplies,
+} from './ChatMessages';
+import {
+  DRAFT_THREAD,
+  QuoteChip,
+  ThreadComposer,
+  ThreadMarkerRow,
+  ThreadsPanel,
+  firstWords,
+  useChatThreads,
+} from './ChatThreads';
+import {
+  answerText,
+  hhmm,
+  itemTime,
+  quoteHeader,
+  routeThreads,
+  unreadCount,
+} from '../../../utils/chatThreads';
+import { ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
 import { ChatActivity } from './ChatActivity';
 import { ChatStatusLine } from './ChatStatusLine';
 import { QuestionCard } from './QuestionCard';
@@ -165,6 +193,23 @@ const reducer = (state: ChatState, action: Action): ChatState =>
       : reduceChat(state, action.event);
 /** Distance from the top (px) at which the next older page loads */
 const LOAD_OLDER_PX = 400;
+const NO_THREADS: never[] = [];
+const NO_ITEMS: never[] = [];
+
+// Threads panel: one width for all orchestrator chats (pane ids do not outlive a restart)
+const THREADS_WIDTH_KEY = 'agents-ui:threads-width';
+const THREADS_OPEN_KEY = 'agents-ui:threads-open';
+const THREADS_WIDTH = 360;
+const THREADS_MIN = 260;
+const THREADS_MAX = 640;
+const readFlag = (key: string, fallback: boolean) => {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v === '1';
+  } catch {
+    return fallback;
+  }
+};
 
 const iconBtn =
   'p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-40 shrink-0';
@@ -244,6 +289,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const connected = usePaneConnected(pane.id);
   const harness = sessionHarness(pane);
   const harnessName = harnessLabel(harness);
+  // Threads of an orchestrator chat: a slice of this session, routed by tag (utils/chatThreads)
+  const threads = useChatThreads(agent?.id);
 
   // The server view outlives this component (split remounts, view switches): with nobody
   // watching it stops itself after the orphan timeout, so a remount never races a stop
@@ -376,13 +423,23 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     }
     return null;
   }, [state.messages]);
+  const threadList = threads.enabled ? threads.threads : NO_THREADS;
+  const routed = useMemo(
+    () =>
+      routeThreads(
+        items.filter((item) => item !== recap),
+        threadList
+      ),
+    [items, recap, threadList]
+  );
   const shown = useMemo(
     () =>
       promptsOnly
-        ? items.filter((item) => item.kind === 'user' && !agentMessage(item.text))
-        : items.filter((item) => item !== recap),
-    [items, promptsOnly, recap]
+        ? routed.main.filter((item) => item.kind === 'user' && !agentMessage(item.text))
+        : routed.main,
+    [routed, promptsOnly]
   );
+  const [quote, setQuote] = useState<ChatQuote | null>(null);
   const pending = useMemo(() => pendingPrompts(state), [state]);
   const starts = useMemo(() => initialPrompts(state.messages), [state.messages]);
   const [startsOpen, setStartsOpen] = useState(false);
@@ -469,33 +526,152 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     if (answer.type !== 'tab' && answer.type !== 'step') setSentFor(dialogId);
   };
 
-  const submit = async () => {
-    if (sending || !connected || (!text.trim() && images.length === 0)) return;
-    setSending(true);
+  // `head`: thread tag line and reply quote, in front of what the user typed
+  const sendPrompt = async (head: string, body: string, files: File[]): Promise<boolean> => {
     setError(null);
     try {
       const stored = uploads
-        ? await Promise.all(images.map((file) => uploads.uploadAttachment(file)))
+        ? await Promise.all(files.map((file) => uploads.uploadAttachment(file)))
         : [];
-      const prompt = promptWithAttachments(text, stored);
+      const prompt = head + promptWithAttachments(body, stored);
       if (!typeIntoPane(pane.id, prompt)) {
         setError(notConnected);
-        return;
+        return false;
       }
       // Claude logs a typed prompt at once (or as queued); others only once the agent takes it.
       // Commands never show up as a user turn.
       if (harness !== 'claude' && !prompt.trimStart().startsWith('/'))
         dispatch({ type: 'event', event: { type: 'devorbit_sent', text: prompt } });
-      setText('');
-      setImages([]);
-      stickToBottom.current = true;
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : t.sendingFailed);
+      return false;
+    }
+  };
+
+  const submit = async () => {
+    if (sending || !connected || (!text.trim() && images.length === 0)) return;
+    setSending(true);
+    try {
+      if (await sendPrompt(quote ? quoteHeader(quote.ts, quote.text) : '', text, images)) {
+        setText('');
+        setImages([]);
+        setQuote(null);
+        stickToBottom.current = true;
+      }
     } finally {
       setSending(false);
       inputRef.current?.focus();
     }
   };
+
+  const [threadsOpen, setThreadsOpen] = useState(() => readFlag(THREADS_OPEN_KEY, true));
+  const showThreadsPanel = (open: boolean) => {
+    setThreadsOpen(open);
+    try {
+      localStorage.setItem(THREADS_OPEN_KEY, open ? '1' : '0');
+    } catch {
+      // not remembered
+    }
+  };
+  const [threadsWidth, setThreadsWidth] = useStoredWidth(
+    THREADS_WIDTH_KEY,
+    THREADS_WIDTH,
+    THREADS_MIN,
+    THREADS_MAX
+  );
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  const [threadQuote, setThreadQuote] = useState<ChatQuote | null>(null);
+  const showThreads = threads.enabled && threadsOpen;
+  const openThreadIn = (id: string | null) => {
+    setOpenThreadId(id);
+    setThreadQuote(null);
+    if (id) showThreadsPanel(true);
+  };
+  const openThread = threads.threads.find((x) => x.id === openThreadId) ?? null;
+  const openFromAnswer = async (answer: ChatAnswer) => {
+    const ts = answer.parts[0]?.ts ?? Date.now();
+    try {
+      const made = await threads.create({
+        name: { project: `Answer ${hhmm(ts)}`, task: firstWords(answerText(answer)) || 'Thread' },
+        parentKey: answer.key,
+      });
+      openThreadIn(made.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.threadsFailed);
+    }
+  };
+  const sendInThread = async (body: string, files: File[]) => {
+    let thread = openThread;
+    if (!thread) {
+      // a thread without a task is named after its first message
+      try {
+        thread = await threads.create({
+          name: { project: `Thread ${hhmm(Date.now())}`, task: firstWords(body) || 'Thread' },
+        });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t.threadsFailed);
+        return false;
+      }
+      setOpenThreadId(thread.id);
+    }
+    const quoted = threadQuote ? quoteHeader(threadQuote.ts, threadQuote.text) : '';
+    const sent = await sendPrompt(`${thread.tag}\n${quoted}`, body, files);
+    if (sent) setThreadQuote(null);
+    return sent;
+  };
+  const unreadTotal = threadList.reduce(
+    (n, x) => n + (x.closed ? 0 : unreadCount(routed.byThread.get(x.id) ?? NO_ITEMS, x.readAt)),
+    0
+  );
+  const threadItems = openThread ? (routed.byThread.get(openThread.id) ?? NO_ITEMS) : NO_ITEMS;
+  // The running turn: its answer (or the working card) shows where its last item went
+  const lastItem = items.at(-1);
+  const lastThread = lastItem
+    ? ([...routed.byThread].find(([, xs]) => xs.at(-1) === lastItem)?.[0] ?? null)
+    : null;
+  const isLive = (item: ChatItem) => busy && item.kind === 'answer' && item === lastItem;
+  const workingCard = busy && pending.length === 0 && lastItem?.kind === 'user';
+  // Read what the open thread shows, while the pane is on screen
+  const { update: updateThread } = threads;
+  useEffect(() => {
+    if (!openThread || !showThreads || !active) return;
+    const latest = Math.max(0, ...threadItems.map((i) => itemTime(i) ?? 0));
+    if (latest > openThread.readAt)
+      void updateThread(openThread.id, { readAt: latest }).catch(() => {});
+  }, [openThread, threadItems, showThreads, active, updateThread]);
+  // The open thread's messages may lie before the loaded tail: load pages back to its start
+  const earliest = useMemo(() => {
+    for (const m of state.messages)
+      if ((m.kind === 'user' || m.kind === 'assistant') && m.ts) return m.ts;
+    return undefined;
+  }, [state.messages]);
+  const needsOlder =
+    !!openThread &&
+    !!state.older?.more &&
+    earliest !== undefined &&
+    earliest > openThread.createdAt;
+  useEffect(() => {
+    if (needsOlder) loadOlder();
+  }, [needsOlder, loadOlder]);
+  const replies = useMemo<ChatReplies>(
+    () => ({ reply: setQuote, openThread: threads.enabled ? openFromAnswer : undefined }),
+    // openFromAnswer reads only stable setters and the create call
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [threads.enabled, threads.create]
+  );
+  const threadReplies = useMemo<ChatReplies>(
+    () => ({ reply: setThreadQuote, tag: openThread?.tag ?? null }),
+    [openThread?.tag]
+  );
+  const threadListRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = threadListRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [threadItems, openThreadId]);
+  useEffect(() => {
+    if (quote) inputRef.current?.focus();
+  }, [quote]);
 
   // Esc, like the key in the TUI
   const stopTurn = () => {
@@ -597,6 +773,22 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         >
           <MessagesSquare size={13} />
         </button>
+        {threads.enabled && (
+          <button
+            type="button"
+            onClick={() => showThreadsPanel(!threadsOpen)}
+            onMouseDown={keepFocus}
+            className={`${iconBtn} relative ${threadsOpen ? 'text-blue-300' : ''}`}
+            title={threadsOpen ? t.hideThreads : t.showThreads}
+            aria-label={t.threads}
+            aria-pressed={threadsOpen}
+          >
+            <PanelRight size={13} />
+            {unreadTotal > 0 && !threadsOpen && (
+              <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-blue-400" />
+            )}
+          </button>
+        )}
         {busy && connected && (
           <button
             type="button"
@@ -643,263 +835,394 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         </button>
       </div>
 
-      <div className="relative flex-1 min-h-0 flex flex-col">
-        {paneView !== null && paneView !== false && (
-          <div data-pane-view className="absolute inset-0 z-20 flex flex-col bg-gray-950">
-            {paneView}
-          </div>
-        )}
-        {starts.length > 0 && (
-          <div className="shrink-0 border-b border-gray-800 bg-gray-900/60 text-xs">
-            <button
-              type="button"
-              onClick={() => setStartsOpen((o) => !o)}
-              className="flex w-full items-center gap-1 px-3 py-1 text-gray-400 hover:text-gray-200"
-              aria-expanded={startsOpen}
-              data-chat-starts
-            >
-              <ChevronRight
-                size={12}
-                aria-hidden
-                className={`transition-transform ${startsOpen ? 'rotate-90' : ''}`}
-              />
-              {t.startPrompts(starts.length)}
-              <span className="text-gray-600">{t.startPromptsHint}</span>
-            </button>
-            {startsOpen && (
-              <ol className="max-h-40 overflow-y-auto pb-1">
-                {starts.map((m, i) => (
-                  <li key={m.key}>
+      <div className="flex-1 min-h-0 flex">
+        <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
+          {paneView !== null && paneView !== false && (
+            <div data-pane-view className="absolute inset-0 z-20 flex flex-col bg-gray-950">
+              {paneView}
+            </div>
+          )}
+          {starts.length > 0 && (
+            <div className="shrink-0 border-b border-gray-800 bg-gray-900/60 text-xs">
+              <button
+                type="button"
+                onClick={() => setStartsOpen((o) => !o)}
+                className="flex w-full items-center gap-1 px-3 py-1 text-gray-400 hover:text-gray-200"
+                aria-expanded={startsOpen}
+                data-chat-starts
+              >
+                <ChevronRight
+                  size={12}
+                  aria-hidden
+                  className={`transition-transform ${startsOpen ? 'rotate-90' : ''}`}
+                />
+                {t.startPrompts(starts.length)}
+                <span className="text-gray-600">{t.startPromptsHint}</span>
+              </button>
+              {startsOpen && (
+                <ol className="max-h-40 overflow-y-auto pb-1">
+                  {starts.map((m, i) => (
+                    <li key={m.key}>
+                      <button
+                        type="button"
+                        onClick={() => jumpTo(m.key)}
+                        className="block w-full truncate px-3 py-0.5 pl-7 text-left text-gray-300 hover:bg-gray-800 hover:text-white"
+                        title={m.text}
+                      >
+                        <span className="mr-1.5 text-gray-600">{i + 1}.</span>
+                        {splitImages(m.text).text || m.text}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
+
+          <div
+            ref={listRef}
+            role="log"
+            aria-label={t.chatLog(pane.name)}
+            className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+              // Only a scroll up by the user lets go; layout shifts never do
+              if (nearBottom) stickToBottom.current = true;
+              else if (el.scrollTop < lastScrollTop.current - 2) stickToBottom.current = false;
+              lastScrollTop.current = el.scrollTop;
+              if (el.scrollTop < LOAD_OLDER_PX) loadOlder();
+            }}
+          >
+            <div ref={contentRef}>
+              {state.older?.more && (
+                <div className="flex justify-center py-2" role="status">
+                  {loadingOlder ? (
+                    <span className="text-xs text-gray-500">{t.loadingEarlier}</span>
+                  ) : (
                     <button
                       type="button"
-                      onClick={() => jumpTo(m.key)}
-                      className="block w-full truncate px-3 py-0.5 pl-7 text-left text-gray-300 hover:bg-gray-800 hover:text-white"
-                      title={m.text}
+                      onClick={loadOlder}
+                      className="text-xs text-gray-400 hover:text-gray-200 underline-offset-2 hover:underline"
                     >
-                      <span className="mr-1.5 text-gray-600">{i + 1}.</span>
-                      {splitImages(m.text).text || m.text}
+                      {t.loadEarlier}
                     </button>
-                  </li>
+                  )}
+                </div>
+              )}
+              {state.messages.length === 0 && (
+                <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                  {sessionId
+                    ? t.emptyChat(harnessName, !!uploads)
+                    : t.waitingForSession(harnessName)}
+                </div>
+              )}
+              <ChatFileContext.Provider value={pane.cwd}>
+                <ChatRepliesContext.Provider value={replies}>
+                  {shown.map((item) => {
+                    if (item.kind === 'thread') {
+                      const thread = threadList.find((x) => x.id === item.threadId);
+                      return thread ? (
+                        <ThreadMarkerRow
+                          key={item.key}
+                          thread={thread}
+                          items={routed.byThread.get(thread.id) ?? NO_ITEMS}
+                          onOpen={() => openThreadIn(thread.id)}
+                        />
+                      ) : null;
+                    }
+                    return (
+                      // content-visibility keeps long chats (hundreds of messages) cheap to scroll
+                      <div
+                        key={item.key}
+                        data-chat-key={item.key}
+                        className="[content-visibility:auto] [contain-intrinsic-size:auto_60px]"
+                      >
+                        <ChatItemView
+                          item={item}
+                          showSteps={showSteps}
+                          live={isLive(item)}
+                          harness={harnessName}
+                          model={state.model}
+                        />
+                      </div>
+                    );
+                  })}
+                </ChatRepliesContext.Provider>
+                {pending.map((p, i) => (
+                  <UserMessage key={`q${i}`} text={p} queued />
                 ))}
-              </ol>
-            )}
-          </div>
-        )}
-
-        <div
-          ref={listRef}
-          role="log"
-          aria-label={t.chatLog(pane.name)}
-          className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2"
-          onScroll={(e) => {
-            const el = e.currentTarget;
-            const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-            // Only a scroll up by the user lets go; layout shifts never do
-            if (nearBottom) stickToBottom.current = true;
-            else if (el.scrollTop < lastScrollTop.current - 2) stickToBottom.current = false;
-            lastScrollTop.current = el.scrollTop;
-            if (el.scrollTop < LOAD_OLDER_PX) loadOlder();
-          }}
-        >
-          <div ref={contentRef}>
-            {state.older?.more && (
-              <div className="flex justify-center py-2" role="status">
-                {loadingOlder ? (
-                  <span className="text-xs text-gray-500">{t.loadingEarlier}</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={loadOlder}
-                    className="text-xs text-gray-400 hover:text-gray-200 underline-offset-2 hover:underline"
-                  >
-                    {t.loadEarlier}
-                  </button>
-                )}
-              </div>
-            )}
-            {state.messages.length === 0 && (
-              <div className="h-full flex items-center justify-center text-sm text-gray-500">
-                {sessionId ? t.emptyChat(harnessName, !!uploads) : t.waitingForSession(harnessName)}
-              </div>
-            )}
-            <ChatFileContext.Provider value={pane.cwd}>
-              {shown.map((item, i) => (
-                // content-visibility keeps long chats (hundreds of messages) cheap to scroll
-                <div
-                  key={item.key}
-                  data-chat-key={item.key}
-                  className="[content-visibility:auto] [contain-intrinsic-size:auto_60px]"
-                >
+                {workingCard && !promptsOnly && !lastThread && (
                   <ChatItemView
-                    item={item}
+                    item={null}
                     showSteps={showSteps}
-                    live={busy && item.kind === 'answer' && i === shown.length - 1}
+                    live
                     harness={harnessName}
                     model={state.model}
                   />
-                </div>
-              ))}
-              {pending.map((p, i) => (
-                <UserMessage key={`q${i}`} text={p} queued />
-              ))}
-              {busy && !promptsOnly && pending.length === 0 && items.at(-1)?.kind === 'user' && (
-                <ChatItemView
-                  item={null}
-                  showSteps={showSteps}
-                  live
-                  harness={harnessName}
-                  model={state.model}
-                />
-              )}
-            </ChatFileContext.Provider>
+                )}
+              </ChatFileContext.Provider>
+            </div>
           </div>
-        </div>
 
-        <div className="shrink-0 border-t border-gray-800 p-2">
-          {recap && (
-            <section
-              aria-label={t.recap}
-              data-chat-recap
-              className="mb-2 flex gap-2 rounded-md border border-gray-700/70 bg-gray-900/70 px-3 py-2 text-sm text-gray-300"
-            >
-              <History size={14} aria-hidden className="mt-0.5 shrink-0 text-gray-500" />
-              <p className="max-h-24 min-w-0 overflow-y-auto whitespace-pre-wrap">
-                <span className="text-gray-500">{t.recapPrefix}</span>
-                {recap.text}
-              </p>
-            </section>
-          )}
-          {dialog && (
-            <QuestionCard
-              dialog={dialog}
-              sent={sentFor === dialogId}
-              disabled={!connected}
-              onAnswer={answerDialog}
-            />
-          )}
-          {prompt !== null && !dialog && (
-            <div
-              role="status"
-              className="mb-2 rounded-md border border-amber-400/40 bg-amber-500/10 p-2"
-            >
-              <div className="text-xs font-medium text-amber-200">{t.agentAskingPrompt}</div>
-              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-gray-200 font-mono">
-                {prompt}
-              </pre>
-              {choices.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {choices.map((c) => (
-                    <button
-                      key={c.number}
-                      type="button"
-                      disabled={!connected}
-                      onClick={() => answerPrompt(String(c.number))}
-                      className="rounded border border-amber-400/40 bg-gray-900 px-2 py-1 text-xs text-gray-100 hover:bg-amber-500/20 focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50"
-                    >
-                      {c.number}. {c.label}
-                    </button>
-                  ))}
+          <div className="shrink-0 border-t border-gray-800 p-2">
+            {recap && (
+              <section
+                aria-label={t.recap}
+                data-chat-recap
+                className="mb-2 flex gap-2 rounded-md border border-gray-700/70 bg-gray-900/70 px-3 py-2 text-sm text-gray-300"
+              >
+                <History size={14} aria-hidden className="mt-0.5 shrink-0 text-gray-500" />
+                <p className="max-h-24 min-w-0 overflow-y-auto whitespace-pre-wrap">
+                  <span className="text-gray-500">{t.recapPrefix}</span>
+                  {recap.text}
+                </p>
+              </section>
+            )}
+            {dialog && (
+              <QuestionCard
+                dialog={dialog}
+                sent={sentFor === dialogId}
+                disabled={!connected}
+                onAnswer={answerDialog}
+              />
+            )}
+            {prompt !== null && !dialog && (
+              <div
+                role="status"
+                className="mb-2 rounded-md border border-amber-400/40 bg-amber-500/10 p-2"
+              >
+                <div className="text-xs font-medium text-amber-200">{t.agentAskingPrompt}</div>
+                <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-gray-200 font-mono">
+                  {prompt}
+                </pre>
+                {choices.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {choices.map((c) => (
+                      <button
+                        key={c.number}
+                        type="button"
+                        disabled={!connected}
+                        onClick={() => answerPrompt(String(c.number))}
+                        className="rounded border border-amber-400/40 bg-gray-900 px-2 py-1 text-xs text-gray-100 hover:bg-amber-500/20 focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50"
+                      >
+                        {c.number}. {c.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {chatId && (
+              <ChatActivity
+                chatId={chatId}
+                messages={state.messages}
+                sub={state.sub}
+                busy={busy}
+                endedTasks={state.endedTasks}
+              />
+            )}
+            {error && (
+              <div role="alert" className="mb-1 text-xs text-red-300">
+                {error}
+              </div>
+            )}
+            {quote && <QuoteChip quote={quote} onRemove={() => setQuote(null)} />}
+            <div className="flex items-end gap-2">
+              <ChatComposer
+                chatId={chatId}
+                value={text}
+                onChange={setText}
+                onSubmit={submit}
+                onStop={stopTurn}
+                busy={busy}
+                disabled={!connected}
+                submitKey={submitKey}
+                history={history}
+                commands={state.commands}
+                agents={state.agents}
+                suggestion={suggestion?.text}
+                suggestionCut={suggestion?.truncated}
+                takeSuggestion={() => takePaneSuggestion(pane.id)}
+                inputRef={inputRef}
+              />
+              <button
+                type="button"
+                onClick={submit}
+                disabled={sending || !connected}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
+                aria-label={t.sendMessage}
+              >
+                <Send size={13} aria-hidden />
+                <span className="hidden sm:inline">{t.send}</span>
+              </button>
+            </div>
+            {uploads && (
+              <ImageAttachments
+                images={images}
+                onChange={setImages}
+                disabled={sending || !connected}
+                files={uploads.attachmentExtensions}
+              />
+            )}
+            {chatId && (
+              <div className="flex items-end gap-3">
+                <div className="flex-1 min-w-0">
+                  <ChatStatusLine
+                    chatId={chatId}
+                    turns={turns}
+                    visible={active}
+                    picker={
+                      (harness === 'claude' || harness === 'omp') && (
+                        <ModelEffortPicker
+                          harness={harness}
+                          model=""
+                          effort=""
+                          keepLabel={t.keepCurrent}
+                          currentModel={state.model}
+                          currentEffort={state.effort}
+                          placement="up"
+                          disabled={busy || !connected}
+                          onPick={switchModel}
+                          title={
+                            busy
+                              ? t.switchModelBusy
+                              : t.switchModel(
+                                  harness === 'omp' ? '/switch, /effort' : '/model, /effort'
+                                )
+                          }
+                        />
+                      )
+                    }
+                  />
                 </div>
-              )}
-            </div>
-          )}
-          {chatId && (
-            <ChatActivity
-              chatId={chatId}
-              messages={state.messages}
-              sub={state.sub}
-              busy={busy}
-              endedTasks={state.endedTasks}
-            />
-          )}
-          {error && (
-            <div role="alert" className="mb-1 text-xs text-red-300">
-              {error}
-            </div>
-          )}
-          <div className="flex items-end gap-2">
-            <ChatComposer
-              chatId={chatId}
-              value={text}
-              onChange={setText}
-              onSubmit={submit}
-              onStop={stopTurn}
-              busy={busy}
-              disabled={!connected}
-              submitKey={submitKey}
-              history={history}
-              commands={state.commands}
-              agents={state.agents}
-              suggestion={suggestion?.text}
-              suggestionCut={suggestion?.truncated}
-              takeSuggestion={() => takePaneSuggestion(pane.id)}
-              inputRef={inputRef}
-            />
-            <button
-              type="button"
-              onClick={submit}
-              disabled={sending || !connected}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50"
-              aria-label={t.sendMessage}
-            >
-              <Send size={13} aria-hidden />
-              <span className="hidden sm:inline">{t.send}</span>
-            </button>
+                <div className="mt-2">
+                  <ChatArtifactsButton
+                    artifacts={artifacts}
+                    onOpen={() => setArtifactsOpen(true)}
+                  />
+                </div>
+              </div>
+            )}
+            {chatId && artifactsOpen && (
+              <ChatArtifactsModal
+                chatId={chatId}
+                cwd={pane.cwd}
+                title={pane.name}
+                artifacts={artifacts}
+                onClose={() => setArtifactsOpen(false)}
+              />
+            )}
           </div>
-          {uploads && (
-            <ImageAttachments
-              images={images}
-              onChange={setImages}
-              disabled={sending || !connected}
-              files={uploads.attachmentExtensions}
-            />
-          )}
-          {chatId && (
-            <div className="flex items-end gap-3">
-              <div className="flex-1 min-w-0">
-                <ChatStatusLine
-                  chatId={chatId}
-                  turns={turns}
-                  visible={active}
-                  picker={
-                    (harness === 'claude' || harness === 'omp') && (
-                      <ModelEffortPicker
-                        harness={harness}
-                        model=""
-                        effort=""
-                        keepLabel={t.keepCurrent}
-                        currentModel={state.model}
-                        currentEffort={state.effort}
-                        placement="up"
-                        disabled={busy || !connected}
-                        onPick={switchModel}
-                        title={
-                          busy
-                            ? t.switchModelBusy
-                            : t.switchModel(
-                                harness === 'omp' ? '/switch, /effort' : '/model, /effort'
-                              )
-                        }
-                      />
-                    )
-                  }
-                />
-              </div>
-              <div className="mt-2">
-                <ChatArtifactsButton artifacts={artifacts} onOpen={() => setArtifactsOpen(true)} />
-              </div>
-            </div>
-          )}
-          {chatId && artifactsOpen && (
-            <ChatArtifactsModal
-              chatId={chatId}
-              cwd={pane.cwd}
-              title={pane.name}
-              artifacts={artifacts}
-              onClose={() => setArtifactsOpen(false)}
-            />
-          )}
         </div>
+        {showThreads && (
+          <>
+            <ResizeHandle
+              width={threadsWidth}
+              min={THREADS_MIN}
+              max={THREADS_MAX}
+              onChange={setThreadsWidth}
+              onReset={() => setThreadsWidth(THREADS_WIDTH)}
+              edge="left"
+              label={t.resizeThreads}
+            />
+            <aside
+              aria-label={t.threads}
+              style={{ width: threadsWidth }}
+              className="min-h-0 max-w-[60%] shrink-0 border-l border-gray-800"
+            >
+              <ThreadsPanel
+                status={threads.status}
+                threads={threadList}
+                tasks={threads.tasks}
+                byThread={routed.byThread}
+                openId={openThreadId}
+                onOpen={openThreadIn}
+                onRetry={() => threads.reload()}
+                onNewTask={(task) =>
+                  threads
+                    .create({ task })
+                    .then((made) => openThreadIn(made.id))
+                    .catch((e: Error) => setError(e.message))
+                }
+                onNewFree={() => openThreadIn(DRAFT_THREAD)}
+                onClose={(id, closed) =>
+                  threads.update(id, { closed }).catch((e: Error) => setError(e.message))
+                }
+                renderThread={(thread) => {
+                  const parent = thread?.parentKey
+                    ? items.find((i) => i.key === thread.parentKey)
+                    : undefined;
+                  return (
+                    <>
+                      <div ref={threadListRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-1">
+                        {needsOlder && (
+                          <div role="status" className="py-2 text-center text-xs text-gray-500">
+                            {t.loadingThreadHistory}
+                          </div>
+                        )}
+                        {parent && (
+                          <div className="opacity-70" data-thread-parent>
+                            <ChatItemView
+                              item={parent}
+                              showSteps={false}
+                              harness={harnessName}
+                              model={state.model}
+                            />
+                          </div>
+                        )}
+                        <ChatFileContext.Provider value={pane.cwd}>
+                          <ChatRepliesContext.Provider value={threadReplies}>
+                            {threadItems.map((item) => (
+                              <ChatItemView
+                                key={item.key}
+                                item={item}
+                                showSteps={showSteps}
+                                live={isLive(item)}
+                                harness={harnessName}
+                                model={state.model}
+                              />
+                            ))}
+                            {workingCard && thread && lastThread === thread.id && (
+                              <ChatItemView
+                                item={null}
+                                showSteps={showSteps}
+                                live
+                                harness={harnessName}
+                                model={state.model}
+                              />
+                            )}
+                          </ChatRepliesContext.Provider>
+                        </ChatFileContext.Provider>
+                        {thread && threadItems.length === 0 && !parent && (
+                          <p className="py-3 text-xs text-gray-500">
+                            {t.firstThreadMessage(thread.tag)}
+                          </p>
+                        )}
+                        {!thread && (
+                          <p className="py-3 text-xs text-gray-500">{t.threadWithoutTaskHint}</p>
+                        )}
+                      </div>
+                      <div className="shrink-0 px-2 pb-1 text-[11px] text-gray-500">
+                        <span className="truncate">
+                          {thread?.binding ? t.boundTo(thread.repo ?? null) : t.notBound}
+                        </span>
+                      </div>
+                      <ThreadComposer
+                        placeholder={t.replyInThread}
+                        quote={threadQuote}
+                        onClearQuote={() => setThreadQuote(null)}
+                        onSend={sendInThread}
+                        disabled={!connected}
+                        focusKey={openThreadId}
+                      />
+                    </>
+                  );
+                }}
+              />
+            </aside>
+          </>
+        )}
       </div>
     </div>
   );

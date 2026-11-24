@@ -49,11 +49,14 @@ export interface ResizeHandleProps {
   className?: string;
   /** Screen pixels per layout pixel, when the box sits under CSS zoom (default 1) */
   scale?: number;
+  /** Double click: back to the default width */
+  onReset?: () => void;
 }
 
 /**
  * Drag handle for a box's width: pointer drag (captured, so a terminal under the pointer cannot
- * swallow the moves), arrow keys in 16 px steps, Home/End for min/max. A vertical separator.
+ * swallow the moves), arrow keys in 16 px steps, Home/End for min/max, double click resets.
+ * A vertical separator.
  */
 export const ResizeHandle: React.FC<ResizeHandleProps> = ({
   width,
@@ -64,6 +67,7 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
   label,
   className = '',
   scale = 1,
+  onReset,
 }) => {
   const drag = useRef<{ x: number; width: number } | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -98,6 +102,7 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
         setDragging(false);
         e.currentTarget.releasePointerCapture?.(e.pointerId);
       }}
+      onDoubleClick={onReset}
       onPointerCancel={() => {
         drag.current = null;
         setDragging(false);

@@ -1,15 +1,18 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, } from 'react';
-import { ChevronRight, History, ListTree, Maximize2, MessageSquare, MessagesSquare, RefreshCw, Send, Square, SquareTerminal, X, } from 'lucide-react';
+import { ChevronRight, History, ListTree, Maximize2, MessageSquare, MessagesSquare, PanelRight, RefreshCw, Send, Square, SquareTerminal, X, } from 'lucide-react';
 import { groupAnswers, initialChatState, initialPrompts, pendingPrompts, prependHistory, agentMessage, reduceChat, } from '../../../utils/chatEvents';
 import { attachableFiles, promptWithAttachments } from '../../../utils/composer';
 import { useTransport } from '../../../host';
 import { useLabels } from '../../../labels';
 import { ImageAttachments, imageDropHandlers } from '../../ImageAttachments';
-import { ChatIdContext, ChatItemView, UserMessage } from './ChatMessages';
 import { ChatFileContext } from './ChatMarkdown';
 import { ChatArtifactsButton, ChatArtifactsModal, artifactRefreshKey, useChatArtifacts, } from './ChatArtifacts';
 import { ChatComposer } from './ChatComposer';
+import { ChatIdContext, ChatItemView, ChatRepliesContext, UserMessage, } from './ChatMessages';
+import { DRAFT_THREAD, QuoteChip, ThreadComposer, ThreadMarkerRow, ThreadsPanel, firstWords, useChatThreads, } from './ChatThreads';
+import { answerText, hhmm, itemTime, quoteHeader, routeThreads, unreadCount, } from '../../../utils/chatThreads';
+import { ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
 import { ChatActivity } from './ChatActivity';
 import { ChatStatusLine } from './ChatStatusLine';
 import { QuestionCard } from './QuestionCard';
@@ -107,6 +110,23 @@ const reducer = (state, action) => action.type === 'reset'
         : reduceChat(state, action.event);
 /** Distance from the top (px) at which the next older page loads */
 const LOAD_OLDER_PX = 400;
+const NO_THREADS = [];
+const NO_ITEMS = [];
+// Threads panel: one width for all orchestrator chats (pane ids do not outlive a restart)
+const THREADS_WIDTH_KEY = 'agents-ui:threads-width';
+const THREADS_OPEN_KEY = 'agents-ui:threads-open';
+const THREADS_WIDTH = 360;
+const THREADS_MIN = 260;
+const THREADS_MAX = 640;
+const readFlag = (key, fallback) => {
+    try {
+        const v = localStorage.getItem(key);
+        return v === null ? fallback : v === '1';
+    }
+    catch {
+        return fallback;
+    }
+};
 const iconBtn = 'p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-40 shrink-0';
 // A focus or active-pane change re-labels the top bar (keys, model) and can reflow the panes
 // between mousedown and mouseup, swallowing the click; header buttons act without either
@@ -137,6 +157,8 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
     const connected = usePaneConnected(pane.id);
     const harness = sessionHarness(pane);
     const harnessName = harnessLabel(harness);
+    // Threads of an orchestrator chat: a slice of this session, routed by tag (utils/chatThreads)
+    const threads = useChatThreads(agent?.id);
     // The server view outlives this component (split remounts, view switches): with nobody
     // watching it stops itself after the orphan timeout, so a remount never races a stop
     useEffect(() => {
@@ -262,9 +284,12 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
         }
         return null;
     }, [state.messages]);
+    const threadList = threads.enabled ? threads.threads : NO_THREADS;
+    const routed = useMemo(() => routeThreads(items.filter((item) => item !== recap), threadList), [items, recap, threadList]);
     const shown = useMemo(() => promptsOnly
-        ? items.filter((item) => item.kind === 'user' && !agentMessage(item.text))
-        : items.filter((item) => item !== recap), [items, promptsOnly, recap]);
+        ? routed.main.filter((item) => item.kind === 'user' && !agentMessage(item.text))
+        : routed.main, [routed, promptsOnly]);
+    const [quote, setQuote] = useState(null);
     const pending = useMemo(() => pendingPrompts(state), [state]);
     const starts = useMemo(() => initialPrompts(state.messages), [state.messages]);
     const [startsOpen, setStartsOpen] = useState(false);
@@ -339,36 +364,149 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
         if (answer.type !== 'tab' && answer.type !== 'step')
             setSentFor(dialogId);
     };
-    const submit = async () => {
-        if (sending || !connected || (!text.trim() && images.length === 0))
-            return;
-        setSending(true);
+    // `head`: thread tag line and reply quote, in front of what the user typed
+    const sendPrompt = async (head, body, files) => {
         setError(null);
         try {
             const stored = uploads
-                ? await Promise.all(images.map((file) => uploads.uploadAttachment(file)))
+                ? await Promise.all(files.map((file) => uploads.uploadAttachment(file)))
                 : [];
-            const prompt = promptWithAttachments(text, stored);
+            const prompt = head + promptWithAttachments(body, stored);
             if (!typeIntoPane(pane.id, prompt)) {
                 setError(notConnected);
-                return;
+                return false;
             }
             // Claude logs a typed prompt at once (or as queued); others only once the agent takes it.
             // Commands never show up as a user turn.
             if (harness !== 'claude' && !prompt.trimStart().startsWith('/'))
                 dispatch({ type: 'event', event: { type: 'devorbit_sent', text: prompt } });
-            setText('');
-            setImages([]);
-            stickToBottom.current = true;
+            return true;
         }
         catch (e) {
             setError(e instanceof Error ? e.message : t.sendingFailed);
+            return false;
+        }
+    };
+    const submit = async () => {
+        if (sending || !connected || (!text.trim() && images.length === 0))
+            return;
+        setSending(true);
+        try {
+            if (await sendPrompt(quote ? quoteHeader(quote.ts, quote.text) : '', text, images)) {
+                setText('');
+                setImages([]);
+                setQuote(null);
+                stickToBottom.current = true;
+            }
         }
         finally {
             setSending(false);
             inputRef.current?.focus();
         }
     };
+    const [threadsOpen, setThreadsOpen] = useState(() => readFlag(THREADS_OPEN_KEY, true));
+    const showThreadsPanel = (open) => {
+        setThreadsOpen(open);
+        try {
+            localStorage.setItem(THREADS_OPEN_KEY, open ? '1' : '0');
+        }
+        catch {
+            // not remembered
+        }
+    };
+    const [threadsWidth, setThreadsWidth] = useStoredWidth(THREADS_WIDTH_KEY, THREADS_WIDTH, THREADS_MIN, THREADS_MAX);
+    const [openThreadId, setOpenThreadId] = useState(null);
+    const [threadQuote, setThreadQuote] = useState(null);
+    const showThreads = threads.enabled && threadsOpen;
+    const openThreadIn = (id) => {
+        setOpenThreadId(id);
+        setThreadQuote(null);
+        if (id)
+            showThreadsPanel(true);
+    };
+    const openThread = threads.threads.find((x) => x.id === openThreadId) ?? null;
+    const openFromAnswer = async (answer) => {
+        const ts = answer.parts[0]?.ts ?? Date.now();
+        try {
+            const made = await threads.create({
+                name: { project: `Answer ${hhmm(ts)}`, task: firstWords(answerText(answer)) || 'Thread' },
+                parentKey: answer.key,
+            });
+            openThreadIn(made.id);
+        }
+        catch (e) {
+            setError(e instanceof Error ? e.message : t.threadsFailed);
+        }
+    };
+    const sendInThread = async (body, files) => {
+        let thread = openThread;
+        if (!thread) {
+            // a thread without a task is named after its first message
+            try {
+                thread = await threads.create({
+                    name: { project: `Thread ${hhmm(Date.now())}`, task: firstWords(body) || 'Thread' },
+                });
+            }
+            catch (e) {
+                setError(e instanceof Error ? e.message : t.threadsFailed);
+                return false;
+            }
+            setOpenThreadId(thread.id);
+        }
+        const quoted = threadQuote ? quoteHeader(threadQuote.ts, threadQuote.text) : '';
+        const sent = await sendPrompt(`${thread.tag}\n${quoted}`, body, files);
+        if (sent)
+            setThreadQuote(null);
+        return sent;
+    };
+    const unreadTotal = threadList.reduce((n, x) => n + (x.closed ? 0 : unreadCount(routed.byThread.get(x.id) ?? NO_ITEMS, x.readAt)), 0);
+    const threadItems = openThread ? (routed.byThread.get(openThread.id) ?? NO_ITEMS) : NO_ITEMS;
+    // The running turn: its answer (or the working card) shows where its last item went
+    const lastItem = items.at(-1);
+    const lastThread = lastItem
+        ? ([...routed.byThread].find(([, xs]) => xs.at(-1) === lastItem)?.[0] ?? null)
+        : null;
+    const isLive = (item) => busy && item.kind === 'answer' && item === lastItem;
+    const workingCard = busy && pending.length === 0 && lastItem?.kind === 'user';
+    // Read what the open thread shows, while the pane is on screen
+    const { update: updateThread } = threads;
+    useEffect(() => {
+        if (!openThread || !showThreads || !active)
+            return;
+        const latest = Math.max(0, ...threadItems.map((i) => itemTime(i) ?? 0));
+        if (latest > openThread.readAt)
+            void updateThread(openThread.id, { readAt: latest }).catch(() => { });
+    }, [openThread, threadItems, showThreads, active, updateThread]);
+    // The open thread's messages may lie before the loaded tail: load pages back to its start
+    const earliest = useMemo(() => {
+        for (const m of state.messages)
+            if ((m.kind === 'user' || m.kind === 'assistant') && m.ts)
+                return m.ts;
+        return undefined;
+    }, [state.messages]);
+    const needsOlder = !!openThread &&
+        !!state.older?.more &&
+        earliest !== undefined &&
+        earliest > openThread.createdAt;
+    useEffect(() => {
+        if (needsOlder)
+            loadOlder();
+    }, [needsOlder, loadOlder]);
+    const replies = useMemo(() => ({ reply: setQuote, openThread: threads.enabled ? openFromAnswer : undefined }), 
+    // openFromAnswer reads only stable setters and the create call
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [threads.enabled, threads.create]);
+    const threadReplies = useMemo(() => ({ reply: setThreadQuote, tag: openThread?.tag ?? null }), [openThread?.tag]);
+    const threadListRef = useRef(null);
+    useLayoutEffect(() => {
+        const el = threadListRef.current;
+        if (el)
+            el.scrollTop = el.scrollHeight;
+    }, [threadItems, openThreadId]);
+    useEffect(() => {
+        if (quote)
+            inputRef.current?.focus();
+    }, [quote]);
     // Esc, like the key in the TUI
     const stopTurn = () => {
         setError(pressKeys(pane.id, '\x1b') ? null : notConnected);
@@ -389,22 +527,38 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
                             setError(null);
                             if (!reattachPane(pane.id))
                                 setError(t.noTerminalToReattach);
-                        }, className: "shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] text-amber-100 bg-amber-500/15 border border-amber-400/40 hover:bg-amber-500/25 focus-visible:outline-2 focus-visible:outline-blue-400", title: t.reattachTitle, children: [_jsx(RefreshCw, { size: 11, "aria-hidden": true }), t.reattach] })), meta && (_jsx("div", { className: "flex items-center gap-x-2 min-w-0 overflow-hidden text-[11px] text-gray-400", children: meta })), _jsx("span", { className: "flex-1" }), hostActions, _jsx("button", { type: "button", onClick: onToggleSteps, onMouseDown: keepFocus, className: `${iconBtn} ${showSteps ? 'text-blue-300' : ''}`, title: showSteps ? t.hideStepsTitle : t.showStepsTitle, "aria-label": t.showSteps, "aria-pressed": showSteps, children: _jsx(ListTree, { size: 13 }) }), _jsx("button", { type: "button", onClick: togglePromptsOnly, onMouseDown: keepFocus, disabled: !sessionId, className: `${iconBtn} ${promptsOnly ? 'text-blue-300' : ''}`, title: promptsOnly ? t.showAnswersTitle : t.promptsOnlyTitle, "aria-label": t.promptsOnly, "aria-pressed": promptsOnly, children: _jsx(MessagesSquare, { size: 13 }) }), busy && connected && (_jsx("button", { type: "button", onClick: stopTurn, onMouseDown: keepFocus, className: iconBtn, title: t.stopTurnTitle, "aria-label": t.stopTurn, children: _jsx(Square, { size: 13 }) })), _jsx("button", { type: "button", onClick: onShowTerminal, onMouseDown: keepFocus, className: iconBtn, title: t.terminalViewTitle, "aria-label": t.terminalView, children: _jsx(SquareTerminal, { size: 14 }) }), onMaximize && (_jsx("button", { type: "button", onClick: onMaximize, onMouseDown: keepFocus, className: iconBtn, title: t.ownTab, "aria-label": t.moveToItsOwnTab, children: _jsx(Maximize2, { size: 13 }) })), _jsx("button", { type: "button", onClick: onClose, onMouseDown: keepFocus, className: iconBtn, title: t.closeAgentTitle, "aria-label": t.closeNamed(pane.name), children: _jsx(X, { size: 14 }) })] }), _jsxs("div", { className: "relative flex-1 min-h-0 flex flex-col", children: [paneView !== null && paneView !== false && (_jsx("div", { "data-pane-view": true, className: "absolute inset-0 z-20 flex flex-col bg-gray-950", children: paneView })), starts.length > 0 && (_jsxs("div", { className: "shrink-0 border-b border-gray-800 bg-gray-900/60 text-xs", children: [_jsxs("button", { type: "button", onClick: () => setStartsOpen((o) => !o), className: "flex w-full items-center gap-1 px-3 py-1 text-gray-400 hover:text-gray-200", "aria-expanded": startsOpen, "data-chat-starts": true, children: [_jsx(ChevronRight, { size: 12, "aria-hidden": true, className: `transition-transform ${startsOpen ? 'rotate-90' : ''}` }), t.startPrompts(starts.length), _jsx("span", { className: "text-gray-600", children: t.startPromptsHint })] }), startsOpen && (_jsx("ol", { className: "max-h-40 overflow-y-auto pb-1", children: starts.map((m, i) => (_jsx("li", { children: _jsxs("button", { type: "button", onClick: () => jumpTo(m.key), className: "block w-full truncate px-3 py-0.5 pl-7 text-left text-gray-300 hover:bg-gray-800 hover:text-white", title: m.text, children: [_jsxs("span", { className: "mr-1.5 text-gray-600", children: [i + 1, "."] }), splitImages(m.text).text || m.text] }) }, m.key))) }))] })), _jsx("div", { ref: listRef, role: "log", "aria-label": t.chatLog(pane.name), className: "flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2", onScroll: (e) => {
-                            const el = e.currentTarget;
-                            const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-                            // Only a scroll up by the user lets go; layout shifts never do
-                            if (nearBottom)
-                                stickToBottom.current = true;
-                            else if (el.scrollTop < lastScrollTop.current - 2)
-                                stickToBottom.current = false;
-                            lastScrollTop.current = el.scrollTop;
-                            if (el.scrollTop < LOAD_OLDER_PX)
-                                loadOlder();
-                        }, children: _jsxs("div", { ref: contentRef, children: [state.older?.more && (_jsx("div", { className: "flex justify-center py-2", role: "status", children: loadingOlder ? (_jsx("span", { className: "text-xs text-gray-500", children: t.loadingEarlier })) : (_jsx("button", { type: "button", onClick: loadOlder, className: "text-xs text-gray-400 hover:text-gray-200 underline-offset-2 hover:underline", children: t.loadEarlier })) })), state.messages.length === 0 && (_jsx("div", { className: "h-full flex items-center justify-center text-sm text-gray-500", children: sessionId ? t.emptyChat(harnessName, !!uploads) : t.waitingForSession(harnessName) })), _jsxs(ChatFileContext.Provider, { value: pane.cwd, children: [shown.map((item, i) => (
-                                        // content-visibility keeps long chats (hundreds of messages) cheap to scroll
-                                        _jsx("div", { "data-chat-key": item.key, className: "[content-visibility:auto] [contain-intrinsic-size:auto_60px]", children: _jsx(ChatItemView, { item: item, showSteps: showSteps, live: busy && item.kind === 'answer' && i === shown.length - 1, harness: harnessName, model: state.model }) }, item.key))), pending.map((p, i) => (_jsx(UserMessage, { text: p, queued: true }, `q${i}`))), busy && !promptsOnly && pending.length === 0 && items.at(-1)?.kind === 'user' && (_jsx(ChatItemView, { item: null, showSteps: showSteps, live: true, harness: harnessName, model: state.model }))] })] }) }), _jsxs("div", { className: "shrink-0 border-t border-gray-800 p-2", children: [recap && (_jsxs("section", { "aria-label": t.recap, "data-chat-recap": true, className: "mb-2 flex gap-2 rounded-md border border-gray-700/70 bg-gray-900/70 px-3 py-2 text-sm text-gray-300", children: [_jsx(History, { size: 14, "aria-hidden": true, className: "mt-0.5 shrink-0 text-gray-500" }), _jsxs("p", { className: "max-h-24 min-w-0 overflow-y-auto whitespace-pre-wrap", children: [_jsx("span", { className: "text-gray-500", children: t.recapPrefix }), recap.text] })] })), dialog && (_jsx(QuestionCard, { dialog: dialog, sent: sentFor === dialogId, disabled: !connected, onAnswer: answerDialog })), prompt !== null && !dialog && (_jsxs("div", { role: "status", className: "mb-2 rounded-md border border-amber-400/40 bg-amber-500/10 p-2", children: [_jsx("div", { className: "text-xs font-medium text-amber-200", children: t.agentAskingPrompt }), _jsx("pre", { className: "mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-gray-200 font-mono", children: prompt }), choices.length > 0 && (_jsx("div", { className: "mt-2 flex flex-wrap gap-1.5", children: choices.map((c) => (_jsxs("button", { type: "button", disabled: !connected, onClick: () => answerPrompt(String(c.number)), className: "rounded border border-amber-400/40 bg-gray-900 px-2 py-1 text-xs text-gray-100 hover:bg-amber-500/20 focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50", children: [c.number, ". ", c.label] }, c.number))) }))] })), chatId && (_jsx(ChatActivity, { chatId: chatId, messages: state.messages, sub: state.sub, busy: busy, endedTasks: state.endedTasks })), error && (_jsx("div", { role: "alert", className: "mb-1 text-xs text-red-300", children: error })), _jsxs("div", { className: "flex items-end gap-2", children: [_jsx(ChatComposer, { chatId: chatId, value: text, onChange: setText, onSubmit: submit, onStop: stopTurn, busy: busy, disabled: !connected, submitKey: submitKey, history: history, commands: state.commands, agents: state.agents, suggestion: suggestion?.text, suggestionCut: suggestion?.truncated, takeSuggestion: () => takePaneSuggestion(pane.id), inputRef: inputRef }), _jsxs("button", { type: "button", onClick: submit, disabled: sending || !connected, className: "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50", "aria-label": t.sendMessage, children: [_jsx(Send, { size: 13, "aria-hidden": true }), _jsx("span", { className: "hidden sm:inline", children: t.send })] })] }), uploads && (_jsx(ImageAttachments, { images: images, onChange: setImages, disabled: sending || !connected, files: uploads.attachmentExtensions })), chatId && (_jsxs("div", { className: "flex items-end gap-3", children: [_jsx("div", { className: "flex-1 min-w-0", children: _jsx(ChatStatusLine, { chatId: chatId, turns: turns, visible: active, picker: (harness === 'claude' || harness === 'omp') && (_jsx(ModelEffortPicker, { harness: harness, model: "", effort: "", keepLabel: t.keepCurrent, currentModel: state.model, currentEffort: state.effort, placement: "up", disabled: busy || !connected, onPick: switchModel, title: busy
-                                                    ? t.switchModelBusy
-                                                    : t.switchModel(harness === 'omp' ? '/switch, /effort' : '/model, /effort') })) }) }), _jsx("div", { className: "mt-2", children: _jsx(ChatArtifactsButton, { artifacts: artifacts, onOpen: () => setArtifactsOpen(true) }) })] })), chatId && artifactsOpen && (_jsx(ChatArtifactsModal, { chatId: chatId, cwd: pane.cwd, title: pane.name, artifacts: artifacts, onClose: () => setArtifactsOpen(false) }))] })] })] }));
+                        }, className: "shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] text-amber-100 bg-amber-500/15 border border-amber-400/40 hover:bg-amber-500/25 focus-visible:outline-2 focus-visible:outline-blue-400", title: t.reattachTitle, children: [_jsx(RefreshCw, { size: 11, "aria-hidden": true }), t.reattach] })), meta && (_jsx("div", { className: "flex items-center gap-x-2 min-w-0 overflow-hidden text-[11px] text-gray-400", children: meta })), _jsx("span", { className: "flex-1" }), hostActions, _jsx("button", { type: "button", onClick: onToggleSteps, onMouseDown: keepFocus, className: `${iconBtn} ${showSteps ? 'text-blue-300' : ''}`, title: showSteps ? t.hideStepsTitle : t.showStepsTitle, "aria-label": t.showSteps, "aria-pressed": showSteps, children: _jsx(ListTree, { size: 13 }) }), _jsx("button", { type: "button", onClick: togglePromptsOnly, onMouseDown: keepFocus, disabled: !sessionId, className: `${iconBtn} ${promptsOnly ? 'text-blue-300' : ''}`, title: promptsOnly ? t.showAnswersTitle : t.promptsOnlyTitle, "aria-label": t.promptsOnly, "aria-pressed": promptsOnly, children: _jsx(MessagesSquare, { size: 13 }) }), threads.enabled && (_jsxs("button", { type: "button", onClick: () => showThreadsPanel(!threadsOpen), onMouseDown: keepFocus, className: `${iconBtn} relative ${threadsOpen ? 'text-blue-300' : ''}`, title: threadsOpen ? t.hideThreads : t.showThreads, "aria-label": t.threads, "aria-pressed": threadsOpen, children: [_jsx(PanelRight, { size: 13 }), unreadTotal > 0 && !threadsOpen && (_jsx("span", { className: "absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-blue-400" }))] })), busy && connected && (_jsx("button", { type: "button", onClick: stopTurn, onMouseDown: keepFocus, className: iconBtn, title: t.stopTurnTitle, "aria-label": t.stopTurn, children: _jsx(Square, { size: 13 }) })), _jsx("button", { type: "button", onClick: onShowTerminal, onMouseDown: keepFocus, className: iconBtn, title: t.terminalViewTitle, "aria-label": t.terminalView, children: _jsx(SquareTerminal, { size: 14 }) }), onMaximize && (_jsx("button", { type: "button", onClick: onMaximize, onMouseDown: keepFocus, className: iconBtn, title: t.ownTab, "aria-label": t.moveToItsOwnTab, children: _jsx(Maximize2, { size: 13 }) })), _jsx("button", { type: "button", onClick: onClose, onMouseDown: keepFocus, className: iconBtn, title: t.closeAgentTitle, "aria-label": t.closeNamed(pane.name), children: _jsx(X, { size: 14 }) })] }), _jsxs("div", { className: "flex-1 min-h-0 flex", children: [_jsxs("div", { className: "relative flex-1 min-w-0 min-h-0 flex flex-col", children: [paneView !== null && paneView !== false && (_jsx("div", { "data-pane-view": true, className: "absolute inset-0 z-20 flex flex-col bg-gray-950", children: paneView })), starts.length > 0 && (_jsxs("div", { className: "shrink-0 border-b border-gray-800 bg-gray-900/60 text-xs", children: [_jsxs("button", { type: "button", onClick: () => setStartsOpen((o) => !o), className: "flex w-full items-center gap-1 px-3 py-1 text-gray-400 hover:text-gray-200", "aria-expanded": startsOpen, "data-chat-starts": true, children: [_jsx(ChevronRight, { size: 12, "aria-hidden": true, className: `transition-transform ${startsOpen ? 'rotate-90' : ''}` }), t.startPrompts(starts.length), _jsx("span", { className: "text-gray-600", children: t.startPromptsHint })] }), startsOpen && (_jsx("ol", { className: "max-h-40 overflow-y-auto pb-1", children: starts.map((m, i) => (_jsx("li", { children: _jsxs("button", { type: "button", onClick: () => jumpTo(m.key), className: "block w-full truncate px-3 py-0.5 pl-7 text-left text-gray-300 hover:bg-gray-800 hover:text-white", title: m.text, children: [_jsxs("span", { className: "mr-1.5 text-gray-600", children: [i + 1, "."] }), splitImages(m.text).text || m.text] }) }, m.key))) }))] })), _jsx("div", { ref: listRef, role: "log", "aria-label": t.chatLog(pane.name), className: "flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2", onScroll: (e) => {
+                                    const el = e.currentTarget;
+                                    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+                                    // Only a scroll up by the user lets go; layout shifts never do
+                                    if (nearBottom)
+                                        stickToBottom.current = true;
+                                    else if (el.scrollTop < lastScrollTop.current - 2)
+                                        stickToBottom.current = false;
+                                    lastScrollTop.current = el.scrollTop;
+                                    if (el.scrollTop < LOAD_OLDER_PX)
+                                        loadOlder();
+                                }, children: _jsxs("div", { ref: contentRef, children: [state.older?.more && (_jsx("div", { className: "flex justify-center py-2", role: "status", children: loadingOlder ? (_jsx("span", { className: "text-xs text-gray-500", children: t.loadingEarlier })) : (_jsx("button", { type: "button", onClick: loadOlder, className: "text-xs text-gray-400 hover:text-gray-200 underline-offset-2 hover:underline", children: t.loadEarlier })) })), state.messages.length === 0 && (_jsx("div", { className: "h-full flex items-center justify-center text-sm text-gray-500", children: sessionId
+                                                ? t.emptyChat(harnessName, !!uploads)
+                                                : t.waitingForSession(harnessName) })), _jsxs(ChatFileContext.Provider, { value: pane.cwd, children: [_jsx(ChatRepliesContext.Provider, { value: replies, children: shown.map((item) => {
+                                                        if (item.kind === 'thread') {
+                                                            const thread = threadList.find((x) => x.id === item.threadId);
+                                                            return thread ? (_jsx(ThreadMarkerRow, { thread: thread, items: routed.byThread.get(thread.id) ?? NO_ITEMS, onOpen: () => openThreadIn(thread.id) }, item.key)) : null;
+                                                        }
+                                                        return (
+                                                        // content-visibility keeps long chats (hundreds of messages) cheap to scroll
+                                                        _jsx("div", { "data-chat-key": item.key, className: "[content-visibility:auto] [contain-intrinsic-size:auto_60px]", children: _jsx(ChatItemView, { item: item, showSteps: showSteps, live: isLive(item), harness: harnessName, model: state.model }) }, item.key));
+                                                    }) }), pending.map((p, i) => (_jsx(UserMessage, { text: p, queued: true }, `q${i}`))), workingCard && !promptsOnly && !lastThread && (_jsx(ChatItemView, { item: null, showSteps: showSteps, live: true, harness: harnessName, model: state.model }))] })] }) }), _jsxs("div", { className: "shrink-0 border-t border-gray-800 p-2", children: [recap && (_jsxs("section", { "aria-label": t.recap, "data-chat-recap": true, className: "mb-2 flex gap-2 rounded-md border border-gray-700/70 bg-gray-900/70 px-3 py-2 text-sm text-gray-300", children: [_jsx(History, { size: 14, "aria-hidden": true, className: "mt-0.5 shrink-0 text-gray-500" }), _jsxs("p", { className: "max-h-24 min-w-0 overflow-y-auto whitespace-pre-wrap", children: [_jsx("span", { className: "text-gray-500", children: t.recapPrefix }), recap.text] })] })), dialog && (_jsx(QuestionCard, { dialog: dialog, sent: sentFor === dialogId, disabled: !connected, onAnswer: answerDialog })), prompt !== null && !dialog && (_jsxs("div", { role: "status", className: "mb-2 rounded-md border border-amber-400/40 bg-amber-500/10 p-2", children: [_jsx("div", { className: "text-xs font-medium text-amber-200", children: t.agentAskingPrompt }), _jsx("pre", { className: "mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-gray-200 font-mono", children: prompt }), choices.length > 0 && (_jsx("div", { className: "mt-2 flex flex-wrap gap-1.5", children: choices.map((c) => (_jsxs("button", { type: "button", disabled: !connected, onClick: () => answerPrompt(String(c.number)), className: "rounded border border-amber-400/40 bg-gray-900 px-2 py-1 text-xs text-gray-100 hover:bg-amber-500/20 focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50", children: [c.number, ". ", c.label] }, c.number))) }))] })), chatId && (_jsx(ChatActivity, { chatId: chatId, messages: state.messages, sub: state.sub, busy: busy, endedTasks: state.endedTasks })), error && (_jsx("div", { role: "alert", className: "mb-1 text-xs text-red-300", children: error })), quote && _jsx(QuoteChip, { quote: quote, onRemove: () => setQuote(null) }), _jsxs("div", { className: "flex items-end gap-2", children: [_jsx(ChatComposer, { chatId: chatId, value: text, onChange: setText, onSubmit: submit, onStop: stopTurn, busy: busy, disabled: !connected, submitKey: submitKey, history: history, commands: state.commands, agents: state.agents, suggestion: suggestion?.text, suggestionCut: suggestion?.truncated, takeSuggestion: () => takePaneSuggestion(pane.id), inputRef: inputRef }), _jsxs("button", { type: "button", onClick: submit, disabled: sending || !connected, className: "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50", "aria-label": t.sendMessage, children: [_jsx(Send, { size: 13, "aria-hidden": true }), _jsx("span", { className: "hidden sm:inline", children: t.send })] })] }), uploads && (_jsx(ImageAttachments, { images: images, onChange: setImages, disabled: sending || !connected, files: uploads.attachmentExtensions })), chatId && (_jsxs("div", { className: "flex items-end gap-3", children: [_jsx("div", { className: "flex-1 min-w-0", children: _jsx(ChatStatusLine, { chatId: chatId, turns: turns, visible: active, picker: (harness === 'claude' || harness === 'omp') && (_jsx(ModelEffortPicker, { harness: harness, model: "", effort: "", keepLabel: t.keepCurrent, currentModel: state.model, currentEffort: state.effort, placement: "up", disabled: busy || !connected, onPick: switchModel, title: busy
+                                                            ? t.switchModelBusy
+                                                            : t.switchModel(harness === 'omp' ? '/switch, /effort' : '/model, /effort') })) }) }), _jsx("div", { className: "mt-2", children: _jsx(ChatArtifactsButton, { artifacts: artifacts, onOpen: () => setArtifactsOpen(true) }) })] })), chatId && artifactsOpen && (_jsx(ChatArtifactsModal, { chatId: chatId, cwd: pane.cwd, title: pane.name, artifacts: artifacts, onClose: () => setArtifactsOpen(false) }))] })] }), showThreads && (_jsxs(_Fragment, { children: [_jsx(ResizeHandle, { width: threadsWidth, min: THREADS_MIN, max: THREADS_MAX, onChange: setThreadsWidth, onReset: () => setThreadsWidth(THREADS_WIDTH), edge: "left", label: t.resizeThreads }), _jsx("aside", { "aria-label": t.threads, style: { width: threadsWidth }, className: "min-h-0 max-w-[60%] shrink-0 border-l border-gray-800", children: _jsx(ThreadsPanel, { status: threads.status, threads: threadList, tasks: threads.tasks, byThread: routed.byThread, openId: openThreadId, onOpen: openThreadIn, onRetry: () => threads.reload(), onNewTask: (task) => threads
+                                        .create({ task })
+                                        .then((made) => openThreadIn(made.id))
+                                        .catch((e) => setError(e.message)), onNewFree: () => openThreadIn(DRAFT_THREAD), onClose: (id, closed) => threads.update(id, { closed }).catch((e) => setError(e.message)), renderThread: (thread) => {
+                                        const parent = thread?.parentKey
+                                            ? items.find((i) => i.key === thread.parentKey)
+                                            : undefined;
+                                        return (_jsxs(_Fragment, { children: [_jsxs("div", { ref: threadListRef, className: "min-h-0 flex-1 overflow-y-auto px-3 py-1", children: [needsOlder && (_jsx("div", { role: "status", className: "py-2 text-center text-xs text-gray-500", children: t.loadingThreadHistory })), parent && (_jsx("div", { className: "opacity-70", "data-thread-parent": true, children: _jsx(ChatItemView, { item: parent, showSteps: false, harness: harnessName, model: state.model }) })), _jsx(ChatFileContext.Provider, { value: pane.cwd, children: _jsxs(ChatRepliesContext.Provider, { value: threadReplies, children: [threadItems.map((item) => (_jsx(ChatItemView, { item: item, showSteps: showSteps, live: isLive(item), harness: harnessName, model: state.model }, item.key))), workingCard && thread && lastThread === thread.id && (_jsx(ChatItemView, { item: null, showSteps: showSteps, live: true, harness: harnessName, model: state.model }))] }) }), thread && threadItems.length === 0 && !parent && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.firstThreadMessage(thread.tag) })), !thread && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.threadWithoutTaskHint }))] }), _jsx("div", { className: "shrink-0 px-2 pb-1 text-[11px] text-gray-500", children: _jsx("span", { className: "truncate", children: thread?.binding ? t.boundTo(thread.repo ?? null) : t.notBound }) }), _jsx(ThreadComposer, { placeholder: t.replyInThread, quote: threadQuote, onClearQuote: () => setThreadQuote(null), onSend: sendInThread, disabled: !connected, focusKey: openThreadId })] }));
+                                    } }) })] }))] })] }));
     // tool results load their images from this chat
     return _jsx(ChatIdContext.Provider, { value: chatId, children: view });
 };

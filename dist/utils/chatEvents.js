@@ -73,9 +73,7 @@ const AGENT_MESSAGE_RE = /^\[(?:(?:from agent|von Agent) (\S+)(?: "([^"]*)"| „
 /** A user turn another agent sent with `orkumo send`: its sender (null = unknown) and text */
 export function agentMessage(text) {
     const m = AGENT_MESSAGE_RE.exec(text);
-    return m
-        ? { id: m[1] ?? null, name: m[2] ?? m[3] ?? null, body: text.slice(m[0].length) }
-        : null;
+    return m ? { id: m[1] ?? null, name: m[2] ?? m[3] ?? null, body: text.slice(m[0].length) } : null;
 }
 const isObj = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v) => (typeof v === 'string' ? v : '');
@@ -229,9 +227,11 @@ export function reduceChat(state, event) {
                 }
                 // Replayed history never gets a `result`, so it must not keep the typing cursor
                 const model = str(msg.model) || m.model;
+                const ts = m.ts ?? (typeof event.ts === 'number' ? event.ts : undefined);
                 return {
                     ...m,
                     blocks,
+                    ...(ts !== undefined ? { ts } : {}),
                     streaming: event.history === true ? false : m.streaming,
                     ...(model ? { model } : {}),
                 };

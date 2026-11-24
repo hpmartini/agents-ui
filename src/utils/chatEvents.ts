@@ -32,6 +32,8 @@ export type ChatMessage =
       streaming: boolean;
       /** Model that wrote this message, if the transcript names it */
       model?: string;
+      /** When it was written (ms), if the transcript says */
+      ts?: number;
     }
   | { kind: 'result'; key: string; ok: boolean; subtype: string; durationMs: number | null }
   | { kind: 'notice'; key: string; text: string; tone: 'info' | 'error' }
@@ -172,9 +174,7 @@ export function agentMessage(
   text: string
 ): { id: string | null; name: string | null; body: string } | null {
   const m = AGENT_MESSAGE_RE.exec(text);
-  return m
-    ? { id: m[1] ?? null, name: m[2] ?? m[3] ?? null, body: text.slice(m[0].length) }
-    : null;
+  return m ? { id: m[1] ?? null, name: m[2] ?? m[3] ?? null, body: text.slice(m[0].length) } : null;
 }
 
 type Json = Record<string, unknown>;
@@ -337,9 +337,11 @@ export function reduceChat(state: ChatState, event: unknown): ChatState {
         }
         // Replayed history never gets a `result`, so it must not keep the typing cursor
         const model = str(msg.model) || m.model;
+        const ts = m.ts ?? (typeof event.ts === 'number' ? event.ts : undefined);
         return {
           ...m,
           blocks,
+          ...(ts !== undefined ? { ts } : {}),
           streaming: event.history === true ? false : m.streaming,
           ...(model ? { model } : {}),
         };
