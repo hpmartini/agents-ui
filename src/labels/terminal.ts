@@ -168,6 +168,42 @@ export interface TerminalLabels {
   copyAnswer: string;
   recapInline: string;
 
+  // Reply and threads (orchestrator chats)
+  reply: string;
+  replyToSelection: string;
+  replyTo: (time: string) => string;
+  removeQuote: string;
+  openThread: string;
+  threads: string;
+  showThreads: string;
+  hideThreads: string;
+  newThread: string;
+  bindToTask: string;
+  threadWithoutTask: string;
+  threadWithoutTaskHint: string;
+  noReportTasks: string;
+  threadReplies: (count: number) => string;
+  inThread: string;
+  unreadNew: (count: number) => string;
+  unreadCount: (count: number) => string;
+  loadingThreads: string;
+  threadsFailed: string;
+  threadsFailedHint: string;
+  tryAgain: string;
+  noThreads: string;
+  noThreadsHint: string;
+  pickThread: string;
+  closeThread: string;
+  closedThreads: (count: number) => string;
+  reopenThread: string;
+  replyInThread: string;
+  firstThreadMessage: (tag: string) => string;
+  boundTo: (repo: string) => string;
+  notBound: string;
+  resizeThreads: string;
+  threadLog: (name: string) => string;
+  loadingThreadHistory: string;
+
   // ChatPane
   notConnected: string;
   questionChanged: string;
@@ -431,6 +467,42 @@ export const terminalEn: TerminalLabels = {
   answerSteps: (count) => `${count} ${count === 1 ? 'step' : 'steps'}`,
   copyAnswer: 'Copy answer',
   recapInline: 'recap: ',
+
+  reply: 'Reply',
+  replyToSelection: 'Reply to selection',
+  replyTo: (time) => `Reply to ${time}`,
+  removeQuote: 'Remove quote',
+  openThread: 'Open thread',
+  threads: 'Threads',
+  showThreads: 'Show threads',
+  hideThreads: 'Hide threads',
+  newThread: 'New thread',
+  bindToTask: 'Bind to a task from the status report',
+  threadWithoutTask: 'Thread without a task',
+  threadWithoutTaskHint: 'Named after its first message',
+  noReportTasks: 'No status report yet',
+  threadReplies: (count) => `${count} ${count === 1 ? 'reply' : 'replies'}`,
+  inThread: 'in thread',
+  unreadNew: (count) => `${count} new`,
+  unreadCount: (count) => `${count} unread`,
+  loadingThreads: 'Loading threads…',
+  threadsFailed: 'Threads could not be loaded',
+  threadsFailedHint: 'Messages still reach the orchestrator through the main chat.',
+  tryAgain: 'Try again',
+  noThreads: 'No threads yet',
+  noThreadsHint:
+    'Open a thread from an answer, from Instruct on a status card, or bind a new one to a task.',
+  pickThread: 'Pick a thread to read it here.',
+  closeThread: 'Close thread',
+  closedThreads: (count) => `Closed (${count})`,
+  reopenThread: 'Reopen',
+  replyInThread: 'Reply in thread',
+  firstThreadMessage: (tag) => `Write the first message. It goes to the orchestrator tagged ${tag}.`,
+  boundTo: (repo) => `Bound to status task · ${repo}`,
+  notBound: 'Not bound to a status task',
+  resizeThreads: 'Resize threads panel',
+  threadLog: (name) => `Thread ${name}`,
+  loadingThreadHistory: 'Loading earlier messages of this thread…',
 
   // ChatPane
   notConnected: 'The terminal is not connected: use Reattach above, then send again',
@@ -704,6 +776,42 @@ export const terminalDe: TerminalLabels = {
   answerSteps: (count) => `${count} ${count === 1 ? 'Schritt' : 'Schritte'}`,
   copyAnswer: 'Antwort kopieren',
   recapInline: 'Zusammenfassung: ',
+
+  reply: 'Antworten',
+  replyToSelection: 'Auf Markierung antworten',
+  replyTo: (time) => `Antwort auf ${time}`,
+  removeQuote: 'Zitat entfernen',
+  openThread: 'Thread öffnen',
+  threads: 'Threads',
+  showThreads: 'Threads einblenden',
+  hideThreads: 'Threads ausblenden',
+  newThread: 'Neuer Thread',
+  bindToTask: 'An eine Aufgabe aus dem Status-Bericht binden',
+  threadWithoutTask: 'Thread ohne Aufgabe',
+  threadWithoutTaskHint: 'Benannt nach der ersten Nachricht',
+  noReportTasks: 'Noch kein Status-Bericht',
+  threadReplies: (count) => `${count} ${count === 1 ? 'Antwort' : 'Antworten'}`,
+  inThread: 'im Thread',
+  unreadNew: (count) => `${count} neu`,
+  unreadCount: (count) => `${count} ungelesen`,
+  loadingThreads: 'Threads werden geladen…',
+  threadsFailed: 'Threads konnten nicht geladen werden',
+  threadsFailedHint: 'Nachrichten erreichen den Orchestrator weiter über den Haupt-Chat.',
+  tryAgain: 'Erneut versuchen',
+  noThreads: 'Noch keine Threads',
+  noThreadsHint:
+    'Thread an einer Antwort öffnen, über Instruct auf einer Status-Karte oder neu an eine Aufgabe binden.',
+  pickThread: 'Thread wählen, um ihn hier zu lesen.',
+  closeThread: 'Thread schließen',
+  closedThreads: (count) => `Geschlossen (${count})`,
+  reopenThread: 'Wieder öffnen',
+  replyInThread: 'Im Thread antworten',
+  firstThreadMessage: (tag) => `Erste Nachricht schreiben. Sie geht mit der Kennung ${tag} an den Orchestrator.`,
+  boundTo: (repo) => `An Status-Aufgabe gebunden · ${repo}`,
+  notBound: 'Nicht an eine Status-Aufgabe gebunden',
+  resizeThreads: 'Breite des Thread-Panels ändern',
+  threadLog: (name) => `Thread ${name}`,
+  loadingThreadHistory: 'Frühere Nachrichten dieses Threads werden geladen…',
 
   // ChatPane
   notConnected: 'Das Terminal ist nicht verbunden: oben neu verbinden, dann erneut senden',

@@ -33,3 +33,4 @@ export { DEFAULT_TERMINAL_FONT, refreshTerminalTheme } from './components/Agents
 export { configureLinks, type LinkPlatform } from './utils/links';
 export { ResizeHandle, clampWidth, useStoredWidth, type ResizeHandleProps } from './ResizeHandle';
 export type { AgentDisplayState, AgentHarness, AgentSession, AgentViewSettings } from './types';
+export type { ChatThread, ChatThreadMarker } from './utils/chatThreads';

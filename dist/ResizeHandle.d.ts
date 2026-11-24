@@ -18,9 +18,12 @@ export interface ResizeHandleProps {
     className?: string;
     /** Screen pixels per layout pixel, when the box sits under CSS zoom (default 1) */
     scale?: number;
+    /** Double click: back to the default width */
+    onReset?: () => void;
 }
 /**
  * Drag handle for a box's width: pointer drag (captured, so a terminal under the pointer cannot
- * swallow the moves), arrow keys in 16 px steps, Home/End for min/max. A vertical separator.
+ * swallow the moves), arrow keys in 16 px steps, Home/End for min/max, double click resets.
+ * A vertical separator.
  */
 export declare const ResizeHandle: React.FC<ResizeHandleProps>;

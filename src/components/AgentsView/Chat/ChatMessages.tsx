@@ -9,6 +9,9 @@ import {
   XCircle,
   Sparkles,
   Bot,
+  MessagesSquare,
+  Quote,
+  Reply,
 } from 'lucide-react';
 import {
   agentMessage,
@@ -20,6 +23,7 @@ import {
   type ResultMessage,
 } from '../../../utils/chatEvents';
 import { leadingCommand, splitImages } from '../../../utils/chatComposer';
+import { hhmm, parseQuote, quoteExcerpt, stripTag } from '../../../utils/chatThreads';
 import { useTransport } from '../../../host';
 import { useLabels } from '../../../labels';
 import type { TerminalLabels } from '../../../labels/terminal';
@@ -68,6 +72,42 @@ const DiffView: React.FC<{ lines: { sign: string; text: string }[] }> = ({ lines
     ))}
   </pre>
 );
+
+/** What Reply puts in the composer: the answer's time and the quoted text */
+export interface ChatQuote {
+  ts?: number;
+  text: string;
+}
+
+/**
+ * Reply and thread actions of a message list; without a provider answers have no actions.
+ * `tag`: the thread whose list this is (its tag line is hidden in front of each message)
+ */
+export interface ChatReplies {
+  reply: (quote: ChatQuote) => void;
+  openThread?: (answer: ChatAnswer) => void;
+  tag?: string | null;
+}
+export const ChatRepliesContext = React.createContext<ChatReplies | null>(null);
+
+const actionBtn = `inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] text-gray-400 hover:bg-gray-800 hover:text-white ${focusRing}`;
+
+/** The quote of a sent reply, above its text */
+export const QuoteBox: React.FC<{ time: string | null; text: string }> = ({ time, text }) => {
+  const t = useLabels().terminal;
+  return (
+    <div
+      data-quote
+      className="mb-1.5 flex gap-1.5 rounded border border-blue-400/25 bg-blue-500/10 px-2 py-1 text-xs text-blue-100/90"
+    >
+      <Quote size={11} aria-hidden className="mt-0.5 shrink-0 text-blue-300" />
+      <span className="min-w-0">
+        <span className="text-blue-300">{time ? `${t.replyTo(time)}: ` : `${t.reply}: `}</span>
+        <span className="line-clamp-2">{text}</span>
+      </span>
+    </div>
+  );
+};
 
 /** The chat a message list belongs to: its tool results' images load from there */
 export const ChatIdContext = React.createContext<string | null>(null);
@@ -172,8 +212,10 @@ const AgentMessage: React.FC<{ id: string | null; name: string | null; body: str
   body,
 }) => {
   const actions = React.useContext(ViewActionsContext);
+  const tag = React.useContext(ChatRepliesContext)?.tag;
   const t = useLabels().terminal;
   const label = name || id || t.unknownAgent;
+  const text = tag ? stripTag(body, tag) : body;
   return (
     <div className="flex flex-col items-start my-3" data-agent-message>
       <div className="max-w-[85%] rounded-lg border border-violet-800/60 bg-violet-950/40 px-3 py-2 text-sm text-gray-100">
@@ -193,7 +235,7 @@ const AgentMessage: React.FC<{ id: string | null; name: string | null; body: str
             <span className="font-medium text-violet-200">{label}</span>
           )}
         </div>
-        <div className="whitespace-pre-wrap break-words">{body}</div>
+        <div className="whitespace-pre-wrap break-words">{text}</div>
       </div>
     </div>
   );
@@ -206,7 +248,11 @@ export const UserMessage: React.FC<{ text: string; queued?: boolean }> = ({ text
 };
 
 const OwnMessage: React.FC<{ text: string; queued?: boolean }> = ({ text, queued }) => {
-  const { text: body, images } = splitImages(text);
+  const tag = React.useContext(ChatRepliesContext)?.tag;
+  const { text: typed, images } = splitImages(tag ? stripTag(text, tag) : text);
+  // a reply: its quote as a box, the user's text below
+  const quote = parseQuote(typed);
+  const body = quote ? quote.body : typed;
   // `/skill args`: the command as a chip, its text after it
   const command = leadingCommand(body);
   const uploads = useTransport().uploads;
@@ -221,6 +267,7 @@ const OwnMessage: React.FC<{ text: string; queued?: boolean }> = ({ text, queued
             : 'bg-blue-900/50 border-blue-800/60'
         }`}
       >
+        {quote && <QuoteBox time={quote.time} text={quote.quote} />}
         {command ? (
           <>
             <span
@@ -323,8 +370,21 @@ interface AnswerCardProps {
  */
 const AnswerCard: React.FC<AnswerCardProps> = ({ answer, showSteps, live, harness, model }) => {
   const t = useLabels().terminal;
+  const replies = React.useContext(ChatRepliesContext);
+  const card = React.useRef<HTMLElement>(null);
+  const [selected, setSelected] = React.useState('');
   const parts = answer?.parts ?? [];
-  const blocks = parts.flatMap((m) => m.blocks).filter(Boolean);
+  const tag = replies?.tag;
+  let tagged = false;
+  // inside a thread the tag line of the first text is not shown
+  const blocks = parts
+    .flatMap((m) => m.blocks)
+    .filter(Boolean)
+    .map((b) => {
+      if (!tag || tagged || b.type !== 'text' || !b.text.trim()) return b;
+      tagged = true;
+      return { ...b, text: stripTag(b.text, tag) };
+    });
   const visible = showSteps ? blocks : blocks.filter((b) => b.type === 'text');
   const hasBody = visible.some((b) => b.type !== 'text' || b.text);
   const steps = blocks.filter((b) => b.type === 'tool').length;
@@ -336,9 +396,21 @@ const AnswerCard: React.FC<AnswerCardProps> = ({ answer, showSteps, live, harnes
   const shownModel = (named ?? model ?? '').replace(/^.*\//, '');
   const result = answer?.result ?? null;
   const working = live || parts.some((m) => m.streaming);
+  const ts = parts[0]?.ts;
+  const canReply = !!replies && !!answer && !!text && !working;
+  // a selection inside this card is what Reply quotes; else its first lines
+  const readSelection = () => {
+    if (!canReply) return;
+    const sel = window.getSelection();
+    const inside = sel && !sel.isCollapsed && card.current?.contains(sel.anchorNode);
+    setSelected(inside ? sel.toString().trim() : '');
+  };
   return (
     <article
-      className="my-3 rounded-lg border border-gray-800 bg-gray-900/40"
+      ref={card}
+      onMouseUp={readSelection}
+      onKeyUp={readSelection}
+      className="group my-3 rounded-lg border border-gray-800 bg-gray-900/40"
       aria-label={t.answerFrom(harness)}
       aria-busy={working || undefined}
     >
@@ -349,11 +421,39 @@ const AnswerCard: React.FC<AnswerCardProps> = ({ answer, showSteps, live, harnes
         <span className="shrink-0 font-medium text-gray-300">{harness}</span>
         {shownModel && <span className="truncate font-mono">{shownModel}</span>}
         <span className="flex-1" />
+        {canReply && (
+          <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none">
+            <button
+              type="button"
+              className={actionBtn}
+              // the click must not clear the selection it quotes
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                replies.reply({ ts, text: selected ? quoteExcerpt(selected) : quoteExcerpt(text) });
+                setSelected('');
+              }}
+            >
+              <Reply size={12} aria-hidden />
+              {selected ? t.replyToSelection : t.reply}
+            </button>
+            {replies.openThread && (
+              <button
+                type="button"
+                className={actionBtn}
+                onClick={() => replies.openThread?.(answer)}
+              >
+                <MessagesSquare size={12} aria-hidden />
+                {t.openThread}
+              </button>
+            )}
+          </span>
+        )}
         {!showSteps && steps > 0 && (
           <span className="shrink-0" title={t.answerStepsTitle}>
             {t.answerSteps(steps)}
           </span>
         )}
+        {ts !== undefined && <span className="shrink-0 tabular-nums">{hhmm(ts)}</span>}
       </header>
       {hasBody && (
         <div className="px-3 py-2.5">

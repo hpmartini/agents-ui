@@ -229,9 +229,11 @@ export function reduceChat(state, event) {
                 }
                 // Replayed history never gets a `result`, so it must not keep the typing cursor
                 const model = str(msg.model) || m.model;
+                const ts = m.ts ?? (typeof event.ts === 'number' ? event.ts : undefined);
                 return {
                     ...m,
                     blocks,
+                    ...(ts !== undefined ? { ts } : {}),
                     streaming: event.history === true ? false : m.streaming,
                     ...(model ? { model } : {}),
                 };

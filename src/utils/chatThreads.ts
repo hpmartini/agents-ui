@@ -46,14 +46,14 @@ export function stripTag(text: string, tag: string): string {
   return t.startsWith(tag) ? t.slice(tag.length).replace(/^[ \t]*\n?/, '') : text;
 }
 
-const hhmm = (ms: number) => {
+export const hhmm = (ms: number) => {
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
 const QUOTE_LINES = 3;
 const QUOTE_CHARS = 280;
-const QUOTE_RE = /^Re your reply from (\d\d:\d\d): "([\s\S]*?)"\n\n/;
+const QUOTE_RE = /^Re your reply(?: from (\d\d:\d\d))?: "([\s\S]*?)"\n\n/;
 
 /** First lines of a quoted text, cut with an ellipsis */
 export function quoteExcerpt(text: string): string {
@@ -63,14 +63,16 @@ export function quoteExcerpt(text: string): string {
   return out.length < text.trim().length ? `${out}…` : out;
 }
 
-/** Sent in front of a reply: `Re your reply from 09:32: "…"` */
-export const quoteHeader = (ts: number, text: string) =>
-  `Re your reply from ${hhmm(ts)}: "${quoteExcerpt(text)}"\n\n`;
+/** Sent in front of a reply: `Re your reply from 09:32: "…"` (no time when the transcript has none) */
+export const quoteHeader = (ts: number | undefined, text: string) =>
+  `Re your reply${ts === undefined ? '' : ` from ${hhmm(ts)}`}: "${quoteExcerpt(text)}"\n\n`;
 
 /** A sent reply split back into the quote and the user's text; null for a plain prompt */
-export function parseQuote(text: string): { time: string; quote: string; body: string } | null {
+export function parseQuote(
+  text: string
+): { time: string | null; quote: string; body: string } | null {
   const m = QUOTE_RE.exec(text);
-  return m ? { time: m[1], quote: m[2], body: text.slice(m[0].length) } : null;
+  return m ? { time: m[1] ?? null, quote: m[2], body: text.slice(m[0].length) } : null;
 }
 
 /** The text an answer shows (its text blocks) */
