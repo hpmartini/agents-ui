@@ -25,6 +25,15 @@ interface ChatComposerProps {
     /** Fetches a cut suggestion's full text once it is taken */
     takeSuggestion?: () => Promise<string | null>;
     inputRef: React.RefObject<HTMLTextAreaElement | null>;
+    /** Accessible name; default "Message" */
+    label?: string;
+    /** Placeholders per submit key; default the main input's */
+    placeholders?: {
+        enter: string;
+        modEnter: string;
+    };
+    /** Where the dragged height is remembered; default the main input's key */
+    heightKey?: string;
 }
 /** Chat input: grows with its content, TUI-like keys, `/` and `@` picker with details */
 export declare const ChatComposer: React.FC<ChatComposerProps>;

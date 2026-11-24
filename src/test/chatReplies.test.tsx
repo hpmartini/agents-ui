@@ -120,6 +120,8 @@ const panel = (props: Partial<React.ComponentProps<typeof ThreadsPanel>> = {}) =
       onNewFree={vi.fn()}
       onClose={vi.fn()}
       renderThread={() => null}
+      maximized={false}
+      onMaximize={vi.fn()}
       {...props}
     />
   );
