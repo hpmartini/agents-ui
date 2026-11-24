@@ -5,10 +5,9 @@ import { Group, Panel, Separator } from 'react-resizable-panels';
 import { X, Columns2, Rows2, LayoutGrid, Bot, Maximize2, SquareTerminal, ChevronDown, Eye, EyeOff, } from 'lucide-react';
 import { usePopover } from './PullRequestsPanel';
 import { registerPaneBrowser } from '../../utils/links';
-import { stateGlyph, resumableSessionId, sessionHarness, UI_VIEW_HARNESSES, } from '../../utils/agentSessions';
+import { stateGlyph, transcriptId, sessionHarness, UI_VIEW_HARNESSES, } from '../../utils/agentSessions';
 import { useHost, useTransport } from '../../host';
 import { useLabels } from '../../labels';
-import { LOCAL_TARGETS } from '../../transport';
 import { AGENT_TAB_MIME, browserUrl, dropZone, prunedRoot, shellCwd, insertPosition, stepIndices, hiddenTabIds, tabTitle, } from '../../utils/agentWorkspace';
 import { AgentTerminal } from './AgentTerminal';
 import { ChatPane } from './Chat/ChatPane';
@@ -119,7 +118,6 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
     const bodyRef = useRef(null);
     const [bodyWidth, setBodyWidth] = useState(Infinity);
     const transport = useTransport();
-    const targets = transport.targets ?? LOCAL_TARGETS;
     // Without a built-in browser there are no browser panes: links go to the system browser
     const { renderBrowser } = useHost();
     const labels = useLabels();
@@ -266,14 +264,14 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
         const url = browserUrl(session.id);
         // A harness pane started here (#195): the server row that claimed it knows its state and session
         const row = sessions.find((s) => s.paneId === session.id);
-        const viewSessionId = resumableSessionId(session, targets) ?? (row ? resumableSessionId(row, targets) : null);
+        // #220: the transcript lives on the pane's instance; the transport routes the view there by
+        // pane id, so a picker on another instance changes nothing here
+        const viewSessionId = transcriptId(session) ?? (row ? transcriptId(row) : null);
         const viewable = !!transport.chat &&
             url === null &&
             shellCwd(session.id) === null &&
             UI_VIEW_HARNESSES[sessionHarness(session)] &&
-            !session.ptyArgs?.includes('--cloud') &&
-            // #220: the transcript lives on the instance the pane runs on
-            targets.targetOf(session.id) === targets.getAgentTarget();
+            !session.ptyArgs?.includes('--cloud');
         const chatView = viewable && views[session.id] === 'chat';
         const active = session.id === tab.activeSessionId;
         const focused = visible && focusZone === 'terminal' && active;
@@ -372,7 +370,7 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
                                                     onActivateTab(order[next]);
                                                     findTab(order[next])?.focus();
                                                 }
-                                            }, className: `flex items-center gap-1.5 flex-1 min-w-0 h-full text-left ${focusRing}`, children: [shellCwd(lead.id) !== null ? (_jsx(SquareTerminal, { size: 12, className: "text-gray-400 shrink-0", "aria-hidden": "true" })) : (_jsx("span", { className: `${glyph.className} ${glyph.animate ? 'animate-pulse motion-reduce:animate-none' : ''}`, "aria-hidden": "true", children: glyph.glyph })), _jsx("span", { className: "truncate flex-1", children: title }), browserUrl(lead.id) === null && tabSessionLabel(lead, targets) && (_jsx("span", { className: "shrink-0 font-mono text-[10px] text-gray-500", "data-testid": "tab-session-id", children: tabSessionLabel(lead, targets) })), panes.length > 1 && (_jsx("span", { className: "px-1 rounded bg-gray-700 text-[10px] leading-4 text-gray-300 shrink-0", "aria-hidden": "true", children: panes.length })), needsInput && (_jsx("span", { className: "w-2 h-2 rounded-full bg-yellow-400 shrink-0", "aria-hidden": "true" }))] }), _jsxs("span", { className: `flex items-center shrink-0 ${isActive ? '' : 'opacity-0'} group-hover:opacity-100 group-focus-within:opacity-100`, children: [isActive && panes.length === 1 && tabs.length > 1 && (_jsxs("span", { className: "hidden group-hover:flex group-focus-within:flex items-center", children: [_jsx("button", { onClick: (e) => {
+                                            }, className: `flex items-center gap-1.5 flex-1 min-w-0 h-full text-left ${focusRing}`, children: [shellCwd(lead.id) !== null ? (_jsx(SquareTerminal, { size: 12, className: "text-gray-400 shrink-0", "aria-hidden": "true" })) : (_jsx("span", { className: `${glyph.className} ${glyph.animate ? 'animate-pulse motion-reduce:animate-none' : ''}`, "aria-hidden": "true", children: glyph.glyph })), _jsx("span", { className: "truncate flex-1", children: title }), browserUrl(lead.id) === null && tabSessionLabel(lead) && (_jsx("span", { className: "shrink-0 font-mono text-[10px] text-gray-500", "data-testid": "tab-session-id", children: tabSessionLabel(lead) })), panes.length > 1 && (_jsx("span", { className: "px-1 rounded bg-gray-700 text-[10px] leading-4 text-gray-300 shrink-0", "aria-hidden": "true", children: panes.length })), needsInput && (_jsx("span", { className: "w-2 h-2 rounded-full bg-yellow-400 shrink-0", "aria-hidden": "true" }))] }), _jsxs("span", { className: `flex items-center shrink-0 ${isActive ? '' : 'opacity-0'} group-hover:opacity-100 group-focus-within:opacity-100`, children: [isActive && panes.length === 1 && tabs.length > 1 && (_jsxs("span", { className: "hidden group-hover:flex group-focus-within:flex items-center", children: [_jsx("button", { onClick: (e) => {
                                                                 e.stopPropagation();
                                                                 splitOut(tab.id, 'right');
                                                             }, className: `p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 ${focusRing}`, title: t.splitRightTitle, "aria-label": t.splitRight(title), children: _jsx(Columns2, { size: 12 }) }), _jsx("button", { onClick: (e) => {

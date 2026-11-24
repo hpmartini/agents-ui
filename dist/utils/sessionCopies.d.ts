@@ -47,4 +47,4 @@ export declare function openPlan(session: AgentSession, panes: AgentSession[], o
 /** The transport's instances (#220); local only without */
 targets?: AgentTargets): OpenPlan;
 /** Session id shown on a workspace tab: the job id for background jobs, else the transcript id */
-export declare function tabSessionLabel(session: AgentSession, targets?: AgentTargets): string | null;
+export declare function tabSessionLabel(session: AgentSession): string | null;
