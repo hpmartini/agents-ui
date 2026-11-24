@@ -1,0 +1,3 @@
+/* prototype only: let Tailwind also scan demo/ */
+@import '../src/styles.css';
+@source './';
