@@ -131,7 +131,9 @@ const ZONE_HIGHLIGHT: Record<DropZone, string> = {
 };
 
 /** Panes narrower than this are unreadable terminals: stack them instead */
-const MIN_PANE_PX = 400;
+/** Narrowest pane that shows its header, chat and composer uncut: panes side by side stack below it, the split divider stops at it */
+const MIN_PANE_PX = 420;
+const MIN_PANE_HEIGHT_PX = 200;
 
 /** Stand-in session for a browser pane, so tab strip, titles and drag treat it like any pane */
 function browserSession(id: string): AgentSession | null {
@@ -588,7 +590,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             )}
             <Panel
               id={`agent-pane-${resolved.tab.id}-${child.id}`}
-              minSize={10}
+              minSize={stacked ? MIN_PANE_HEIGHT_PX : MIN_PANE_PX}
               className="min-h-0 min-w-0"
             >
               {renderNode(resolved, child, visible, stacked ? width : width / node.children.length)}

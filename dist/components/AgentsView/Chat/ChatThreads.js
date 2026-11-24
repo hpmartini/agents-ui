@@ -121,17 +121,30 @@ const SHORT_PANEL = 520;
  * The thread input beside its log: dragged at most 40 % of the chat pane's height, and in a short
  * (stacked) pane 40 % of the thread view, so header, log and Attach stay inside the panel
  */
-const threadInputMax = (el) => Math.min((el.closest('[data-chat-pane]')?.clientHeight ?? window.innerHeight) * 0.4, (el.closest('section')?.clientHeight ?? window.innerHeight) * 0.4);
+/** Room the open thread keeps above its input: thread header, binding line, a few log lines */
+const THREAD_VIEW_ROOM = 180;
+const threadInputMax = (el) => Math.min((el.closest('[data-chat-pane]')?.clientHeight ?? window.innerHeight) * 0.4, (el.closest('section')?.clientHeight ?? window.innerHeight) - THREAD_VIEW_ROOM);
+/** Unsent thread input per chat and thread: hiding the panel unmounts the composer */
+const threadDrafts = new Map();
 export const THREAD_COMPOSER_HEIGHT_KEY = 'devOrbitChatThreadComposerHeight';
 /**
  * Composer of the open thread: the main chat's composer (send key from the settings, height grip,
  * `@` files) plus quote, images and files. `/` commands are left out: the tag line in front
  * would turn them into plain text.
  */
-export const ThreadComposer = ({ chatId, submitKey, history, agents, quote, onClearQuote, onSend, disabled, focusKey }) => {
+export const ThreadComposer = ({ chatId, submitKey, history, agents, quote, onClearQuote, onSend, disabled, focusKey, draftKey, }) => {
     const t = useLabels().terminal;
     const uploads = useTransport().uploads;
-    const [text, setText] = useState('');
+    const storeKey = `${chatId}:${draftKey ?? ''}`;
+    const [text, setTextState] = useState(() => threadDrafts.get(storeKey) ?? '');
+    useEffect(() => setTextState(threadDrafts.get(storeKey) ?? ''), [storeKey]);
+    const setText = useCallback((value) => {
+        if (value)
+            threadDrafts.set(storeKey, value);
+        else
+            threadDrafts.delete(storeKey);
+        setTextState(value);
+    }, [storeKey]);
     const [files, setFiles] = useState([]);
     const [sending, setSending] = useState(false);
     const input = useRef(null);

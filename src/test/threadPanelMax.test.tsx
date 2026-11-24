@@ -212,3 +212,31 @@ describe('maximised threads panel', () => {
     expect(screen.getByRole('button', { name: 'Close thread' })).toBeTruthy();
   });
 });
+
+describe('thread draft', () => {
+  const mount = (draftKey: string) =>
+    renderWithAgents(
+      <ThreadComposer
+        chatId="draft-chat"
+        draftKey={draftKey}
+        submitKey="mod+enter"
+        history={[]}
+        agents={[]}
+        quote={null}
+        onClearQuote={vi.fn()}
+        onSend={vi.fn(async () => true)}
+      />
+    );
+  const input = () => screen.getByRole('textbox', { name: 'Reply in thread' }) as HTMLTextAreaElement;
+
+  it('survives hiding the panel (composer unmounted) and stays with its thread', () => {
+    const first = mount('t1');
+    fireEvent.change(input(), { target: { value: 'unsent reply' } });
+    first.unmount();
+    const again = mount('t1');
+    expect(input().value).toBe('unsent reply');
+    again.unmount();
+    mount('t2');
+    expect(input().value).toBe('');
+  });
+});

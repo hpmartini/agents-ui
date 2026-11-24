@@ -116,7 +116,7 @@ const NO_ITEMS = [];
 const THREADS_WIDTH_KEY = 'agents-ui:threads-width';
 const THREADS_OPEN_KEY = 'agents-ui:threads-open';
 const THREADS_WIDTH = 360;
-const THREADS_MIN = 240;
+const THREADS_MIN = 300;
 const THREADS_MAX = 640;
 /** Main chat beside the panel: answer footers, model chip and the host's usage bars fit uncut */
 export const CHAT_MAIN_MIN = 460;
@@ -129,12 +129,16 @@ export function threadsLayout(row) {
         return { overlay: false, min: THREADS_MIN, max: THREADS_MAX };
     const room = row - CHAT_MAIN_MIN - HANDLE_NET;
     if (room < THREADS_MIN) {
-        return { overlay: true, min: Math.min(THREADS_MIN, row), max: row };
+        return { overlay: true, min: Math.min(THREADS_MIN, row - DRAWER_GAP), max: row - DRAWER_GAP };
     }
     return { overlay: false, min: THREADS_MIN, max: Math.min(THREADS_MAX, room) };
 }
 /** Stored ceiling: the widest drawer (a wide pane gets the panel beside, capped at THREADS_MAX) */
 const THREADS_DRAWER_MAX = 4096;
+/** The widest drawer leaves this much chat visible, so its handle never lands on the split divider */
+const DRAWER_GAP = 24;
+/** Below this pane width the header drops path, model and harness so the name stays readable */
+const NARROW_PANE = 560;
 /** ResizeHandle's net width in the row: 9 px with -4 px margins */
 const HANDLE_NET = 1;
 /** Stored floor: the overlay in a narrow pane may be narrower than THREADS_MIN */
@@ -458,6 +462,7 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
         return () => observer.disconnect();
     }, []);
     const { overlay: threadsOverlay, min: threadsMin, max: threadsMax } = threadsLayout(rowWidth);
+    const narrowPane = rowWidth > 0 && rowWidth < NARROW_PANE;
     const threadsShown = clampWidth(threadsWidth, threadsMin, threadsMax);
     const [openThreadId, setOpenThreadId] = useState(null);
     const [threadQuote, setThreadQuote] = useState(null);
@@ -630,7 +635,7 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
             : active
                 ? 'border-blue-400/40'
                 : 'border-gray-800'}`, onMouseDown: onFocus, ref: paneRef, "data-agent-pane": pane.id, "data-chat-pane": true, "data-pane-active": active, ...(uploads &&
-            imageDropHandlers((files) => setImages((prev) => [...prev, ...files]), (list) => attachableFiles(list, uploads.attachmentExtensions))), children: [_jsxs("div", { ...headerProps, className: `flex flex-nowrap items-center gap-x-1.5 h-8 px-2 border-b text-xs shrink-0 bg-gray-900 border-gray-800 ${headerProps?.draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${headerProps?.className ?? ''}`, children: [_jsx(MessageSquare, { size: 13, "aria-hidden": true, className: "text-blue-300 shrink-0" }), _jsx("span", { className: "font-medium text-gray-200 truncate min-w-0", children: pane.name }), harness !== 'claude' && (_jsx("span", { className: "shrink-0 px-1 rounded border border-gray-700 text-[10px] text-gray-400", children: harnessName })), _jsx("span", { className: "text-gray-500 font-mono truncate min-w-0 hidden lg:inline", children: pane.cwd }), state.model && (_jsx("span", { className: "text-gray-500 truncate min-w-0 hidden sm:inline", children: state.model })), _jsx("span", { className: `shrink-0 ${prompting || !connected ? 'text-amber-300' : busy ? 'text-blue-300' : 'text-gray-500'}`, children: status }), !connected && (_jsxs("button", { type: "button", onClick: () => {
+            imageDropHandlers((files) => setImages((prev) => [...prev, ...files]), (list) => attachableFiles(list, uploads.attachmentExtensions))), children: [_jsxs("div", { ...headerProps, className: `flex flex-nowrap items-center gap-x-1.5 h-8 px-2 border-b text-xs shrink-0 bg-gray-900 border-gray-800 ${headerProps?.draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${headerProps?.className ?? ''}`, children: [_jsx(MessageSquare, { size: 13, "aria-hidden": true, className: "text-blue-300 shrink-0" }), _jsx("span", { className: "font-medium text-gray-200 truncate min-w-[3.5rem]", children: pane.name }), harness !== 'claude' && !narrowPane && (_jsx("span", { className: "shrink-0 px-1 rounded border border-gray-700 text-[10px] text-gray-400", children: harnessName })), !narrowPane && (_jsx("span", { className: "text-gray-500 font-mono truncate min-w-0 hidden lg:inline", children: pane.cwd })), state.model && !narrowPane && (_jsx("span", { className: "text-gray-500 truncate min-w-0 hidden sm:inline", children: state.model })), _jsx("span", { className: `shrink-0 ${prompting || !connected ? 'text-amber-300' : busy ? 'text-blue-300' : 'text-gray-500'}`, children: status }), !connected && (_jsxs("button", { type: "button", onClick: () => {
                             setError(null);
                             if (!reattachPane(pane.id))
                                 setError(t.noTerminalToReattach);
@@ -672,7 +677,7 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
                                         const parent = thread?.parentKey
                                             ? items.find((i) => i.key === thread.parentKey)
                                             : undefined;
-                                        return (_jsxs(_Fragment, { children: [_jsxs("div", { ref: threadListRef, className: "min-h-20 flex-1 overflow-y-auto px-3 py-1", children: [needsOlder && (_jsx("div", { role: "status", className: "py-2 text-center text-xs text-gray-500", children: t.loadingThreadHistory })), parent && (_jsx("div", { className: "opacity-70", "data-thread-parent": true, children: _jsx(ChatItemView, { item: parent, showSteps: false, harness: harnessName, model: state.model }) })), _jsx(ChatFileContext.Provider, { value: pane.cwd, children: _jsxs(ChatRepliesContext.Provider, { value: threadReplies, children: [threadItems.map((item) => (_jsx(ChatItemView, { item: item, showSteps: showSteps, live: isLive(item), harness: harnessName, model: state.model }, item.key))), workingCard && thread && lastThread === thread.id && (_jsx(ChatItemView, { item: null, showSteps: showSteps, live: true, harness: harnessName, model: state.model }))] }) }), thread && threadItems.length === 0 && !parent && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.firstThreadMessage(thread.tag) })), !thread && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.threadWithoutTaskHint }))] }), _jsx("div", { className: "shrink-0 px-2 pb-1 text-[11px] text-gray-500", children: _jsx("span", { className: "truncate", children: thread?.binding ? t.boundTo(thread.repo ?? null) : t.notBound }) }), threadsFull && error && (_jsx("div", { role: "alert", className: "px-2 pb-1 text-xs text-red-300", children: error })), _jsx(ThreadComposer, { chatId: chatId, submitKey: submitKey, history: threadHistory, agents: state.agents, quote: threadQuote, onClearQuote: () => setThreadQuote(null), onSend: sendInThread, disabled: !connected, focusKey: `${openThreadId}:${threadsFull}` })] }));
+                                        return (_jsxs(_Fragment, { children: [_jsxs("div", { ref: threadListRef, className: "min-h-20 flex-1 overflow-y-auto px-3 py-1", children: [needsOlder && (_jsx("div", { role: "status", className: "py-2 text-center text-xs text-gray-500", children: t.loadingThreadHistory })), parent && (_jsx("div", { className: "opacity-70", "data-thread-parent": true, children: _jsx(ChatItemView, { item: parent, showSteps: false, harness: harnessName, model: state.model }) })), _jsx(ChatFileContext.Provider, { value: pane.cwd, children: _jsxs(ChatRepliesContext.Provider, { value: threadReplies, children: [threadItems.map((item) => (_jsx(ChatItemView, { item: item, showSteps: showSteps, live: isLive(item), harness: harnessName, model: state.model }, item.key))), workingCard && thread && lastThread === thread.id && (_jsx(ChatItemView, { item: null, showSteps: showSteps, live: true, harness: harnessName, model: state.model }))] }) }), thread && threadItems.length === 0 && !parent && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.firstThreadMessage(thread.tag) })), !thread && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.threadWithoutTaskHint }))] }), _jsx("div", { className: "shrink-0 px-2 pb-1 text-[11px] text-gray-500", children: _jsx("span", { className: "truncate", children: thread?.binding ? t.boundTo(thread.repo ?? null) : t.notBound }) }), threadsFull && error && (_jsx("div", { role: "alert", className: "px-2 pb-1 text-xs text-red-300", children: error })), _jsx(ThreadComposer, { chatId: chatId, submitKey: submitKey, history: threadHistory, agents: state.agents, quote: threadQuote, onClearQuote: () => setThreadQuote(null), onSend: sendInThread, disabled: !connected, focusKey: `${openThreadId}:${threadsFull}`, draftKey: openThreadId })] }));
                                     } }) })] }))] })] }));
     // tool results load their images from this chat
     return _jsx(ChatIdContext.Provider, { value: chatId, children: view });

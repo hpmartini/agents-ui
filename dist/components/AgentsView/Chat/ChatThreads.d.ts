@@ -69,6 +69,8 @@ export declare const ThreadComposer: React.FC<{
     disabled?: boolean;
     /** Focus the input when this changes (thread opened, quote added, panel maximised) */
     focusKey?: unknown;
+    /** The open thread (its unsent text survives hiding the panel) */
+    draftKey?: string | null;
 }>;
 export interface ThreadsPanelProps {
     status: ThreadsStatus;

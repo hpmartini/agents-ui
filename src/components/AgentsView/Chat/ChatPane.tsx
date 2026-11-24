@@ -203,7 +203,7 @@ const NO_ITEMS: never[] = [];
 const THREADS_WIDTH_KEY = 'agents-ui:threads-width';
 const THREADS_OPEN_KEY = 'agents-ui:threads-open';
 const THREADS_WIDTH = 360;
-const THREADS_MIN = 240;
+const THREADS_MIN = 300;
 const THREADS_MAX = 640;
 /** Main chat beside the panel: answer footers, model chip and the host's usage bars fit uncut */
 export const CHAT_MAIN_MIN = 460;
@@ -215,12 +215,16 @@ export function threadsLayout(row: number): { overlay: boolean; min: number; max
   if (!row) return { overlay: false, min: THREADS_MIN, max: THREADS_MAX };
   const room = row - CHAT_MAIN_MIN - HANDLE_NET;
   if (room < THREADS_MIN) {
-    return { overlay: true, min: Math.min(THREADS_MIN, row), max: row };
+    return { overlay: true, min: Math.min(THREADS_MIN, row - DRAWER_GAP), max: row - DRAWER_GAP };
   }
   return { overlay: false, min: THREADS_MIN, max: Math.min(THREADS_MAX, room) };
 }
 /** Stored ceiling: the widest drawer (a wide pane gets the panel beside, capped at THREADS_MAX) */
 const THREADS_DRAWER_MAX = 4096;
+/** The widest drawer leaves this much chat visible, so its handle never lands on the split divider */
+const DRAWER_GAP = 24;
+/** Below this pane width the header drops path, model and harness so the name stays readable */
+const NARROW_PANE = 560;
 /** ResizeHandle's net width in the row: 9 px with -4 px margins */
 const HANDLE_NET = 1;
 /** Stored floor: the overlay in a narrow pane may be narrower than THREADS_MIN */
@@ -622,6 +626,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     return () => observer.disconnect();
   }, []);
   const { overlay: threadsOverlay, min: threadsMin, max: threadsMax } = threadsLayout(rowWidth);
+  const narrowPane = rowWidth > 0 && rowWidth < NARROW_PANE;
   const threadsShown = clampWidth(threadsWidth, threadsMin, threadsMax);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [threadQuote, setThreadQuote] = useState<ChatQuote | null>(null);
@@ -824,16 +829,18 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         } ${headerProps?.className ?? ''}`}
       >
         <MessageSquare size={13} aria-hidden className="text-blue-300 shrink-0" />
-        <span className="font-medium text-gray-200 truncate min-w-0">{pane.name}</span>
-        {harness !== 'claude' && (
+        <span className="font-medium text-gray-200 truncate min-w-[3.5rem]">{pane.name}</span>
+        {harness !== 'claude' && !narrowPane && (
           <span className="shrink-0 px-1 rounded border border-gray-700 text-[10px] text-gray-400">
             {harnessName}
           </span>
         )}
-        <span className="text-gray-500 font-mono truncate min-w-0 hidden lg:inline">
-          {pane.cwd}
-        </span>
-        {state.model && (
+        {!narrowPane && (
+          <span className="text-gray-500 font-mono truncate min-w-0 hidden lg:inline">
+            {pane.cwd}
+          </span>
+        )}
+        {state.model && !narrowPane && (
           <span className="text-gray-500 truncate min-w-0 hidden sm:inline">{state.model}</span>
         )}
         <span
@@ -1381,6 +1388,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                         onSend={sendInThread}
                         disabled={!connected}
                         focusKey={`${openThreadId}:${threadsFull}`}
+                        draftKey={openThreadId}
                       />
                     </>
                   );

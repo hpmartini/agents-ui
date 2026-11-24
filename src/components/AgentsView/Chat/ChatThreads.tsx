@@ -218,11 +218,15 @@ const SHORT_PANEL = 520;
  * The thread input beside its log: dragged at most 40 % of the chat pane's height, and in a short
  * (stacked) pane 40 % of the thread view, so header, log and Attach stay inside the panel
  */
+/** Room the open thread keeps above its input: thread header, binding line, a few log lines */
+const THREAD_VIEW_ROOM = 180;
 const threadInputMax = (el: HTMLTextAreaElement) =>
   Math.min(
     (el.closest('[data-chat-pane]')?.clientHeight ?? window.innerHeight) * 0.4,
-    (el.closest('section')?.clientHeight ?? window.innerHeight) * 0.4
+    (el.closest('section')?.clientHeight ?? window.innerHeight) - THREAD_VIEW_ROOM
   );
+/** Unsent thread input per chat and thread: hiding the panel unmounts the composer */
+const threadDrafts = new Map<string, string>();
 export const THREAD_COMPOSER_HEIGHT_KEY = 'devOrbitChatThreadComposerHeight';
 
 /**
@@ -242,10 +246,33 @@ export const ThreadComposer: React.FC<{
   disabled?: boolean;
   /** Focus the input when this changes (thread opened, quote added, panel maximised) */
   focusKey?: unknown;
-}> = ({ chatId, submitKey, history, agents, quote, onClearQuote, onSend, disabled, focusKey }) => {
+  /** The open thread (its unsent text survives hiding the panel) */
+  draftKey?: string | null;
+}> = ({
+  chatId,
+  submitKey,
+  history,
+  agents,
+  quote,
+  onClearQuote,
+  onSend,
+  disabled,
+  focusKey,
+  draftKey,
+}) => {
   const t = useLabels().terminal;
   const uploads = useTransport().uploads;
-  const [text, setText] = useState('');
+  const storeKey = `${chatId}:${draftKey ?? ''}`;
+  const [text, setTextState] = useState(() => threadDrafts.get(storeKey) ?? '');
+  useEffect(() => setTextState(threadDrafts.get(storeKey) ?? ''), [storeKey]);
+  const setText = useCallback(
+    (value: string) => {
+      if (value) threadDrafts.set(storeKey, value);
+      else threadDrafts.delete(storeKey);
+      setTextState(value);
+    },
+    [storeKey]
+  );
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);

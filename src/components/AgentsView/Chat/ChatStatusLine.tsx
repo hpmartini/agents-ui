@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import { useTransport } from '../../../host';
 import { useLabels } from '../../../labels';
@@ -23,6 +23,16 @@ export const ChatStatusLine: React.FC<{
   picker?: React.ReactNode;
 }> = ({ chatId, turns, visible, picker }) => {
   const [status, setStatus] = useState<ChatStatus | null>(null);
+  // the pane, not the viewport, decides the columns: a narrow split pane stacks them
+  const [width, setWidth] = useState(0);
+  const observer = useRef<ResizeObserver | null>(null);
+  const boxRef = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    observer.current = new ResizeObserver(() => setWidth(el.clientWidth));
+    observer.current.observe(el);
+  }, []);
   const chat = useTransport().chat;
   const t = useLabels().terminal;
 
@@ -49,7 +59,16 @@ export const ChatStatusLine: React.FC<{
   const fill = context ? Math.min(100, (context.tokens / context.window) * 100) : 0;
 
   return (
-    <div className="mt-2 grid grid-cols-2 sm:grid-cols-[auto_minmax(9rem,1fr)_minmax(6rem,0.6fr)_minmax(9rem,1fr)] items-end gap-x-4 gap-y-2 text-xs text-gray-300">
+    <div
+      ref={boxRef}
+      className={`mt-2 grid ${
+        width && width < 400
+          ? 'grid-cols-1'
+          : width && width < 640
+            ? 'grid-cols-[auto_minmax(0,1fr)]'
+            : 'grid-cols-2 sm:grid-cols-[auto_minmax(9rem,1fr)_minmax(6rem,0.6fr)_minmax(9rem,1fr)]'
+      } items-end gap-x-4 gap-y-2 text-xs text-gray-300`}
+    >
       <div className="flex flex-col items-start gap-1.5 self-center min-w-0">
         {git?.branch && (
           <span
