@@ -39,22 +39,27 @@ export function useChatThreads(session: string | null | undefined) {
   const api = useTransport().threads;
   const [list, setList] = useState<ChatThreadList | null>(null);
   const [status, setStatus] = useState<ThreadsStatus>('loading');
+  // no orchestrator: nothing to poll for
+  const noThreads = useRef(false);
   const load = useCallback(
     (quiet = false) => {
-      if (!api || !session) return;
+      if (!api || !session || noThreads.current) return;
       if (!quiet) setStatus('loading');
       api
         .fetchThreads(session)
         .then((l) => {
+          noThreads.current = !l.orchestrator;
           setList(l);
           setStatus('ready');
         })
-        // a failed poll keeps what is on screen
-        .catch(() => !quiet && setStatus('error'));
+        // the last list stays known: the panel shows the error and recovers on the next poll
+        .catch(() => setStatus('error'));
     },
     [api, session]
   );
   useEffect(() => {
+    noThreads.current = false;
+    setList(null);
     if (!api || !session) return;
     load();
     const t = window.setInterval(() => load(true), POLL_MS);
@@ -90,8 +95,8 @@ export function useChatThreads(session: string | null | undefined) {
     },
     [api, session, put]
   );
-  // a session that is no orchestrator (or a host without threads) gets no panel
-  const enabled = !!api && !!session && (status !== 'ready' || !!list?.orchestrator);
+  // only a known orchestrator chat gets the panel: other panes never flash it while loading
+  const enabled = !!list?.orchestrator;
   return {
     enabled,
     status,

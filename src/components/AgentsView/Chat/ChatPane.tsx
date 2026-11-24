@@ -31,6 +31,7 @@ import {
   agentMessage,
   reduceChat,
   type ChatAnswer,
+  type ChatItem,
   type ChatState,
   type ChatSubmitKey,
 } from '../../../utils/chatEvents';
@@ -70,6 +71,7 @@ import {
   itemTime,
   quoteHeader,
   routeThreads,
+  threadOf,
   unreadCount,
 } from '../../../utils/chatThreads';
 import { ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
@@ -624,6 +626,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     0
   );
   const threadItems = openThread ? (routed.byThread.get(openThread.id) ?? NO_ITEMS) : NO_ITEMS;
+  // The running turn: its answer (or the working card) shows where its last item went
+  const lastItem = items.at(-1);
+  const lastThread = lastItem && threadList.length ? threadOf(lastItem, threadList) : null;
+  const isLive = (item: ChatItem) => busy && item.kind === 'answer' && item === lastItem;
+  const workingCard = busy && pending.length === 0 && lastItem?.kind === 'user';
   // Read what the open thread shows, while the pane is on screen
   const { update: updateThread } = threads;
   useEffect(() => {
@@ -911,7 +918,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               )}
               <ChatFileContext.Provider value={pane.cwd}>
                 <ChatRepliesContext.Provider value={replies}>
-                  {shown.map((item, i) => {
+                  {shown.map((item) => {
                     if (item.kind === 'thread') {
                       const thread = threadList.find((x) => x.id === item.threadId);
                       return thread ? (
@@ -933,7 +940,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                         <ChatItemView
                           item={item}
                           showSteps={showSteps}
-                          live={busy && item.kind === 'answer' && i === shown.length - 1}
+                          live={isLive(item)}
                           harness={harnessName}
                           model={state.model}
                         />
@@ -944,7 +951,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 {pending.map((p, i) => (
                   <UserMessage key={`q${i}`} text={p} queued />
                 ))}
-                {busy && !promptsOnly && pending.length === 0 && items.at(-1)?.kind === 'user' && (
+                {workingCard && !promptsOnly && !lastThread && (
                   <ChatItemView
                     item={null}
                     showSteps={showSteps}
@@ -1170,10 +1177,20 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                                 key={item.key}
                                 item={item}
                                 showSteps={showSteps}
+                                live={isLive(item)}
                                 harness={harnessName}
                                 model={state.model}
                               />
                             ))}
+                            {workingCard && thread && lastThread === thread.id && (
+                              <ChatItemView
+                                item={null}
+                                showSteps={showSteps}
+                                live
+                                harness={harnessName}
+                                model={state.model}
+                              />
+                            )}
                           </ChatRepliesContext.Provider>
                         </ChatFileContext.Provider>
                         {thread && threadItems.length === 0 && !parent && (
