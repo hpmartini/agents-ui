@@ -58,9 +58,10 @@ const SESSIONS = [
   session('s1', { sessionId: 'uuid-1' }),
   session('s2', { sessionId: 'uuid-2' }),
   session('s3', { sessionId: 'uuid-3' }),
+  session('s4', { sessionId: 'uuid-4' }),
 ];
 const PEER = '/modules/mesh/peer/b';
-const TARGET_OF: Record<string, string> = { s1: '', s2: PEER, s3: '' };
+const TARGET_OF: Record<string, string> = { s1: '', s2: PEER, s3: '', s4: PEER };
 
 vi.mock('../hooks/useAgentSessions', () => ({
   useAgentSessions: () => ({
@@ -92,7 +93,10 @@ const tab = (id: string, pane: string) => ({
 
 const socket = () => ({ readyState: 0, send() {}, close() {} }) as unknown as PtySocket;
 
-const render = (openTranscriptView: NonNullable<AgentsTransport['chat']>['openTranscriptView']) => {
+const render = (
+  openTranscriptView: NonNullable<AgentsTransport['chat']>['openTranscriptView'],
+  selectedId?: string
+) => {
   const base = orkumoTransport();
   const transport: AgentsTransport = {
     ...base,
@@ -114,7 +118,14 @@ const render = (openTranscriptView: NonNullable<AgentsTransport['chat']>['openTr
   );
   localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify({ s1: 'chat', s2: 'chat' }));
   renderWithAgents(
-    <AgentsView active apps={[]} onExit={() => {}} nav={nav} onOpenView={() => {}} />,
+    <AgentsView
+      active
+      apps={[]}
+      onExit={() => {}}
+      nav={nav}
+      onOpenView={() => {}}
+      selectedId={selectedId}
+    />,
     { transport, host: orkumoHost() }
   );
 };
@@ -159,6 +170,14 @@ describe('UI view of panes on another instance than the picker (#220, cluster mo
     fireEvent.click(within(alert).getByRole('button', { name: 'Try again', hidden: true }));
     await waitFor(() =>
       expect(open.mock.calls.filter(([id]) => id === 's2').length).toBe(calls + 1)
+    );
+  });
+
+  it('an agent the host opens (selectedId, e.g. the Cluster rail) starts in the preferred UI view', async () => {
+    const open = vi.fn(() => new Promise<never>(() => {}));
+    render(open, 's4');
+    await waitFor(() =>
+      expect(open).toHaveBeenCalledWith('s4', expect.objectContaining({ sessionId: 'uuid-4' }))
     );
   });
 });
