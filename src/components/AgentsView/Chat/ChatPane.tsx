@@ -613,6 +613,44 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     if (on) showThreadsPanel(true);
     setThreadsMaxed(on);
   };
+  // On the window: maximising hides the focused main input and focus falls to <body>, where a
+  // handler on the pane never hears the key. Keys inside this pane, or on <body> for the active pane on screen.
+  const paneRef = useRef<HTMLDivElement>(null);
+  const maxKeys = useRef({
+    enabled: false,
+    full: false,
+    active: false,
+    toggle: (_on: boolean) => {},
+  });
+  maxKeys.current = {
+    enabled: threads.enabled,
+    full: threadsFull,
+    active,
+    toggle: maximizeThreads,
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const k = maxKeys.current;
+      const target = e.target instanceof Node ? e.target : null;
+      const mine = !!target && !!paneRef.current?.contains(target);
+      const loose = target === document.body || target === document.documentElement;
+      if (
+        !k.enabled ||
+        e.defaultPrevented ||
+        !(mine || (loose && k.active && !!paneRef.current?.offsetWidth))
+      )
+        return;
+      if (isThreadsMaxKey(e)) {
+        e.preventDefault();
+        k.toggle(!k.full);
+      } else if (e.key === 'Escape' && k.full) {
+        e.preventDefault();
+        k.toggle(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const openThreadIn = (id: string | null) => {
     setOpenThreadId(id);
     setThreadQuote(null);
@@ -737,18 +775,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             : 'border-gray-800'
       }`}
       onMouseDown={onFocus}
+      ref={paneRef}
       data-agent-pane={pane.id}
       data-chat-pane
       data-pane-active={active}
-      onKeyDown={(e) => {
-        if (threads.enabled && isThreadsMaxKey(e)) {
-          e.preventDefault();
-          maximizeThreads(!threadsFull);
-        } else if (e.key === 'Escape' && threadsFull && !e.defaultPrevented) {
-          e.preventDefault();
-          setThreadsMaxed(false);
-        }
-      }}
       {...(uploads &&
         imageDropHandlers(
           (files) => setImages((prev) => [...prev, ...files]),

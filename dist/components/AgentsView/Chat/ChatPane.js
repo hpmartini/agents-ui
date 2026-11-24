@@ -448,6 +448,43 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
             showThreadsPanel(true);
         setThreadsMaxed(on);
     };
+    // On the window: maximising hides the focused main input and focus falls to <body>, where a
+    // handler on the pane never hears the key. Keys inside this pane, or on <body> for the active pane on screen.
+    const paneRef = useRef(null);
+    const maxKeys = useRef({
+        enabled: false,
+        full: false,
+        active: false,
+        toggle: (_on) => { },
+    });
+    maxKeys.current = {
+        enabled: threads.enabled,
+        full: threadsFull,
+        active,
+        toggle: maximizeThreads,
+    };
+    useEffect(() => {
+        const onKey = (e) => {
+            const k = maxKeys.current;
+            const target = e.target instanceof Node ? e.target : null;
+            const mine = !!target && !!paneRef.current?.contains(target);
+            const loose = target === document.body || target === document.documentElement;
+            if (!k.enabled ||
+                e.defaultPrevented ||
+                !(mine || (loose && k.active && !!paneRef.current?.offsetWidth)))
+                return;
+            if (isThreadsMaxKey(e)) {
+                e.preventDefault();
+                k.toggle(!k.full);
+            }
+            else if (e.key === 'Escape' && k.full) {
+                e.preventDefault();
+                k.toggle(false);
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
     const openThreadIn = (id) => {
         setOpenThreadId(id);
         setThreadQuote(null);
@@ -559,16 +596,7 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
             ? 'border-blue-300 ring-2 ring-blue-300/70'
             : active
                 ? 'border-blue-400/40'
-                : 'border-gray-800'}`, onMouseDown: onFocus, "data-agent-pane": pane.id, "data-chat-pane": true, "data-pane-active": active, onKeyDown: (e) => {
-            if (threads.enabled && isThreadsMaxKey(e)) {
-                e.preventDefault();
-                maximizeThreads(!threadsFull);
-            }
-            else if (e.key === 'Escape' && threadsFull && !e.defaultPrevented) {
-                e.preventDefault();
-                setThreadsMaxed(false);
-            }
-        }, ...(uploads &&
+                : 'border-gray-800'}`, onMouseDown: onFocus, ref: paneRef, "data-agent-pane": pane.id, "data-chat-pane": true, "data-pane-active": active, ...(uploads &&
             imageDropHandlers((files) => setImages((prev) => [...prev, ...files]), (list) => attachableFiles(list, uploads.attachmentExtensions))), children: [_jsxs("div", { ...headerProps, className: `flex flex-nowrap items-center gap-x-1.5 h-8 px-2 border-b text-xs shrink-0 bg-gray-900 border-gray-800 ${headerProps?.draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${headerProps?.className ?? ''}`, children: [_jsx(MessageSquare, { size: 13, "aria-hidden": true, className: "text-blue-300 shrink-0" }), _jsx("span", { className: "font-medium text-gray-200 truncate min-w-0", children: pane.name }), harness !== 'claude' && (_jsx("span", { className: "shrink-0 px-1 rounded border border-gray-700 text-[10px] text-gray-400", children: harnessName })), _jsx("span", { className: "text-gray-500 font-mono truncate min-w-0 hidden lg:inline", children: pane.cwd }), state.model && (_jsx("span", { className: "text-gray-500 truncate min-w-0 hidden sm:inline", children: state.model })), _jsx("span", { className: `shrink-0 ${prompting || !connected ? 'text-amber-300' : busy ? 'text-blue-300' : 'text-gray-500'}`, children: status }), !connected && (_jsxs("button", { type: "button", onClick: () => {
                             setError(null);
                             if (!reattachPane(pane.id))
