@@ -273,6 +273,8 @@ export const ThreadComposer: React.FC<{
     },
     [storeKey]
   );
+  const currentKey = useRef(storeKey);
+  currentKey.current = storeKey;
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -283,9 +285,12 @@ export const ThreadComposer: React.FC<{
   const send = async () => {
     if (empty || sending || disabled) return;
     setSending(true);
+    const sentKey = storeKey;
     try {
       if (await onSend(text.trim(), files)) {
-        setText('');
+        // another thread opened meanwhile: only the sent thread's draft goes
+        if (sentKey === currentKey.current) setText('');
+        else threadDrafts.delete(sentKey);
         setFiles([]);
       }
     } finally {

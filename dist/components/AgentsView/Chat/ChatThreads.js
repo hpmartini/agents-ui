@@ -145,6 +145,8 @@ export const ThreadComposer = ({ chatId, submitKey, history, agents, quote, onCl
             threadDrafts.delete(storeKey);
         setTextState(value);
     }, [storeKey]);
+    const currentKey = useRef(storeKey);
+    currentKey.current = storeKey;
     const [files, setFiles] = useState([]);
     const [sending, setSending] = useState(false);
     const input = useRef(null);
@@ -156,9 +158,14 @@ export const ThreadComposer = ({ chatId, submitKey, history, agents, quote, onCl
         if (empty || sending || disabled)
             return;
         setSending(true);
+        const sentKey = storeKey;
         try {
             if (await onSend(text.trim(), files)) {
-                setText('');
+                // another thread opened meanwhile: only the sent thread's draft goes
+                if (sentKey === currentKey.current)
+                    setText('');
+                else
+                    threadDrafts.delete(sentKey);
                 setFiles([]);
             }
         }

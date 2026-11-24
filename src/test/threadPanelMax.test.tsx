@@ -227,7 +227,8 @@ describe('thread draft', () => {
         onSend={vi.fn(async () => true)}
       />
     );
-  const input = () => screen.getByRole('textbox', { name: 'Reply in thread' }) as HTMLTextAreaElement;
+  const input = () =>
+    screen.getByRole('textbox', { name: 'Reply in thread' }) as HTMLTextAreaElement;
 
   it('survives hiding the panel (composer unmounted) and stays with its thread', () => {
     const first = mount('t1');
@@ -237,6 +238,32 @@ describe('thread draft', () => {
     expect(input().value).toBe('unsent reply');
     again.unmount();
     mount('t2');
+    expect(input().value).toBe('');
+  });
+
+  it('a send that finishes after switching threads clears only the sent thread', async () => {
+    let finish: (ok: boolean) => void = () => {};
+    const onSend = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
+    const view = (draftKey: string) => (
+      <ThreadComposer
+        chatId="send-chat"
+        draftKey={draftKey}
+        submitKey="mod+enter"
+        history={[]}
+        agents={[]}
+        quote={null}
+        onClearQuote={vi.fn()}
+        onSend={onSend}
+      />
+    );
+    const { rerender } = renderWithAgents(view('a'));
+    fireEvent.change(input(), { target: { value: 'to a' } });
+    fireEvent.keyDown(input(), { key: 'Enter', metaKey: true });
+    rerender(view('b'));
+    fireEvent.change(input(), { target: { value: 'typing in b' } });
+    await act(async () => finish(true));
+    expect(input().value).toBe('typing in b');
+    rerender(view('a'));
     expect(input().value).toBe('');
   });
 });

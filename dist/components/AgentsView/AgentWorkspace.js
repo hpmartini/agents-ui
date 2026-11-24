@@ -25,7 +25,8 @@ const ZONE_HIGHLIGHT = {
 /** Panes narrower than this are unreadable terminals: stack them instead */
 /** Narrowest pane that shows its header, chat and composer uncut: panes side by side stack below it, the split divider stops at it */
 const MIN_PANE_PX = 420;
-const MIN_PANE_HEIGHT_PX = 200;
+/** Stacked: header, a few log lines, composer, model chip and usage */
+const MIN_PANE_HEIGHT_PX = 360;
 /** Stand-in session for a browser pane, so tab strip, titles and drag treat it like any pane */
 function browserSession(id) {
     const url = browserUrl(id);

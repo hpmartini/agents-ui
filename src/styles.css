@@ -46,7 +46,14 @@
   --color-sel: var(--agents-sel, #3f6399);
   --color-cursor: var(--agents-cursor, #8fd0ff);
   --font-sans: var(--agents-font, Inter, ui-sans-serif, system-ui, sans-serif);
-  --font-mono: var(--agents-font-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace);
+  --font-mono: var(
+    --agents-font-mono,
+    'JetBrains Mono',
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace
+  );
   /* Tailwind v3 values where v4 changed them */
   --radius-sm: 0.125rem;
   /* Strongest text on the view's surfaces (see the reset for solid colour buttons below) */
@@ -154,7 +161,14 @@
     font-weight: bolder;
   }
   .agents-ui :is(code, kbd, samp, pre) {
-    font-family: var(--agents-font-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-family: var(
+      --agents-font-mono,
+      'JetBrains Mono',
+      ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      monospace
+    );
     font-size: 1em;
   }
   .agents-ui small {

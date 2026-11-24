@@ -223,8 +223,8 @@ export function threadsLayout(row: number): { overlay: boolean; min: number; max
 const THREADS_DRAWER_MAX = 4096;
 /** The widest drawer leaves this much chat visible, so its handle never lands on the split divider */
 const DRAWER_GAP = 24;
-/** Below this pane width the header drops path, model and harness so the name stays readable */
-const NARROW_PANE = 560;
+/** Below this pane width the header drops path, model and harness and puts its buttons on a second row, so the name stays readable */
+const NARROW_PANE = 640;
 /** ResizeHandle's net width in the row: 9 px with -4 px margins */
 const HANDLE_NET = 1;
 /** Stored floor: the overlay in a narrow pane may be narrower than THREADS_MIN */
@@ -784,7 +784,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   useLayoutEffect(() => {
     const el = threadListRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [threadItems, openThreadId]);
+    // showThreads: a reopened panel mounts a new log, which starts at the top
+  }, [threadItems, openThreadId, showThreads]);
   useEffect(() => {
     if (quote) inputRef.current?.focus();
   }, [quote]);
@@ -824,12 +825,21 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     >
       <div
         {...headerProps}
-        className={`flex flex-nowrap items-center gap-x-1.5 h-8 px-2 border-b text-xs shrink-0 bg-gray-900 border-gray-800 ${
+        className={`flex items-center gap-x-1.5 px-2 border-b text-xs shrink-0 bg-gray-900 border-gray-800 ${
+          narrowPane ? 'flex-wrap min-h-8 py-0.5' : 'flex-nowrap h-8'
+        } ${
           headerProps?.draggable ? 'cursor-grab active:cursor-grabbing' : ''
         } ${headerProps?.className ?? ''}`}
       >
         <MessageSquare size={13} aria-hidden className="text-blue-300 shrink-0" />
-        <span className="font-medium text-gray-200 truncate min-w-[3.5rem]">{pane.name}</span>
+        <span
+          className={`font-medium text-gray-200 truncate ${
+            narrowPane ? 'min-w-0 flex-1 basis-[calc(100%-6rem)] leading-7' : 'min-w-[9rem]'
+          }`}
+          title={pane.name}
+        >
+          {pane.name}
+        </span>
         {harness !== 'claude' && !narrowPane && (
           <span className="shrink-0 px-1 rounded border border-gray-700 text-[10px] text-gray-400">
             {harnessName}
