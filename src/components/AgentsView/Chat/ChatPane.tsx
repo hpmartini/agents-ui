@@ -73,7 +73,7 @@ import {
   routeThreads,
   unreadCount,
 } from '../../../utils/chatThreads';
-import { ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
+import { clampWidth, ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
 import { ChatActivity } from './ChatActivity';
 import { ChatStatusLine } from './ChatStatusLine';
 import { QuestionCard } from './QuestionCard';
@@ -580,6 +580,20 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     THREADS_MIN,
     THREADS_MAX
   );
+  // The panel takes at most 60 % of the pane (splits are narrow): the handle starts from the width
+  // on screen, else a drag from a stored 420 behind a 281 cap shows no movement
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [rowWidth, setRowWidth] = useState(0);
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!row) return;
+    const observer = new ResizeObserver(() => setRowWidth(row.clientWidth));
+    observer.observe(row);
+    setRowWidth(row.clientWidth);
+    return () => observer.disconnect();
+  }, []);
+  const threadsMax = rowWidth ? Math.min(THREADS_MAX, Math.floor(rowWidth * 0.6)) : THREADS_MAX;
+  const threadsShown = clampWidth(threadsWidth, THREADS_MIN, threadsMax);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [threadQuote, setThreadQuote] = useState<ChatQuote | null>(null);
   const showThreads = threads.enabled && threadsOpen;
@@ -835,7 +849,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 flex">
+      <div ref={rowRef} className="flex-1 min-h-0 flex">
         <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
           {paneView !== null && paneView !== false && (
             <div data-pane-view className="absolute inset-0 z-20 flex flex-col bg-gray-950">
@@ -1118,9 +1132,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         {showThreads && (
           <>
             <ResizeHandle
-              width={threadsWidth}
+              width={threadsShown}
               min={THREADS_MIN}
-              max={THREADS_MAX}
+              max={threadsMax}
               onChange={setThreadsWidth}
               onReset={() => setThreadsWidth(THREADS_WIDTH)}
               edge="left"
@@ -1128,7 +1142,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             />
             <aside
               aria-label={t.threads}
-              style={{ width: threadsWidth }}
+              style={{ width: threadsShown }}
               className="min-h-0 max-w-[60%] shrink-0 border-l border-gray-800"
             >
               <ThreadsPanel

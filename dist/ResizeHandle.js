@@ -41,9 +41,22 @@ export function useStoredWidth(key, initial, min, max) {
 export const ResizeHandle = ({ width, min, max, onChange, edge, label, className = '', scale = 1, onReset, }) => {
     const drag = useRef(null);
     const [dragging, setDragging] = useState(false);
+    const [hover, setHover] = useState(false);
     const sign = edge === 'right' ? 1 : -1;
     const set = (next) => onChange(clampWidth(next, min, max));
-    return (_jsx("div", { role: "separator", "aria-orientation": "vertical", "aria-label": label, "aria-valuenow": width, "aria-valuemin": min, "aria-valuemax": Math.max(min, max), tabIndex: 0, title: label, "data-dragging": dragging || undefined, className: `ag-resize-handle ${className}`, onPointerDown: (e) => {
+    const hot = dragging || hover;
+    // Inline, not only in styles.css: hosts that skip the package stylesheet (Orkumo) got a 0 px handle
+    return (_jsx("div", { style: {
+            position: 'relative',
+            flex: 'none',
+            alignSelf: 'stretch',
+            width: 9,
+            margin: '0 -4px',
+            zIndex: 5,
+            cursor: 'col-resize',
+            touchAction: 'none',
+            outline: 'none',
+        }, onPointerEnter: () => setHover(true), onPointerLeave: () => setHover(false), onFocus: () => setHover(true), onBlur: () => setHover(false), role: "separator", "aria-orientation": "vertical", "aria-label": label, "aria-valuenow": width, "aria-valuemin": min, "aria-valuemax": Math.max(min, max), tabIndex: 0, title: label, "data-dragging": dragging || undefined, className: `ag-resize-handle ${className}`, onPointerDown: (e) => {
             if (e.button !== undefined && e.button !== 0)
                 return;
             e.preventDefault();
@@ -72,5 +85,14 @@ export const ResizeHandle = ({ width, min, max, onChange, edge, label, className
             else
                 return;
             e.preventDefault();
-        } }));
+        }, children: _jsx("span", { "aria-hidden": true, style: {
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: hot ? 3 : 4,
+                right: hot ? 3 : 4,
+                background: hot ? 'var(--agents-accent, #8fd0ff)' : 'var(--agents-border, #4f67a0)',
+                transition: 'background-color 120ms, left 120ms, right 120ms',
+                pointerEvents: 'none',
+            } }) }));
 };

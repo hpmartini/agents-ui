@@ -71,11 +71,29 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
 }) => {
   const drag = useRef<{ x: number; width: number } | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [hover, setHover] = useState(false);
   const sign = edge === 'right' ? 1 : -1;
   const set = (next: number) => onChange(clampWidth(next, min, max));
+  const hot = dragging || hover;
 
+  // Inline, not only in styles.css: hosts that skip the package stylesheet (Orkumo) got a 0 px handle
   return (
     <div
+      style={{
+        position: 'relative',
+        flex: 'none',
+        alignSelf: 'stretch',
+        width: 9,
+        margin: '0 -4px',
+        zIndex: 5,
+        cursor: 'col-resize',
+        touchAction: 'none',
+        outline: 'none',
+      }}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
       role="separator"
       aria-orientation="vertical"
       aria-label={label}
@@ -115,6 +133,20 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
         else return;
         e.preventDefault();
       }}
-    />
+    >
+      <span
+        aria-hidden
+        style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: hot ? 3 : 4,
+          right: hot ? 3 : 4,
+          background: hot ? 'var(--agents-accent, #8fd0ff)' : 'var(--agents-border, #4f67a0)',
+          transition: 'background-color 120ms, left 120ms, right 120ms',
+          pointerEvents: 'none',
+        }}
+      />
+    </div>
   );
 };
