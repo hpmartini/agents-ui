@@ -8,11 +8,13 @@ import { renderWithAgents } from './agents';
 
 describe('message from another agent (orkumo send)', () => {
   it('reads the sender line: id and name, id only, unknown sender, none', () => {
-    expect(agentMessage('[from agent omp-u3 "playmaker" via orkumo send]\n\nbitte prüfen')).toEqual({
-      id: 'omp-u3',
-      name: 'playmaker',
-      body: 'bitte prüfen',
-    });
+    expect(agentMessage('[from agent omp-u3 "playmaker" via orkumo send]\n\nbitte prüfen')).toEqual(
+      {
+        id: 'omp-u3',
+        name: 'playmaker',
+        body: 'bitte prüfen',
+      }
+    );
     expect(agentMessage('[from agent abc-1 via orkumo send]\n\nhi')).toEqual({
       id: 'abc-1',
       name: null,
@@ -62,5 +64,27 @@ describe('message from another agent (orkumo send)', () => {
     const { container } = renderWithAgents(<UserMessage text="eigener prompt" />);
     expect(container.querySelector('[data-agent-message]')).toBeNull();
     expect(screen.getByText('eigener prompt')).toBeTruthy();
+  });
+});
+
+describe('own message with a slash command', () => {
+  it('a skill called with text: the command as a chip, the text after it', () => {
+    renderWithAgents(
+      <UserMessage
+        text={'/demo-skills:retro Dann musst du das prüfen!!!!\n\nUnd messen, ob es wirkt.'}
+      />
+    );
+    expect(document.querySelector('[data-command]')?.textContent).toBe('/demo-skills:retro');
+    expect(screen.getByText(/Dann musst du das prüfen!!!!/).textContent).toContain(
+      'Und messen, ob es wirkt.'
+    );
+  });
+
+  it("omp's /skill: line with the text on the next line; a path is no command", () => {
+    renderWithAgents(<UserMessage text={'/skill:impeccable \nUpdate: die Screens'} />);
+    expect(document.querySelector('[data-command]')?.textContent).toBe('/skill:impeccable');
+    expect(screen.getByText(/Update: die Screens/)).toBeTruthy();
+    renderWithAgents(<UserMessage text="/Users/anna/notiz.md erklär das" />);
+    expect(document.querySelectorAll('[data-command]')).toHaveLength(1);
   });
 });

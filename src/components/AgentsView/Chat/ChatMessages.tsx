@@ -19,7 +19,7 @@ import {
   type ChatItem,
   type ResultMessage,
 } from '../../../utils/chatEvents';
-import { splitImages } from '../../../utils/chatComposer';
+import { leadingCommand, splitImages } from '../../../utils/chatComposer';
 import { useTransport } from '../../../host';
 import { useLabels } from '../../../labels';
 import type { TerminalLabels } from '../../../labels/terminal';
@@ -207,6 +207,8 @@ export const UserMessage: React.FC<{ text: string; queued?: boolean }> = ({ text
 
 const OwnMessage: React.FC<{ text: string; queued?: boolean }> = ({ text, queued }) => {
   const { text: body, images } = splitImages(text);
+  // `/skill args`: the command as a chip, its text after it
+  const command = leadingCommand(body);
   const uploads = useTransport().uploads;
   const t = useLabels().terminal;
   const previews = images.map((p) => ({ path: p, url: uploads?.agentImageUrl(p) ?? null }));
@@ -219,7 +221,19 @@ const OwnMessage: React.FC<{ text: string; queued?: boolean }> = ({ text, queued
             : 'bg-blue-900/50 border-blue-800/60'
         }`}
       >
-        {body}
+        {command ? (
+          <>
+            <span
+              data-command
+              className="mr-1.5 inline-block rounded border border-blue-400/40 bg-blue-500/15 px-1.5 py-px font-mono text-xs text-blue-200"
+            >
+              {command.command}
+            </span>
+            {command.rest}
+          </>
+        ) : (
+          body
+        )}
         {previews.length > 0 && (
           <div className={`flex flex-wrap gap-1.5 ${body ? 'mt-2' : ''}`}>
             {previews.map(({ path, url }) =>

@@ -2,7 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import React from 'react';
 import { Brain, Clock, ChevronRight, History, Wrench, CheckCircle2, XCircle, Sparkles, Bot, } from 'lucide-react';
 import { agentMessage, toolDiff, toolSummary, } from '../../../utils/chatEvents';
-import { splitImages } from '../../../utils/chatComposer';
+import { leadingCommand, splitImages } from '../../../utils/chatComposer';
 import { useTransport } from '../../../host';
 import { useLabels } from '../../../labels';
 import { ViewActionsContext } from '../../../viewActions';
@@ -67,12 +67,14 @@ export const UserMessage = ({ text, queued }) => {
 };
 const OwnMessage = ({ text, queued }) => {
     const { text: body, images } = splitImages(text);
+    // `/skill args`: the command as a chip, its text after it
+    const command = leadingCommand(body);
     const uploads = useTransport().uploads;
     const t = useLabels().terminal;
     const previews = images.map((p) => ({ path: p, url: uploads?.agentImageUrl(p) ?? null }));
     return (_jsxs("div", { className: "flex flex-col items-end my-3", "data-queued": queued || undefined, children: [_jsxs("div", { className: `max-w-[85%] rounded-lg px-3 py-2 text-sm text-gray-100 whitespace-pre-wrap break-words border ${queued
                     ? 'bg-blue-900/25 border-dashed border-blue-700/70'
-                    : 'bg-blue-900/50 border-blue-800/60'}`, children: [body, previews.length > 0 && (_jsx("div", { className: `flex flex-wrap gap-1.5 ${body ? 'mt-2' : ''}`, children: previews.map(({ path, url }) => url ? (_jsx("a", { href: url, target: "_blank", rel: "noreferrer", title: path, children: _jsx("img", { src: url, alt: t.attachedImage, loading: "lazy", className: "h-20 max-w-[10rem] rounded border border-blue-800/60 object-cover hover:opacity-90" }) }, path)) : (_jsx("span", { className: "text-xs text-blue-200/80 font-mono", children: t.imageRef(path) }, path))) }))] }), queued && (_jsxs("span", { className: "mt-1 flex items-center gap-1 text-[11px] text-blue-300/80", children: [_jsx(Clock, { size: 11, "aria-hidden": true }), " ", t.queuedNote] }))] }));
+                    : 'bg-blue-900/50 border-blue-800/60'}`, children: [command ? (_jsxs(_Fragment, { children: [_jsx("span", { "data-command": true, className: "mr-1.5 inline-block rounded border border-blue-400/40 bg-blue-500/15 px-1.5 py-px font-mono text-xs text-blue-200", children: command.command }), command.rest] })) : (body), previews.length > 0 && (_jsx("div", { className: `flex flex-wrap gap-1.5 ${body ? 'mt-2' : ''}`, children: previews.map(({ path, url }) => url ? (_jsx("a", { href: url, target: "_blank", rel: "noreferrer", title: path, children: _jsx("img", { src: url, alt: t.attachedImage, loading: "lazy", className: "h-20 max-w-[10rem] rounded border border-blue-800/60 object-cover hover:opacity-90" }) }, path)) : (_jsx("span", { className: "text-xs text-blue-200/80 font-mono", children: t.imageRef(path) }, path))) }))] }), queued && (_jsxs("span", { className: "mt-1 flex items-center gap-1 text-[11px] text-blue-300/80", children: [_jsx(Clock, { size: 11, "aria-hidden": true }), " ", t.queuedNote] }))] }));
 };
 /** 12.3 s · 4 min 12 s · 1 h 5 min */
 export function formatDuration(ms) {

@@ -165,6 +165,15 @@ export function splitImages(text) {
     return { text: rest.trim(), images };
 }
 /**
+ * A prompt that starts with a slash command (`/retro Dann …`, omp's `/skill:impeccable \n…`):
+ * the command and the text after it, for a chip plus the text. null for any other prompt (also
+ * one that starts with a path like `/Users/…`).
+ */
+export function leadingCommand(text) {
+    const m = text.match(/^(\/\w[\w:.-]*)(?:\s+([\s\S]*))?$/);
+    return m ? { command: m[1], rest: (m[2] ?? '').trim() } : null;
+}
+/**
  * The CLI runs a built-in command (`/compact`, `/model` …) only as the first word of a message.
  * "erst das, dann /compact" becomes two turns: the text before, then the command with its rest.
  * Skills and agents stay inline: the model calls them from anywhere in the text.
