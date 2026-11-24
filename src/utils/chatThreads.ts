@@ -37,8 +37,10 @@ export interface ChatThreadMarker {
   count: number;
 }
 
+const TAG_START = '[Thread: ';
+
 export const threadTag = (name: { project: string; task: string }) =>
-  `[Thread: ${name.project} · ${name.task}]`;
+  `${TAG_START}${name.project} · ${name.task}]`;
 
 /** Message text without its thread tag line */
 export function stripTag(text: string, tag: string): string {
@@ -141,11 +143,18 @@ export function routeThreads(
     return m;
   };
   const parents = new Map(threads.filter((t) => t.parentKey).map((t) => [t.parentKey, t.id]));
+  const open = new Set(threads.filter((t) => !t.closed).map((t) => t.id));
   let prev: string | null = null;
   for (const item of items) {
-    // tool steps without text are the same turn as the item before them (no tag to read)
-    const stepsOnly = item.kind === 'answer' && !firstText(item);
-    const id: string | null = !threads.length ? null : stepsOnly ? prev : threadOf(item, threads);
+    // An answer without a tag (orchestrators started before the tag rule, tool steps only) is the
+    // turn of the thread message before it; a tag of its own, known or not, decides instead
+    const untagged = item.kind === 'answer' && !firstText(item).startsWith(TAG_START);
+    const turn: string | null = prev && open.has(prev) ? prev : null;
+    const id: string | null = !threads.length
+      ? null
+      : untagged
+        ? (threadOf(item, threads) ?? turn)
+        : threadOf(item, threads);
     prev = id;
     if (id) {
       byThread.set(id, [...(byThread.get(id) ?? []), item]);
