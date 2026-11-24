@@ -1,6 +1,6 @@
 import type { AgentSession } from '../types';
 import type { AgentTargets } from '../transport';
-import { resumableSessionId, sessionHarness } from './agentSessions';
+import { resumableSessionId, sessionHarness, transcriptId } from './agentSessions';
 
 /**
  * Session copies (#236). `claude -p --resume <id>` keeps the session id, so a second process on
@@ -109,8 +109,8 @@ export function openPlan(
 }
 
 /** Session id shown on a workspace tab: the job id for background jobs, else the transcript id */
-export function tabSessionLabel(session: AgentSession, targets?: AgentTargets): string | null {
+export function tabSessionLabel(session: AgentSession): string | null {
   if (session.kind === 'background' && !session.ptyArgs) return session.id;
-  const id = resumableSessionId(session, targets);
+  const id = transcriptId(session);
   return id ? id.slice(0, 8) : null;
 }

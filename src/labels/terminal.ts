@@ -190,6 +190,7 @@ export interface TerminalLabels {
   threadsFailed: string;
   threadsFailedHint: string;
   tryAgain: string;
+  uiViewFailed: (reason: string) => string;
   noThreads: string;
   noThreadsHint: string;
   pickThread: string;
@@ -489,6 +490,8 @@ export const terminalEn: TerminalLabels = {
   threadsFailed: 'Threads could not be loaded',
   threadsFailedHint: 'Messages still reach the orchestrator through the main chat.',
   tryAgain: 'Try again',
+  uiViewFailed: (reason) =>
+    `The UI view cannot read this agent's transcript (${reason}). The terminal view still works.`,
   noThreads: 'No threads yet',
   noThreadsHint:
     'Open a thread from an answer, from Instruct on a status card, or bind a new one to a task.',
@@ -799,6 +802,8 @@ export const terminalDe: TerminalLabels = {
   threadsFailed: 'Threads konnten nicht geladen werden',
   threadsFailedHint: 'Nachrichten erreichen den Orchestrator weiter über den Haupt-Chat.',
   tryAgain: 'Erneut versuchen',
+  uiViewFailed: (reason) =>
+    `Die UI-Ansicht kann das Transkript dieses Agents nicht lesen (${reason}). Die Terminal-Ansicht geht weiter.`,
   noThreads: 'Noch keine Threads',
   noThreadsHint:
     'Thread an einer Antwort öffnen, über Instruct auf einer Status-Karte oder neu an eine Aufgabe binden.',

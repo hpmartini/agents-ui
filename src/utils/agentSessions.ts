@@ -1291,6 +1291,14 @@ export function resumableSessionId(
 ): string | null {
   // #220: the chat would start on the picked instance, not on the one this pane runs on
   if (targets.targetOf(session.id) !== targets.getAgentTarget()) return null;
+  return transcriptId(session);
+}
+
+/**
+ * Transcript id of the session a pane runs, on whatever instance it runs (`resumableSessionId`
+ * without the instance check): the UI view reads it there through the pane's own target
+ */
+export function transcriptId(session: AgentSession): string | null {
   if (session.sessionId) return session.sessionId;
   if (sessionHarness(session) !== 'claude') return null;
   const args = session.ptyArgs ?? [];

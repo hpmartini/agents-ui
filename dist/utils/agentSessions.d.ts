@@ -329,5 +329,10 @@ export declare function shortenPath(cwd: string, max?: number): string;
  * instances (#220), local only without.
  */
 export declare function resumableSessionId(session: AgentSession, targets?: AgentTargets): string | null;
+/**
+ * Transcript id of the session a pane runs, on whatever instance it runs (`resumableSessionId`
+ * without the instance check): the UI view reads it there through the pane's own target
+ */
+export declare function transcriptId(session: AgentSession): string | null;
 /** An agent works in its worktree; its cwd is the worktree (or a folder in it) otherwise */
 export declare function agentFolder(session: Pick<AgentSession, 'cwd'> | undefined, ctx?: AgentContext | null): string | null;
