@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ChatThreadList, ChatThreadTask } from '../../../transport';
-import { type ChatItem } from '../../../utils/chatEvents';
+import { type ChatItem, type ChatSubmitKey } from '../../../utils/chatEvents';
 import { type ChatThread } from '../../../utils/chatThreads';
 import type { ChatQuote } from './ChatMessages';
 export type ThreadsStatus = 'loading' | 'ready' | 'error';
@@ -48,14 +48,26 @@ export declare const ThreadMarkerRow: React.FC<{
     items: ChatItem[];
     onOpen: () => void;
 }>;
-/** Composer of the open thread: text, quote, images and files */
+export declare const THREAD_COMPOSER_HEIGHT_KEY = "devOrbitChatThreadComposerHeight";
+/**
+ * Composer of the open thread: the main chat's composer (send key from the settings, height grip,
+ * `@` files) plus quote, images and files. `/` commands are left out: the tag line in front
+ * would turn them into plain text.
+ */
 export declare const ThreadComposer: React.FC<{
-    placeholder: string;
+    chatId: string | null;
+    submitKey: ChatSubmitKey;
+    /** The thread's sent messages, oldest first (Arrow up walks them) */
+    history: string[];
+    agents: {
+        name: string;
+        description: string;
+    }[];
     quote: ChatQuote | null;
     onClearQuote: () => void;
     onSend: (text: string, files: File[]) => Promise<boolean>;
     disabled?: boolean;
-    /** Focus the input when this changes (thread opened, quote added) */
+    /** Focus the input when this changes (thread opened, quote added, panel maximised) */
     focusKey?: unknown;
 }>;
 export interface ThreadsPanelProps {
@@ -75,7 +87,20 @@ export interface ThreadsPanelProps {
     onClose: (id: string, closed: boolean) => void;
     /** Messages and composer of the open thread (null: the draft) */
     renderThread: (thread: ChatThread | null) => React.ReactNode;
+    /** Over the whole pane, the main chat hidden */
+    maximized: boolean;
+    onMaximize: (maximized: boolean) => void;
 }
+export declare const THREADS_SIDEBAR_KEY = "agents-ui:threads-sidebar";
+/** Mod+Shift+M: maximise or restore the threads panel of the active pane */
+export declare const isThreadsMaxKey: (e: {
+    code: string;
+    shiftKey: boolean;
+    altKey: boolean;
+    metaKey: boolean;
+    ctrlKey: boolean;
+}) => boolean;
+export declare const THREADS_MAX_SHORTCUT: string;
 export declare const DRAFT_THREAD = "draft";
 /** Right panel of an orchestrator chat: its threads, below them the open one */
 export declare const ThreadsPanel: React.FC<ThreadsPanelProps>;

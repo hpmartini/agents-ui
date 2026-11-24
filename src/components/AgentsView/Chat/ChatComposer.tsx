@@ -44,6 +44,12 @@ interface ChatComposerProps {
   /** Fetches a cut suggestion's full text once it is taken */
   takeSuggestion?: () => Promise<string | null>;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
+  /** Accessible name; default "Message" */
+  label?: string;
+  /** Placeholders per submit key; default the main input's */
+  placeholders?: { enter: string; modEnter: string };
+  /** Where the dragged height is remembered; default the main input's key */
+  heightKey?: string;
 }
 
 /** Chat input: grows with its content, TUI-like keys, `/` and `@` picker with details */
@@ -63,6 +69,9 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   suggestionCut,
   takeSuggestion,
   inputRef,
+  label,
+  placeholders,
+  heightKey = CHAT_COMPOSER_HEIGHT_KEY,
 }) => {
   const t = useLabels().terminal;
   // The suggestion the user typed over or took; a new one shows again
@@ -73,8 +82,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     : disabled
       ? t.composerDisconnected
       : submitKey === 'enter'
-        ? t.composerPlaceholderEnter
-        : t.composerPlaceholderModEnter;
+        ? (placeholders?.enter ?? t.composerPlaceholderEnter)
+        : (placeholders?.modEnter ?? t.composerPlaceholderModEnter);
   const valueRef = useRef(value);
   valueRef.current = value;
   const [caret, setCaret] = useState(0);
@@ -91,7 +100,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   const { handleProps } = useAutoGrowTextarea(inputRef, value || placeholder, {
     min: MIN_HEIGHT,
     max: MAX_HEIGHT,
-    storageKey: CHAT_COMPOSER_HEIGHT_KEY,
+    storageKey: heightKey,
   });
 
   useLayoutEffect(() => {
@@ -355,7 +364,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
           onKeyDown={onKeyDown}
           onBlur={() => setDismissed(queryKey)}
           placeholder={placeholder}
-          aria-label={t.message}
+          aria-label={label ?? t.message}
           aria-autocomplete="list"
           aria-controls={open ? listId : undefined}
           aria-activedescendant={open ? `${listId}-${highlighted}` : undefined}

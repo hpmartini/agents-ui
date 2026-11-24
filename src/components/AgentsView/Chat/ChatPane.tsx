@@ -62,6 +62,7 @@ import {
   ThreadComposer,
   ThreadMarkerRow,
   ThreadsPanel,
+  isThreadsMaxKey,
   firstWords,
   useChatThreads,
 } from './ChatThreads';
@@ -69,7 +70,9 @@ import {
   answerText,
   hhmm,
   itemTime,
+  parseQuote,
   quoteHeader,
+  stripTag,
   routeThreads,
   unreadCount,
 } from '../../../utils/chatThreads';
@@ -568,8 +571,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   };
 
   const [threadsOpen, setThreadsOpen] = useState(() => readFlag(THREADS_OPEN_KEY, true));
+  // Per pane and page: a split maximises only its own threads
+  const [threadsMaxed, setThreadsMaxed] = useState(false);
   const showThreadsPanel = (open: boolean) => {
     setThreadsOpen(open);
+    if (!open) setThreadsMaxed(false);
     try {
       localStorage.setItem(THREADS_OPEN_KEY, open ? '1' : '0');
     } catch {
@@ -601,6 +607,12 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [threadQuote, setThreadQuote] = useState<ChatQuote | null>(null);
   const showThreads = threads.enabled && threadsOpen;
+  // A question of the agent needs the main chat: it shows again until answered
+  const threadsFull = showThreads && threadsMaxed && !dialog && prompt === null;
+  const maximizeThreads = (on: boolean) => {
+    if (on) showThreadsPanel(true);
+    setThreadsMaxed(on);
+  };
   const openThreadIn = (id: string | null) => {
     setOpenThreadId(id);
     setThreadQuote(null);
@@ -643,6 +655,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     0
   );
   const threadItems = openThread ? (routed.byThread.get(openThread.id) ?? NO_ITEMS) : NO_ITEMS;
+  const threadHistory = useMemo(
+    () =>
+      threadItems
+        .filter((i): i is Extract<ChatItem, { kind: 'user' }> => i.kind === 'user')
+        .map((i) => {
+          const text = openThread ? stripTag(i.text, openThread.tag) : i.text;
+          return splitImages(parseQuote(text)?.body ?? text).text;
+        })
+        .filter(Boolean),
+    [threadItems, openThread]
+  );
   // The running turn: its answer (or the working card) shows where its last item went
   const lastItem = items.at(-1);
   const lastThread = lastItem
@@ -717,6 +740,15 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       data-agent-pane={pane.id}
       data-chat-pane
       data-pane-active={active}
+      onKeyDown={(e) => {
+        if (threads.enabled && isThreadsMaxKey(e)) {
+          e.preventDefault();
+          maximizeThreads(!threadsFull);
+        } else if (e.key === 'Escape' && threadsFull && !e.defaultPrevented) {
+          e.preventDefault();
+          setThreadsMaxed(false);
+        }
+      }}
       {...(uploads &&
         imageDropHandlers(
           (files) => setImages((prev) => [...prev, ...files]),
@@ -854,7 +886,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       </div>
 
       <div ref={rowRef} className="flex-1 min-h-0 flex">
-        <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
+        {/* hidden, not unmounted: draft, scroll position and the live stream stay */}
+        <div
+          className={`relative flex-1 min-w-0 min-h-0 flex flex-col ${threadsFull ? 'hidden' : ''}`}
+        >
           {paneView !== null && paneView !== false && (
             <div data-pane-view className="absolute inset-0 z-20 flex flex-col bg-gray-950">
               {paneView}
@@ -1135,19 +1170,25 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         </div>
         {showThreads && (
           <>
-            <ResizeHandle
-              width={threadsShown}
-              min={threadsMin}
-              max={threadsMax}
-              onChange={setThreadsWidth}
-              onReset={() => setThreadsWidth(THREADS_WIDTH)}
-              edge="left"
-              label={t.resizeThreads}
-            />
+            {!threadsFull && (
+              <ResizeHandle
+                width={threadsShown}
+                min={threadsMin}
+                max={threadsMax}
+                onChange={setThreadsWidth}
+                onReset={() => setThreadsWidth(THREADS_WIDTH)}
+                edge="left"
+                label={t.resizeThreads}
+              />
+            )}
             <aside
               aria-label={t.threads}
-              style={{ width: threadsShown }}
-              className="min-h-0 max-w-[60%] shrink-0 border-l border-gray-800"
+              style={threadsFull ? undefined : { width: threadsShown }}
+              className={
+                threadsFull
+                  ? 'min-h-0 min-w-0 flex-1'
+                  : 'min-h-0 max-w-[60%] shrink-0 border-l border-gray-800'
+              }
             >
               <ThreadsPanel
                 status={threads.status}
@@ -1167,6 +1208,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 onClose={(id, closed) =>
                   threads.update(id, { closed }).catch((e: Error) => setError(e.message))
                 }
+                maximized={threadsFull}
+                onMaximize={maximizeThreads}
                 renderThread={(thread) => {
                   const parent = thread?.parentKey
                     ? items.find((i) => i.key === thread.parentKey)
@@ -1226,13 +1269,21 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                           {thread?.binding ? t.boundTo(thread.repo ?? null) : t.notBound}
                         </span>
                       </div>
+                      {threadsFull && error && (
+                        <div role="alert" className="px-2 pb-1 text-xs text-red-300">
+                          {error}
+                        </div>
+                      )}
                       <ThreadComposer
-                        placeholder={t.replyInThread}
+                        chatId={chatId}
+                        submitKey={submitKey}
+                        history={threadHistory}
+                        agents={state.agents}
                         quote={threadQuote}
                         onClearQuote={() => setThreadQuote(null)}
                         onSend={sendInThread}
                         disabled={!connected}
-                        focusKey={openThreadId}
+                        focusKey={`${openThreadId}:${threadsFull}`}
                       />
                     </>
                   );

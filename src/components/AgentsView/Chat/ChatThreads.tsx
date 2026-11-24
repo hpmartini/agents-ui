@@ -4,7 +4,10 @@ import {
   ChevronRight,
   FolderGit2,
   Loader2,
+  Expand,
   MessagesSquare,
+  Shrink,
+  PanelLeft,
   Plus,
   Quote,
   RotateCcw,
@@ -13,7 +16,12 @@ import {
 import { useTransport } from '../../../host';
 import { useLabels } from '../../../labels';
 import type { ChatThreadList, ChatThreadTask } from '../../../transport';
-import { agentMessage, type ChatItem } from '../../../utils/chatEvents';
+import {
+  agentMessage,
+  type ChatCommand,
+  type ChatItem,
+  type ChatSubmitKey,
+} from '../../../utils/chatEvents';
 import { splitImages } from '../../../utils/chatComposer';
 import { attachableFiles } from '../../../utils/composer';
 import {
@@ -24,8 +32,10 @@ import {
   unreadCount,
   type ChatThread,
 } from '../../../utils/chatThreads';
+import { isMac } from '../../../utils/platform';
 import { ImageAttachments, imageDropHandlers } from '../../ImageAttachments';
 import type { ChatQuote } from './ChatMessages';
+import { ChatComposer } from './ChatComposer';
 
 const focusRing = 'focus-visible:outline-2 focus-visible:outline-blue-400';
 const smallBtn = `inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] text-gray-400 hover:bg-gray-800 hover:text-white ${focusRing}`;
@@ -201,16 +211,26 @@ export const ThreadMarkerRow: React.FC<{
   );
 };
 
-/** Composer of the open thread: text, quote, images and files */
+export const THREAD_COMPOSER_HEIGHT_KEY = 'devOrbitChatThreadComposerHeight';
+
+/**
+ * Composer of the open thread: the main chat's composer (send key from the settings, height grip,
+ * `@` files) plus quote, images and files. `/` commands are left out: the tag line in front
+ * would turn them into plain text.
+ */
 export const ThreadComposer: React.FC<{
-  placeholder: string;
+  chatId: string | null;
+  submitKey: ChatSubmitKey;
+  /** The thread's sent messages, oldest first (Arrow up walks them) */
+  history: string[];
+  agents: { name: string; description: string }[];
   quote: ChatQuote | null;
   onClearQuote: () => void;
   onSend: (text: string, files: File[]) => Promise<boolean>;
   disabled?: boolean;
-  /** Focus the input when this changes (thread opened, quote added) */
+  /** Focus the input when this changes (thread opened, quote added, panel maximised) */
   focusKey?: unknown;
-}> = ({ placeholder, quote, onClearQuote, onSend, disabled, focusKey }) => {
+}> = ({ chatId, submitKey, history, agents, quote, onClearQuote, onSend, disabled, focusKey }) => {
   const t = useLabels().terminal;
   const uploads = useTransport().uploads;
   const [text, setText] = useState('');
@@ -237,6 +257,13 @@ export const ThreadComposer: React.FC<{
   return (
     <div
       className="shrink-0 border-t border-gray-800 p-2"
+      onKeyDown={(e) => {
+        // after the composer: an Esc that closed its picker is taken already
+        if (e.key === 'Escape' && !e.defaultPrevented && quote) {
+          e.preventDefault();
+          onClearQuote();
+        }
+      }}
       {...(uploads &&
         imageDropHandlers(
           (picked) => setFiles((prev) => [...prev, ...picked]),
@@ -245,24 +272,22 @@ export const ThreadComposer: React.FC<{
     >
       {quote && <QuoteChip quote={quote} onRemove={onClearQuote} />}
       <div className="flex items-end gap-1.5">
-        <textarea
-          ref={input}
-          rows={2}
+        <ChatComposer
+          chatId={chatId}
           value={text}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          disabled={disabled}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              void send();
-            } else if (e.key === 'Escape' && quote) {
-              e.preventDefault();
-              onClearQuote();
-            }
-          }}
-          className="block min-h-[40px] w-full resize-none rounded-md border border-gray-700 bg-gray-900 px-2.5 py-2 text-sm leading-5 text-gray-100 placeholder:text-gray-500 focus:border-blue-400 focus:outline-none disabled:opacity-50"
+          onChange={setText}
+          onSubmit={() => void send()}
+          onStop={noop}
+          busy={false}
+          disabled={!!disabled}
+          submitKey={submitKey}
+          history={history}
+          commands={NO_COMMANDS}
+          agents={agents}
+          inputRef={input}
+          label={t.replyInThread}
+          placeholders={{ enter: t.threadPlaceholderEnter, modEnter: t.threadPlaceholderModEnter }}
+          heightKey={THREAD_COMPOSER_HEIGHT_KEY}
         />
         <button
           type="button"
@@ -291,6 +316,9 @@ export const ThreadComposer: React.FC<{
   );
 };
 
+const noop = () => {};
+const NO_COMMANDS: ChatCommand[] = [];
+
 const NewThreadMenu: React.FC<{
   tasks: ChatThreadTask[];
   onTask: (task: { project: string; task: string }) => void;
@@ -315,7 +343,11 @@ const NewThreadMenu: React.FC<{
       role="menu"
       aria-label={t.newThread}
       onKeyDown={(e) => {
-        if (e.key === 'Escape') return onDismiss();
+        if (e.key === 'Escape') {
+          // taken: the maximised panel must not restore on the same key
+          e.preventDefault();
+          return onDismiss();
+        }
         if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
         e.preventDefault();
         const items = [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
@@ -433,7 +465,21 @@ export interface ThreadsPanelProps {
   onClose: (id: string, closed: boolean) => void;
   /** Messages and composer of the open thread (null: the draft) */
   renderThread: (thread: ChatThread | null) => React.ReactNode;
+  /** Over the whole pane, the main chat hidden */
+  maximized: boolean;
+  onMaximize: (maximized: boolean) => void;
 }
+
+export const THREADS_SIDEBAR_KEY = 'agents-ui:threads-sidebar';
+/** Mod+Shift+M: maximise or restore the threads panel of the active pane */
+export const isThreadsMaxKey = (e: {
+  code: string;
+  shiftKey: boolean;
+  altKey: boolean;
+  metaKey: boolean;
+  ctrlKey: boolean;
+}) => e.code === 'KeyM' && e.shiftKey && !e.altKey && (isMac ? e.metaKey : e.ctrlKey);
+export const THREADS_MAX_SHORTCUT = isMac ? '⌘⇧M' : 'Ctrl+Shift+M';
 
 export const DRAFT_THREAD = 'draft';
 
@@ -450,21 +496,64 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
   onNewFree,
   onClose,
   renderThread,
+  maximized,
+  onMaximize,
 }) => {
   const t = useLabels().terminal;
   const [menu, setMenu] = useState(false);
+  const [sidebarPref, setSidebarPref] = useState(() => {
+    try {
+      return localStorage.getItem(THREADS_SIDEBAR_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleSidebar = () => {
+    const next = !sidebarPref;
+    setSidebarPref(next);
+    try {
+      localStorage.setItem(THREADS_SIDEBAR_KEY, next ? '1' : '0');
+    } catch {
+      // not remembered
+    }
+  };
+  const sidebar = maximized && sidebarPref;
   const [closedOpen, setClosedOpen] = useState(false);
   const active = threads.filter((x) => !x.closed);
   const closed = threads.filter((x) => x.closed);
   const open = threads.find((x) => x.id === openId) ?? null;
   const draft = openId === DRAFT_THREAD;
   const dismissMenu = useCallback(() => setMenu(false), []);
+  const unread = active.reduce((n, x) => n + unreadCount(byThread.get(x.id) ?? [], x.readAt), 0);
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-gray-950" data-threads-panel>
-      <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-gray-800 px-2 text-xs">
+    <div
+      className="relative flex h-full min-h-0 flex-col bg-gray-950"
+      data-threads-panel
+      data-threads-maximized={maximized || undefined}
+      onKeyDown={(e) => {
+        // last in line: picker, quote and menu take their Esc first
+        if (e.key === 'Escape' && maximized && !e.defaultPrevented) {
+          e.preventDefault();
+          onMaximize(false);
+        }
+      }}
+    >
+      <div
+        data-testid="threads-header"
+        className="flex h-8 shrink-0 items-center gap-1.5 border-b border-gray-800 px-2 text-xs"
+      >
         <MessagesSquare size={13} aria-hidden className="shrink-0 text-blue-300" />
         <span className="font-medium text-gray-200">{t.threads}</span>
+        {active.length > 0 && <span className="tabular-nums text-gray-500">{active.length}</span>}
+        {unread > 0 && (
+          <span
+            className="shrink-0 rounded-full bg-blue-500 px-1.5 text-[10px] font-semibold leading-4 text-white tabular-nums"
+            title={t.unreadCount(unread)}
+          >
+            {t.unreadNew(unread)}
+          </span>
+        )}
         <span className="flex-1" />
         <button
           type="button"
@@ -476,6 +565,32 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
         >
           <Plus size={12} aria-hidden />
           {t.newThread}
+        </button>
+        {maximized && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-pressed={sidebarPref}
+            aria-label={t.threadsSidebar}
+            title={t.threadsSidebar}
+            className={`${smallBtn} px-1 ${sidebarPref ? 'text-blue-300' : ''}`}
+          >
+            <PanelLeft size={12} aria-hidden />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onMaximize(!maximized)}
+          aria-pressed={maximized}
+          aria-label={maximized ? t.restoreThreads : t.maximizeThreads}
+          title={
+            maximized
+              ? t.restoreThreadsTitle(THREADS_MAX_SHORTCUT)
+              : t.maximizeThreadsTitle(THREADS_MAX_SHORTCUT)
+          }
+          className={`${smallBtn} px-1 ${maximized ? 'text-blue-300' : ''}`}
+        >
+          {maximized ? <Shrink size={12} aria-hidden /> : <Expand size={12} aria-hidden />}
         </button>
       </div>
       {menu && (
@@ -522,94 +637,103 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
           <p className="mt-1">{t.noThreadsHint}</p>
         </div>
       )}
-      {status === 'ready' && threads.length > 0 && (
-        <div
-          className={`shrink-0 overflow-y-auto border-b border-gray-800 ${openId ? 'max-h-[42%]' : 'flex-1'}`}
-        >
-          <ul className="py-1">
-            {active.map((x) => (
-              <ThreadListRow
-                key={x.id}
-                thread={x}
-                items={byThread.get(x.id) ?? []}
-                open={x.id === openId}
-                onOpen={() => onOpen(x.id === openId ? null : x.id)}
-              />
-            ))}
-          </ul>
-          {closed.length > 0 && (
-            <div className="border-t border-gray-800/70 py-1 text-xs">
+      <div
+        data-threads-layout={sidebar ? 'sidebar' : 'top'}
+        className={`flex min-h-0 flex-1 ${sidebar ? 'flex-row' : 'flex-col'}`}
+      >
+        {status === 'ready' && threads.length > 0 && (
+          <div
+            className={`shrink-0 overflow-y-auto border-gray-800 ${
+              sidebar
+                ? 'w-72 max-w-[40%] border-r'
+                : `border-b ${openId ? 'max-h-[42%]' : 'flex-1'}`
+            }`}
+          >
+            <ul className="py-1">
+              {active.map((x) => (
+                <ThreadListRow
+                  key={x.id}
+                  thread={x}
+                  items={byThread.get(x.id) ?? []}
+                  open={x.id === openId}
+                  onOpen={() => onOpen(x.id === openId ? null : x.id)}
+                />
+              ))}
+            </ul>
+            {closed.length > 0 && (
+              <div className="border-t border-gray-800/70 py-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setClosedOpen((o) => !o)}
+                  aria-expanded={closedOpen}
+                  className={`flex w-full items-center gap-1 px-3 py-1 text-gray-500 hover:text-gray-300 ${focusRing}`}
+                >
+                  <ChevronRight
+                    size={12}
+                    aria-hidden
+                    className={`transition-transform motion-reduce:transition-none ${closedOpen ? 'rotate-90' : ''}`}
+                  />
+                  {t.closedThreads(closed.length)}
+                </button>
+                {closedOpen && (
+                  <ul>
+                    {closed.map((x) => (
+                      <li key={x.id} className="flex items-center gap-2 px-3 py-1 pl-7">
+                        <button
+                          type="button"
+                          onClick={() => onOpen(x.id)}
+                          className={`min-w-0 flex-1 truncate text-left text-gray-400 hover:text-gray-200 ${focusRing}`}
+                        >
+                          {threadName(x)}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onClose(x.id, false)}
+                          className={smallBtn}
+                        >
+                          {t.reopenThread}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {(open || draft) && (
+          <section
+            aria-label={t.threadLog(open ? threadName(open) : t.newThread)}
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
+          >
+            <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-gray-800 px-2 text-xs">
+              <span className="min-w-0 truncate font-medium text-gray-200">
+                {open ? threadName(open) : t.newThread}
+              </span>
+              <span className="flex-1" />
+              {open && !open.closed && (
+                <button type="button" onClick={() => onClose(open.id, true)} className={smallBtn}>
+                  {t.closeThread}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setClosedOpen((o) => !o)}
-                aria-expanded={closedOpen}
-                className={`flex w-full items-center gap-1 px-3 py-1 text-gray-500 hover:text-gray-300 ${focusRing}`}
+                onClick={() => onOpen(null)}
+                aria-label={t.hideThreads}
+                title={t.hideThreads}
+                className={`${smallBtn} px-1`}
               >
-                <ChevronRight
-                  size={12}
-                  aria-hidden
-                  className={`transition-transform motion-reduce:transition-none ${closedOpen ? 'rotate-90' : ''}`}
-                />
-                {t.closedThreads(closed.length)}
+                <X size={12} aria-hidden />
               </button>
-              {closedOpen && (
-                <ul>
-                  {closed.map((x) => (
-                    <li key={x.id} className="flex items-center gap-2 px-3 py-1 pl-7">
-                      <button
-                        type="button"
-                        onClick={() => onOpen(x.id)}
-                        className={`min-w-0 flex-1 truncate text-left text-gray-400 hover:text-gray-200 ${focusRing}`}
-                      >
-                        {threadName(x)}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onClose(x.id, false)}
-                        className={smallBtn}
-                      >
-                        {t.reopenThread}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
-          )}
-        </div>
-      )}
-
-      {(open || draft) && (
-        <section
-          aria-label={t.threadLog(open ? threadName(open) : t.newThread)}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-gray-800 px-2 text-xs">
-            <span className="min-w-0 truncate font-medium text-gray-200">
-              {open ? threadName(open) : t.newThread}
-            </span>
-            <span className="flex-1" />
-            {open && !open.closed && (
-              <button type="button" onClick={() => onClose(open.id, true)} className={smallBtn}>
-                {t.closeThread}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => onOpen(null)}
-              aria-label={t.hideThreads}
-              title={t.hideThreads}
-              className={`${smallBtn} px-1`}
-            >
-              <X size={12} aria-hidden />
-            </button>
-          </div>
-          {renderThread(open)}
-        </section>
-      )}
-      {status === 'ready' && threads.length > 0 && !openId && (
-        <p className="px-3 py-2 text-[11px] text-gray-600">{t.pickThread}</p>
-      )}
+            {renderThread(open)}
+          </section>
+        )}
+        {status === 'ready' && threads.length > 0 && !openId && (
+          <p className="px-3 py-2 text-[11px] text-gray-600">{t.pickThread}</p>
+        )}
+      </div>
     </div>
   );
 };
