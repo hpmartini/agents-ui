@@ -11,7 +11,7 @@ import {
   type ChatReplies,
 } from '../components/AgentsView/Chat/ChatMessages';
 import { ThreadsPanel } from '../components/AgentsView/Chat/ChatThreads';
-import { ResizeHandle } from '../ResizeHandle';
+import { ResizeHandle, useStoredWidth } from '../ResizeHandle';
 
 const at = new Date(2026, 10, 24, 9, 32).getTime();
 const answerOf = (text: string, ts = at): ChatAnswer =>
@@ -207,5 +207,35 @@ describe('resize handle', () => {
     );
     fireEvent.doubleClick(screen.getByRole('separator'));
     expect(onReset).toHaveBeenCalled();
+  });
+
+  it('left edge: arrow left widens, clamped to min and max; Home/End jump there', () => {
+    const onChange = vi.fn();
+    const handle = (width: number) =>
+      renderWithAgents(
+        <ResizeHandle width={width} min={260} max={640} onChange={onChange} edge="left" label="R" />
+      );
+    const { unmount } = handle(500);
+    const sep = screen.getByRole('separator');
+    fireEvent.keyDown(sep, { key: 'ArrowLeft' });
+    fireEvent.keyDown(sep, { key: 'ArrowRight' });
+    fireEvent.keyDown(sep, { key: 'Home' });
+    fireEvent.keyDown(sep, { key: 'End' });
+    expect(onChange.mock.calls.map((c) => c[0])).toEqual([516, 484, 260, 640]);
+    unmount();
+    onChange.mockClear();
+    handle(636);
+    fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowLeft' });
+    expect(onChange).toHaveBeenCalledWith(640);
+  });
+
+  it('the stored width survives a remount and is clamped', () => {
+    localStorage.setItem('test:w', '9999');
+    const Box = () => {
+      const [w] = useStoredWidth('test:w', 360, 260, 640);
+      return <output>{w}</output>;
+    };
+    renderWithAgents(<Box />);
+    expect(screen.getByRole('status').textContent).toBe('640');
   });
 });
