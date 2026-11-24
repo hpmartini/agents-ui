@@ -45,6 +45,8 @@ export const ResizeHandle = ({ width, min, max, onChange, edge, label, className
     const sign = edge === 'right' ? 1 : -1;
     const set = (next) => onChange(clampWidth(next, min, max));
     const hot = dragging || hover;
+    const still = typeof window !== 'undefined' &&
+        !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     // Inline, not only in styles.css: hosts that skip the package stylesheet (Orkumo) got a 0 px handle
     return (_jsx("div", { style: {
             position: 'relative',
@@ -92,7 +94,7 @@ export const ResizeHandle = ({ width, min, max, onChange, edge, label, className
                 left: hot ? 3 : 4,
                 right: hot ? 3 : 4,
                 background: hot ? 'var(--agents-accent, #8fd0ff)' : 'var(--agents-border, #4f67a0)',
-                transition: 'background-color 120ms, left 120ms, right 120ms',
+                transition: still ? 'none' : 'background-color 120ms, left 120ms, right 120ms',
                 pointerEvents: 'none',
             } }) }));
 };

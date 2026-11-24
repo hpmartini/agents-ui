@@ -202,6 +202,8 @@ const THREADS_OPEN_KEY = 'agents-ui:threads-open';
 const THREADS_WIDTH = 360;
 const THREADS_MIN = 260;
 const THREADS_MAX = 640;
+/** Stored floor: a narrow split may go below THREADS_MIN (its own 40 % floor) */
+const THREADS_FLOOR = 120;
 const readFlag = (key: string, fallback: boolean) => {
   try {
     const v = localStorage.getItem(key);
@@ -577,7 +579,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [threadsWidth, setThreadsWidth] = useStoredWidth(
     THREADS_WIDTH_KEY,
     THREADS_WIDTH,
-    THREADS_MIN,
+    THREADS_FLOOR,
     THREADS_MAX
   );
   // The panel takes at most 60 % of the pane (splits are narrow): the handle starts from the width
@@ -593,7 +595,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     return () => observer.disconnect();
   }, []);
   const threadsMax = rowWidth ? Math.min(THREADS_MAX, Math.floor(rowWidth * 0.6)) : THREADS_MAX;
-  const threadsShown = clampWidth(threadsWidth, THREADS_MIN, threadsMax);
+  // Narrow panes (splits): 260-640 at most 60 % would leave no travel, so the floor drops to 40 %
+  const threadsMin = rowWidth ? Math.min(THREADS_MIN, Math.floor(rowWidth * 0.4)) : THREADS_MIN;
+  const threadsShown = clampWidth(threadsWidth, threadsMin, threadsMax);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [threadQuote, setThreadQuote] = useState<ChatQuote | null>(null);
   const showThreads = threads.enabled && threadsOpen;
@@ -1133,7 +1137,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           <>
             <ResizeHandle
               width={threadsShown}
-              min={THREADS_MIN}
+              min={threadsMin}
               max={threadsMax}
               onChange={setThreadsWidth}
               onReset={() => setThreadsWidth(THREADS_WIDTH)}
