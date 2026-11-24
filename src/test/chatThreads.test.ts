@@ -93,12 +93,12 @@ describe('routing into threads', () => {
     const r = route([
       user('hello', min(1)),
       user('[Thread: Shop · Checkout]\nhow far?', min(2)),
-      answer('untagged answer', min(3)),
+      answer('untagged answer of the same turn', min(3)),
       user('next', min(4)),
       answer('[Thread: Shop · Checkout]\nForm is done.', min(5)),
     ]);
-    expect(r.main.map((i) => i.kind)).toEqual(['user', 'thread', 'answer', 'user']);
-    expect(r.main[1]).toMatchObject({ kind: 'thread', threadId: 't1', count: 2 });
+    expect(r.main.map((i) => i.kind)).toEqual(['user', 'thread', 'user']);
+    expect(r.main[1]).toMatchObject({ kind: 'thread', threadId: 't1', count: 3 });
   });
 
   it('a thread opened on an answer shows its marker right after that answer', () => {
@@ -138,16 +138,68 @@ describe('an answer of tool steps only continues the turn it belongs to', () => 
   });
 });
 
-describe('unclear stays in the main chat (never guessed)', () => {
-  it('an answer without a tag, even right after a thread prompt', () => {
+describe('an answer follows the turn it answers (orchestrators that never write the tag)', () => {
+  it('an untagged answer right after a thread prompt goes to that thread', () => {
     const r = route([
       user('[Thread: Shop · Checkout]\nhow far?', min(1)),
       answer('Form is done.', min(2)),
     ]);
-    expect(r.byThread.get('t1')).toHaveLength(1);
-    expect(r.main.some((i) => i.kind === 'answer')).toBe(true);
+    expect(r.byThread.get('t1')).toHaveLength(2);
+    expect(r.main.filter((i) => i.kind === 'answer')).toHaveLength(0);
   });
 
+  it('also after a worker message that went to the thread', () => {
+    const r = route([
+      worker('omp-aaaa0000-0000-0000-0000-000000000001', 'tests green', min(1)),
+      answer('Noted, merging next.', min(2)),
+    ]);
+    expect(r.byThread.get('t1')).toHaveLength(2);
+  });
+
+  it('a tag of another thread wins over the turn', () => {
+    const r = route([
+      user('[Thread: Shop · Checkout]\nhow far?', min(1)),
+      answer('[Thread: Weather app · Offline cache]\nAbout the cache: shipped.', min(2)),
+    ]);
+    expect(r.byThread.get('t1')).toHaveLength(1);
+    expect(r.byThread.get('t2')).toHaveLength(1);
+  });
+
+  it('an unknown tag is something else: main chat', () => {
+    const r = route([
+      user('[Thread: Shop · Checkout]\nhow far?', min(1)),
+      answer('[Thread: Shop · Payments]\nDone.', min(2)),
+    ]);
+    expect(r.byThread.get('t1')).toHaveLength(1);
+    expect(r.main.filter((i) => i.kind === 'answer')).toHaveLength(1);
+  });
+
+  it('a main chat prompt ends the turn: its answer stays in the main chat', () => {
+    const r = route([
+      user('[Thread: Shop · Checkout]\nhow far?', min(1)),
+      answer('Form is done.', min(2)),
+      user('anything else?', min(3)),
+      answer('No.', min(4)),
+    ]);
+    expect(r.byThread.get('t1')).toHaveLength(2);
+    expect(r.main.filter((i) => i.kind !== 'thread').map((i) => i.kind)).toEqual([
+      'user',
+      'answer',
+    ]);
+  });
+
+  it('closing a thread keeps its untagged answers in it', () => {
+    const closed = { ...shop, closed: true };
+    const r = route(
+      [user('[Thread: Shop · Checkout]\nhow far?', min(1)), answer('Form is done.', min(2))],
+      [closed, weather]
+    );
+    expect(r.byThread.get('t1')).toHaveLength(2);
+    expect(r.main.filter((i) => i.kind === 'answer')).toHaveLength(0);
+  });
+});
+
+describe('unclear stays in the main chat (never guessed)', () => {
   it('an unknown tag', () => {
     const r = route([answer('[Thread: Shop · Payments]\nDone.', min(1))]);
     expect(r.byThread.size).toBe(0);

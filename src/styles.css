@@ -253,33 +253,3 @@
     transform: translateY(0);
   }
 }
-
-/* Width handle (ResizeHandle): also used outside .agents-ui, so plain CSS on the --agents-* vars */
-.ag-resize-handle {
-  position: relative;
-  flex: none;
-  width: 7px;
-  margin: 0 -3px;
-  z-index: 5;
-  cursor: col-resize;
-  touch-action: none;
-  outline: none;
-}
-.ag-resize-handle::after {
-  content: '';
-  position: absolute;
-  inset: 0 3px;
-  background: var(--agents-border, #4f67a0);
-  transition: background-color 120ms, inset 120ms;
-}
-.ag-resize-handle:hover::after,
-.ag-resize-handle:focus-visible::after,
-.ag-resize-handle[data-dragging]::after {
-  inset: 0 2px;
-  background: var(--agents-accent, #8fd0ff);
-}
-@media (prefers-reduced-motion: reduce) {
-  .ag-resize-handle::after {
-    transition: none;
-  }
-}

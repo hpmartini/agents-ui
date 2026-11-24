@@ -229,6 +229,35 @@ describe('resize handle', () => {
     expect(onChange).toHaveBeenCalledWith(640);
   });
 
+  it('has its grab area and col-resize cursor without the package stylesheet (hosts that skip it)', () => {
+    renderWithAgents(
+      <ResizeHandle width={360} min={260} max={640} onChange={vi.fn()} edge="left" label="R" />
+    );
+    const sep = screen.getByRole('separator');
+    expect(parseFloat(sep.style.width)).toBeGreaterThanOrEqual(7);
+    expect(sep.style.cursor).toBe('col-resize');
+    expect(sep.style.touchAction).toBe('none');
+    // the visible line, accented on hover
+    const line = sep.firstElementChild as HTMLElement;
+    const idle = line.style.background;
+    fireEvent.pointerEnter(sep);
+    expect(line.style.background).not.toBe(idle);
+  });
+
+  it('pointer drag on the left edge: dragging left widens, clamped at max', () => {
+    const onChange = vi.fn();
+    renderWithAgents(
+      <ResizeHandle width={360} min={260} max={640} onChange={onChange} edge="left" label="R" />
+    );
+    const sep = screen.getByRole('separator');
+    fireEvent.pointerDown(sep, { clientX: 1000, button: 0, pointerId: 1 });
+    fireEvent.pointerMove(sep, { clientX: 900, pointerId: 1 });
+    fireEvent.pointerMove(sep, { clientX: 500, pointerId: 1 });
+    fireEvent.pointerUp(sep, { clientX: 500, pointerId: 1 });
+    fireEvent.pointerMove(sep, { clientX: 1200, pointerId: 1 });
+    expect(onChange.mock.calls.map((c) => c[0])).toEqual([460, 640]);
+  });
+
   it('the stored width survives a remount and is clamped', () => {
     localStorage.setItem('test:w', '9999');
     const Box = () => {

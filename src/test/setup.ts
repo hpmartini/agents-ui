@@ -42,3 +42,15 @@ if (!globalThis.localStorage) {
     },
   });
 }
+
+// jsdom has no PointerEvent: fireEvent.pointer* would drop clientX, button and pointerId
+if (!window.PointerEvent) {
+  class PointerEventPolyfill extends MouseEvent {
+    pointerId: number;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 1;
+    }
+  }
+  window.PointerEvent = PointerEventPolyfill as unknown as typeof PointerEvent;
+}

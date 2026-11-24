@@ -5,7 +5,8 @@
  * unclear stays in the main chat; nothing is guessed. Pure: the chat pane routes on every render.
  */
 import { agentMessage } from './chatEvents';
-export const threadTag = (name) => `[Thread: ${name.project} · ${name.task}]`;
+const TAG_START = '[Thread: ';
+export const threadTag = (name) => `${TAG_START}${name.project} · ${name.task}]`;
 /** Message text without its thread tag line */
 export function stripTag(text, tag) {
     const t = text.trimStart();
@@ -94,9 +95,16 @@ export function routeThreads(items, threads) {
     const parents = new Map(threads.filter((t) => t.parentKey).map((t) => [t.parentKey, t.id]));
     let prev = null;
     for (const item of items) {
-        // tool steps without text are the same turn as the item before them (no tag to read)
-        const stepsOnly = item.kind === 'answer' && !firstText(item);
-        const id = !threads.length ? null : stepsOnly ? prev : threadOf(item, threads);
+        // An answer without a tag (orchestrators started before the tag rule, tool steps only) is the
+        // turn of the thread message before it; a tag of its own, known or not, decides instead
+        const untagged = item.kind === 'answer' && !firstText(item).startsWith(TAG_START);
+        // closed threads too: closing must not move their answers back into the main chat
+        const turn = prev;
+        const id = !threads.length
+            ? null
+            : untagged
+                ? (threadOf(item, threads) ?? turn)
+                : threadOf(item, threads);
         prev = id;
         if (id) {
             byThread.set(id, [...(byThread.get(id) ?? []), item]);
