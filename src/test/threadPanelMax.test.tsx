@@ -245,7 +245,7 @@ describe('rename a thread', () => {
     const row = document.querySelector<HTMLElement>('[data-thread-row="t2"]')!;
     fireEvent.click(row, { detail: 1 });
     fireEvent.click(row, { detail: 2 });
-    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen.mock.calls).toEqual([['t2'], ['t2']]);
     fireEvent.doubleClick(listTitle('t2'));
     expect(field().value).toBe('Shop · Task t2');
     fireEvent.change(field(), { target: { value: 'Payment page' } });
@@ -255,13 +255,15 @@ describe('rename a thread', () => {
     expect(screen.queryByRole('textbox', { name: /^Thread name/ })).toBeNull();
   });
 
-  it("double-click on the open thread's list title keeps it open", () => {
+  // closing it on the first click of a double-click moved the rows, so the second click (and the
+  // rename) hit a neighbour in a scrolled list; the thread header closes it (collapse, Close)
+  it("a click on the open thread's row keeps it open; double-click renames it", () => {
     const { onOpen } = panel();
     const row = document.querySelector<HTMLElement>('[data-thread-row="t1"]')!;
     fireEvent.click(row, { detail: 1 });
     fireEvent.click(row, { detail: 2 });
     fireEvent.doubleClick(listTitle('t1'));
-    expect(onOpen).toHaveBeenLastCalledWith('t1');
+    expect(onOpen).not.toHaveBeenCalledWith(null);
     expect(field().value).toBe('Shop · Task t1');
   });
 
