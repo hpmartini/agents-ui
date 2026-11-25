@@ -5,7 +5,9 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithAgents, testTransport } from './agents';
 import { ChatPane } from '../components/AgentsView/Chat/ChatPane';
+import { useChatThreads } from '../components/AgentsView/Chat/ChatThreads';
 import { threadTag, type ChatThread } from '../utils/chatThreads';
+import type { ChatHandlers, ChatThreadList } from '../transport';
 import type { AgentSession } from '../types';
 
 beforeAll(() => {
@@ -42,8 +44,19 @@ const THREAD: ChatThread = {
 let n = 0;
 const shot = () => new File(['png'], `shot-${++n}.png`, { type: 'image/png' });
 
-async function mount() {
+/** One answer of the orchestrator in the main chat */
+const ANSWER = {
+  type: 'assistant',
+  message: { id: 'msg_1', content: [{ type: 'text', text: '**Stand:** shop is ready' }] },
+};
+
+async function mount(
+  opts: { list?: Partial<ChatThreadList>; undoTidy?: (s: string) => Promise<ChatThreadList> } = {}
+) {
   const updateThread = vi.fn(async () => THREAD);
+  const createThread = vi.fn(async () => ({ ...THREAD, id: 't2' }));
+  const list: ChatThreadList = { orchestrator: 'o1', threads: [THREAD], tasks: [], ...opts.list };
+  const fetchThreads = vi.fn(async () => list);
   renderWithAgents(
     <ChatPane
       pane={PANE}
@@ -61,9 +74,10 @@ async function mount() {
     {
       transport: testTransport({
         threads: {
-          fetchThreads: vi.fn(async () => ({ orchestrator: 'o1', threads: [THREAD], tasks: [] })),
-          createThread: vi.fn(),
+          fetchThreads,
+          createThread,
           updateThread,
+          ...(opts.undoTidy ? { undoTidy: opts.undoTidy } : {}),
         },
         chat: {
           openTranscriptView: vi.fn(async () => ({
@@ -76,7 +90,11 @@ async function mount() {
             running: true,
             startedAt: 1,
           })),
-          subscribeToChat: vi.fn(() => () => {}),
+          subscribeToChat: vi.fn((_id: string, h: ChatHandlers) => {
+            h.onEvent(ANSWER);
+            h.onEvent({ type: 'result', subtype: 'success', duration_ms: 1 });
+            return () => {};
+          }),
           fetchChatHistory: vi.fn(),
         },
         uploads: {
@@ -98,7 +116,7 @@ async function mount() {
   if (!aside) throw new Error('thread composer outside the panel');
   const mainInput = screen.getAllByRole('textbox').find((el) => !aside.contains(el));
   if (!mainInput) throw new Error('no main input');
-  return { aside, threadInput, mainInput, updateThread };
+  return { aside, threadInput, mainInput, updateThread, createThread, fetchThreads };
 }
 
 /** Where the attachment named `name` shows: 'thread', 'main', both, or none */
@@ -186,5 +204,92 @@ describe('footer and rename in the pane', () => {
         name: { project: 'Shop', task: 'Payment page' },
       })
     );
+  });
+});
+
+describe('automatic names, tidy-up overrides and undo', () => {
+  it('a thread opened on an answer sends the answer, never a name made of time or words', async () => {
+    const { createThread } = await mount();
+    const main = screen.getByRole('log');
+    fireEvent.click(within(main).getByRole('button', { name: 'Open thread' }));
+    await waitFor(() =>
+      expect(createThread).toHaveBeenCalledWith('p1', {
+        parentKey: 'msg_1',
+        answerText: '**Stand:** shop is ready',
+      })
+    );
+  });
+
+  it('an unbound thread shows no "Not bound" line', async () => {
+    const { aside } = await mount();
+    expect(aside.textContent).not.toContain('Not bound');
+  });
+
+  it('an answer moved by the orchestrator shows in its thread, not in the main chat', async () => {
+    const { aside } = await mount({
+      list: { overrides: { entries: { msg_1: 't1' }, merged: {} } },
+    });
+    await waitFor(() => expect(aside.textContent).toContain('shop is ready'));
+    expect(screen.getByRole('log').textContent).not.toContain('shop is ready');
+  });
+
+  it('Undo tidy-up calls the host and shows the list it returns', async () => {
+    const undoTidy = vi.fn(async () => ({ orchestrator: 'o1', threads: [THREAD], tasks: [] }));
+    await mount({ list: { canUndo: true }, undoTidy });
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo tidy-up' }));
+    await waitFor(() => expect(undoTidy).toHaveBeenCalledWith('p1'));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Undo tidy-up' })).toBeNull());
+  });
+
+  it('no Undo tidy-up when the host has no undo', async () => {
+    await mount({ list: { canUndo: true } });
+    expect(screen.queryByRole('button', { name: 'Undo tidy-up' })).toBeNull();
+  });
+
+  it('an active pane polls the threads every 3 s', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { fetchThreads } = await mount();
+      const before = fetchThreads.mock.calls.length;
+      await act(async () => {
+        vi.advanceTimersByTime(3_100);
+      });
+      expect(fetchThreads.mock.calls.length).toBeGreaterThan(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('live threads poll', () => {
+  it('an unchanged poll keeps the same list (no regroup, no scroll jump)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const seen: unknown[] = [];
+      const fetchThreads = vi.fn(async () => ({
+        orchestrator: 'o1',
+        threads: [THREAD],
+        tasks: [],
+      }));
+      const Probe = () => {
+        const list = useChatThreads('p1', true).threads;
+        if (seen.at(-1) !== list) seen.push(list);
+        return null;
+      };
+      renderWithAgents(<Probe />, {
+        transport: testTransport({
+          threads: { fetchThreads, createThread: vi.fn(), updateThread: vi.fn() },
+        }),
+      });
+      await waitFor(() => expect(fetchThreads).toHaveBeenCalledTimes(1));
+      const loaded = seen.length;
+      await act(async () => {
+        vi.advanceTimersByTime(6_100);
+      });
+      expect(fetchThreads.mock.calls.length).toBeGreaterThanOrEqual(3);
+      expect(seen.length).toBe(loaded);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

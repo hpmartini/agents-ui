@@ -63,12 +63,13 @@ import {
   ThreadMarkerRow,
   ThreadsPanel,
   isThreadsMaxKey,
-  firstWords,
   useChatThreads,
 } from './ChatThreads';
 import {
   answerText,
-  hhmm,
+  entryKey,
+  threadTarget,
+  visibleThreads,
   itemTime,
   parseQuote,
   quoteHeader,
@@ -334,7 +335,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const harness = sessionHarness(pane);
   const harnessName = harnessLabel(harness);
   // Threads of an orchestrator chat: a slice of this session, routed by tag (utils/chatThreads)
-  const threads = useChatThreads(agent?.id);
+  const threads = useChatThreads(agent?.id, active);
 
   // The server view outlives this component (split remounts, view switches): with nobody
   // watching it stops itself after the orphan timeout, so a remount never races a stop
@@ -472,9 +473,15 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     () =>
       routeThreads(
         items.filter((item) => item !== recap),
-        threadList
+        threadList,
+        threads.overrides
       ),
-    [items, recap, threadList]
+    [items, recap, threadList, threads.overrides]
+  );
+  // merged threads of a tidy-up are gone from the list; their items went to the target
+  const listed = useMemo(
+    () => visibleThreads(threadList, threads.overrides),
+    [threadList, threads.overrides]
   );
   const shown = useMemo(
     () =>
@@ -708,13 +715,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     setThreadQuote(null);
     if (id) showThreadsPanel(true);
   };
-  const openThread = threads.threads.find((x) => x.id === openThreadId) ?? null;
+  const openId =
+    openThreadId && openThreadId !== DRAFT_THREAD
+      ? threadTarget(openThreadId, threadList, threads.overrides)
+      : openThreadId;
+  const openThread = threads.threads.find((x) => x.id === openId) ?? null;
   const openFromAnswer = async (answer: ChatAnswer) => {
-    const ts = answer.parts[0]?.ts ?? Date.now();
     try {
+      // the host names it after the agent, status task or project the answer mentions
       const made = await threads.create({
-        name: { project: `Answer ${hhmm(ts)}`, task: firstWords(answerText(answer)) || 'Thread' },
-        parentKey: answer.key,
+        parentKey: entryKey(answer),
+        answerText: answerText(answer),
       });
       openThreadIn(made.id);
     } catch (e) {
@@ -724,11 +735,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const sendInThread = async (body: string, files: File[]) => {
     let thread = openThread;
     if (!thread) {
-      // a thread without a task is named after its first message
+      // neutral until the orchestrator names it after its project (`orkumo thread rename`)
       try {
-        thread = await threads.create({
-          name: { project: `Thread ${hhmm(Date.now())}`, task: firstWords(body) || 'Thread' },
-        });
+        thread = await threads.create({ name: { project: 'Thread', task: 'Thread' } });
       } catch (e) {
         setError(e instanceof Error ? e.message : t.threadsFailed);
         return false;
@@ -740,7 +749,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     if (sent) setThreadQuote(null);
     return sent;
   };
-  const unreadTotal = threadList.reduce(
+  const unreadTotal = listed.reduce(
     (n, x) => n + (x.closed ? 0 : unreadCount(routed.byThread.get(x.id) ?? NO_ITEMS, x.readAt)),
     0
   );
@@ -800,7 +809,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     const el = threadListRef.current;
     if (el) el.scrollTop = el.scrollHeight;
     // showThreads: a reopened panel mounts a new log, which starts at the top
-  }, [threadItems, openThreadId, showThreads]);
+  }, [threadItems, openId, showThreads]);
   // a log at its newest message stays there when the pane or the thread input resizes it
   useEffect(() => {
     const el = threadListRef.current;
@@ -815,7 +824,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [openThreadId, showThreads, threadsFull]);
+  }, [openId, showThreads, threadsFull]);
   useEffect(() => {
     if (quote) inputRef.current?.focus();
   }, [quote]);
@@ -1301,10 +1310,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             >
               <ThreadsPanel
                 status={threads.status}
-                threads={threadList}
+                threads={listed}
                 tasks={threads.tasks}
                 byThread={routed.byThread}
-                openId={openThreadId}
+                openId={openId}
                 onOpen={openThreadIn}
                 onRetry={() => threads.reload()}
                 onNewTask={(task) =>
@@ -1323,9 +1332,15 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 maximized={threadsFull}
                 onMaximize={maximizeThreads}
                 onHide={() => showThreadsPanel(false)}
+                canUndo={threads.canUndo}
+                onUndo={
+                  threads.undoTidy &&
+                  (() => threads.undoTidy?.().catch((e: Error) => setError(e.message)))
+                }
                 renderThread={(thread) => {
-                  const parent = thread?.parentKey
-                    ? items.find((i) => i.key === thread.parentKey)
+                  const parentKey = thread?.parentKey && entryKey({ key: thread.parentKey });
+                  const parent = parentKey
+                    ? items.find((i) => entryKey(i) === parentKey)
                     : undefined;
                   return (
                     <>
@@ -1380,11 +1395,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                           <p className="py-3 text-xs text-gray-500">{t.threadWithoutTaskHint}</p>
                         )}
                       </div>
-                      <div className="shrink-0 px-2 pb-1 text-[11px] text-gray-500">
-                        <span className="truncate">
-                          {thread?.binding ? t.boundTo(thread.repo ?? null) : t.notBound}
-                        </span>
-                      </div>
+                      {thread?.binding && (
+                        <div className="shrink-0 px-2 pb-1 text-[11px] text-gray-500">
+                          <span className="truncate">{t.boundTo(thread.repo ?? null)}</span>
+                        </div>
+                      )}
                       {threadsFull && error && (
                         <div role="alert" className="px-2 pb-1 text-xs text-red-300">
                           {error}
@@ -1399,8 +1414,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                         onClearQuote={() => setThreadQuote(null)}
                         onSend={sendInThread}
                         disabled={!connected}
-                        focusKey={`${openThreadId}:${threadsFull}`}
-                        draftKey={openThreadId}
+                        focusKey={`${openId}:${threadsFull}`}
+                        draftKey={openId}
                       />
                     </>
                   );

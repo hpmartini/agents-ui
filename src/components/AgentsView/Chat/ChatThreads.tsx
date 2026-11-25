@@ -14,6 +14,7 @@ import {
   Plus,
   Quote,
   RotateCcw,
+  Undo2,
   X,
 } from 'lucide-react';
 import { useTransport } from '../../../host';
@@ -32,6 +33,7 @@ import {
   hhmm,
   itemTime,
   stripTag,
+  threadTitle,
   unreadCount,
   type ChatThread,
 } from '../../../utils/chatThreads';
@@ -45,13 +47,25 @@ const focusRing = 'focus-visible:outline-2 focus-visible:outline-blue-400';
 const smallBtn = `inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] text-gray-400 hover:bg-gray-800 hover:text-white ${focusRing}`;
 // Threads made elsewhere (Instruct on a status card) and report changes show up within this
 const POLL_MS = 15_000;
+// On screen: a tidy-up by the orchestrator's CLI regroups the chat within this
+const LIVE_POLL_MS = 3_000;
 
 export type ThreadsStatus = 'loading' | 'ready' | 'error';
 
 /** Threads of the pane's session from the host; `orchestrator` null: no threads for it */
-export function useChatThreads(session: string | null | undefined) {
+export function useChatThreads(session: string | null | undefined, active = false) {
   const api = useTransport().threads;
   const [list, setList] = useState<ChatThreadList | null>(null);
+  // an unchanged poll keeps the list: routing and the open thread's log stay as they are
+  const keep = useCallback(
+    (next: ChatThreadList) =>
+      setList((l) => {
+        // a reply without `orchestrator` (undo) must not take the panel away
+        const full = { ...next, orchestrator: next.orchestrator ?? l?.orchestrator ?? null };
+        return l && JSON.stringify(l) === JSON.stringify(full) ? l : full;
+      }),
+    []
+  );
   const [status, setStatus] = useState<ThreadsStatus>('loading');
   // no orchestrator: nothing to poll for
   const noThreads = useRef(false);
@@ -63,22 +77,25 @@ export function useChatThreads(session: string | null | undefined) {
         .fetchThreads(session)
         .then((l) => {
           noThreads.current = !l.orchestrator;
-          setList(l);
+          keep(l);
           setStatus('ready');
         })
         // the last list stays known: the panel shows the error and recovers on the next poll
         .catch(() => setStatus('error'));
     },
-    [api, session]
+    [api, session, keep]
   );
   useEffect(() => {
     noThreads.current = false;
     setList(null);
     if (!api || !session) return;
     load();
-    const t = window.setInterval(() => load(true), POLL_MS);
-    return () => window.clearInterval(t);
   }, [api, session, load]);
+  useEffect(() => {
+    if (!api || !session) return;
+    const t = window.setInterval(() => load(true), active ? LIVE_POLL_MS : POLL_MS);
+    return () => window.clearInterval(t);
+  }, [api, session, load, active]);
   const put = useCallback(
     (thread: ChatThread) =>
       setList((l) =>
@@ -109,6 +126,11 @@ export function useChatThreads(session: string | null | undefined) {
     },
     [api, session, put]
   );
+  const undoApi = api?.undoTidy;
+  const undoTidy = useCallback(async () => {
+    if (!undoApi || !session) return;
+    keep(await undoApi(session));
+  }, [undoApi, session, keep]);
   // only a known orchestrator chat gets the panel: other panes never flash it while loading
   const enabled = !!list?.orchestrator;
   return {
@@ -116,20 +138,14 @@ export function useChatThreads(session: string | null | undefined) {
     status,
     threads: list?.threads ?? [],
     tasks: list?.tasks ?? [],
+    overrides: list?.overrides,
+    canUndo: !!list?.canUndo,
+    /** undefined: the host cannot undo a tidy-up */
+    undoTidy: undoApi ? undoTidy : undefined,
     reload: load,
     create,
     update,
   };
-}
-
-/** First words of a text, for a thread named after an answer or its first message */
-export function firstWords(text: string, words = 6): string {
-  const line = text
-    .replace(/^#+\s*/gm, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const cut = line.split(' ').slice(0, words).join(' ');
-  return cut.length < line.length ? `${cut}…` : cut;
 }
 
 /** What a thread list row shows of an item */
@@ -148,7 +164,7 @@ const lastTime = (thread: ChatThread, items: ChatItem[]) => {
   return thread.createdAt;
 };
 
-const threadName = (t: ChatThread) => `${t.name.project} · ${t.name.task}`;
+const threadName = (t: ChatThread) => threadTitle(t.name);
 
 type ThreadNameParts = ChatThread['name'];
 
@@ -176,9 +192,10 @@ const RenameField: React.FC<{
   const finish = (text: string | null) => {
     if (done.current) return;
     done.current = true;
+    // the field shows the cleaned name: leaving it unchanged saves nothing
+    const shown = threadName(thread);
     const name = text === null ? null : parseThreadName(text, thread.name);
-    const same = name?.project === thread.name.project && name?.task === thread.name.task;
-    onDone(same ? null : name);
+    onDone(name && threadTitle(name) !== shown ? name : null);
   };
   return (
     <input
@@ -639,10 +656,10 @@ const ThreadListRow: React.FC<{
             {hhmm(lastTime(thread, items))}
           </span>
         </span>
-        {(thread.repo || !thread.binding) && (
+        {thread.repo && (
           <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-gray-500">
             <FolderGit2 size={10} aria-hidden className="shrink-0" />
-            <span className="truncate">{thread.repo ?? t.notBound}</span>
+            <span className="truncate">{thread.repo}</span>
           </span>
         )}
         {thread.summary && (
@@ -679,6 +696,10 @@ export interface ThreadsPanelProps {
   onMaximize: (maximized: boolean) => void;
   /** Hide the whole panel (the pane header's threads button shows it again) */
   onHide: () => void;
+  /** A tidy-up of the orchestrator can be undone */
+  canUndo?: boolean;
+  /** Undo the last tidy-up; absent when the host cannot */
+  onUndo?: () => void;
 }
 
 export const THREADS_SIDEBAR_KEY = 'agents-ui:threads-sidebar';
@@ -711,6 +732,8 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
   maximized,
   onMaximize,
   onHide,
+  canUndo,
+  onUndo,
 }) => {
   const t = useLabels().terminal;
   const [menu, setMenu] = useState(false);
@@ -793,6 +816,12 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
           </span>
         )}
         <span className="flex-1" />
+        {canUndo && onUndo && (
+          <button type="button" onClick={onUndo} title={t.undoTidyTitle} className={smallBtn}>
+            <Undo2 size={12} aria-hidden />
+            {t.undoTidy}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setMenu((m) => !m)}
