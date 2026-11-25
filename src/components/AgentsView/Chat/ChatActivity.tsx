@@ -21,8 +21,10 @@ import { AssistantBlock } from './ChatMessages';
 
 const chip =
   'flex max-w-full items-start gap-1 px-2 py-0.5 rounded-xl border text-[11px] focus-visible:outline-2 focus-visible:outline-blue-400 transition-colors';
-// Chips wrap instead of truncating: what a background shell or sub-agent does must be readable
-const chipText = 'min-w-0 text-left [overflow-wrap:anywhere]';
+// Row chips stay on one line (full text in the title); in an opened list they wrap
+const chipText = (oneLine: boolean) =>
+  `min-w-0 text-left ${oneLine ? 'truncate' : '[overflow-wrap:anywhere]'}`;
+const rowChip = 'shrink-0 max-w-[min(16rem,100%)]';
 
 /** One-line label of the latest step: "Bash npm test", "Thinking" */
 function stepLabel(block: ChatBlock | undefined, t: TerminalLabels): string {
@@ -115,15 +117,75 @@ export const ChatActivity: React.FC<ChatActivityProps> = ({
   const canPeekShell = !!useTransport().chat?.fetchChatShell;
   const plan = useMemo(() => chatPlan(messages), [messages]);
   const shells = useMemo(() => chatShells(messages, endedTasks), [messages, endedTasks]);
-  const agents = useMemo(() => chatSubagents(messages), [messages]);
+  const agents = useMemo(() => chatSubagents(messages, endedTasks), [messages, endedTasks]);
   const steps = useMemo(() => turnSteps(messages), [messages]);
   const [planOpen, setPlanOpen] = useState(true);
   const [workOpen, setWorkOpen] = useState(false);
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [allOpen, setAllOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
 
   const done = plan.filter((item) => item.status === 'completed').length;
-  const runningAgents = agents.filter((a) => !a.done).length;
+  const running = agents.filter((a) => !a.done);
+  const finished = agents.filter((a) => a.done);
+  const chipCount = shells.length + running.length;
+  const chipKey = [...shells.map((s) => s.id), ...running.map((a) => a.toolId)].join();
+
+  // One row: chips past its right edge hide (keeping their place) behind "+N more"
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(Infinity);
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (!row || allOpen) return setFit(Infinity);
+    const measure = () => {
+      const n = [...row.children].findIndex(
+        (c) => (c as HTMLElement).offsetLeft + (c as HTMLElement).offsetWidth > row.clientWidth
+      );
+      setFit(n < 0 ? Infinity : n);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [chipKey, allOpen]);
+  const hidden = Math.max(0, chipCount - fit);
+
   if (!plan.length && !shells.length && !agents.length && !busy) return null;
+
+  const agentChip = (a: (typeof agents)[number], inRow: boolean, hide = false) => (
+    <button
+      key={a.toolId}
+      type="button"
+      tabIndex={hide ? -1 : undefined}
+      onClick={() =>
+        setDetail(
+          detail?.id === a.toolId
+            ? null
+            : { kind: 'agent', id: a.toolId, title: `${a.type}: ${a.description}` }
+        )
+      }
+      aria-pressed={detail?.id === a.toolId}
+      title={t.subAgent(a.type, a.description)}
+      className={`${chip} ${inRow ? rowChip : ''} ${hide ? 'invisible' : ''} ${detail?.id === a.toolId ? 'border-blue-400 text-white bg-blue-500/15' : 'border-gray-700 text-gray-300 hover:border-gray-500'}`}
+    >
+      {a.done ? (
+        <Bot
+          size={11}
+          aria-hidden
+          className={`mt-0.5 shrink-0 ${a.isError ? 'text-red-400' : 'text-emerald-400'}`}
+        />
+      ) : (
+        <Loader2
+          size={11}
+          aria-hidden
+          className="mt-0.5 shrink-0 animate-spin motion-reduce:animate-none text-blue-300"
+        />
+      )}
+      <span className={chipText(inRow && !allOpen)}>
+        {a.type} · {a.description}
+      </span>
+    </button>
+  );
 
   return (
     <div className="mb-2 space-y-1.5">
@@ -187,64 +249,66 @@ export const ChatActivity: React.FC<ChatActivityProps> = ({
         </div>
       )}
 
-      {(shells.length > 0 || agents.length > 0) && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {shells.map((s) => (
+      {(chipCount > 0 || finished.length > 0) && (
+        <div className="flex items-start gap-1.5">
+          <div
+            ref={rowRef}
+            className={`relative flex min-w-0 flex-1 gap-1.5 ${allOpen ? 'max-h-24 flex-wrap overflow-y-auto' : 'overflow-hidden'}`}
+          >
+            {shells.map((s, i) => (
+              <button
+                key={s.id}
+                type="button"
+                tabIndex={i >= fit ? -1 : undefined}
+                onClick={() =>
+                  canPeekShell &&
+                  setDetail(
+                    detail?.id === s.id
+                      ? null
+                      : { kind: 'shell', id: s.id, title: s.description || s.command }
+                  )
+                }
+                aria-pressed={detail?.id === s.id}
+                title={t.backgroundShell(s.command)}
+                className={`${chip} ${rowChip} ${i >= fit ? 'invisible' : ''} ${detail?.id === s.id ? 'border-blue-400 text-white bg-blue-500/15' : 'border-gray-700 text-gray-300 hover:border-gray-500'}`}
+              >
+                <SquareTerminal size={11} aria-hidden className="mt-0.5 shrink-0" />
+                <span className={chipText(!allOpen)}>{s.description || s.command}</span>
+              </button>
+            ))}
+            {running.map((a, i) => agentChip(a, true, shells.length + i >= fit))}
+          </div>
+          {(hidden > 0 || allOpen) && (
             <button
-              key={s.id}
               type="button"
-              onClick={() =>
-                canPeekShell &&
-                setDetail(
-                  detail?.id === s.id
-                    ? null
-                    : { kind: 'shell', id: s.id, title: s.description || s.command }
-                )
-              }
-              aria-pressed={detail?.id === s.id}
-              title={t.backgroundShell(s.command)}
-              className={`${chip} ${detail?.id === s.id ? 'border-blue-400 text-white bg-blue-500/15' : 'border-gray-700 text-gray-300 hover:border-gray-500'}`}
+              onClick={() => setAllOpen((o) => !o)}
+              aria-expanded={allOpen}
+              className={`${chip} shrink-0 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200`}
             >
-              <SquareTerminal size={11} aria-hidden className="mt-0.5 shrink-0" />
-              <span className={chipText}>{s.description || s.command}</span>
+              {allOpen ? t.chipsLess : t.chipsMore(hidden)}
             </button>
-          ))}
-          {agents.map((a) => (
-            <button
-              key={a.toolId}
-              type="button"
-              onClick={() =>
-                setDetail(
-                  detail?.id === a.toolId
-                    ? null
-                    : { kind: 'agent', id: a.toolId, title: `${a.type}: ${a.description}` }
-                )
-              }
-              aria-pressed={detail?.id === a.toolId}
-              title={t.subAgent(a.type, a.description)}
-              className={`${chip} ${detail?.id === a.toolId ? 'border-blue-400 text-white bg-blue-500/15' : 'border-gray-700 text-gray-300 hover:border-gray-500'}`}
-            >
-              {a.done ? (
-                <Bot
-                  size={11}
-                  aria-hidden
-                  className={`mt-0.5 shrink-0 ${a.isError ? 'text-red-400' : 'text-emerald-400'}`}
-                />
-              ) : (
-                <Loader2
-                  size={11}
-                  aria-hidden
-                  className="mt-0.5 shrink-0 animate-spin motion-reduce:animate-none text-blue-300"
-                />
-              )}
-              <span className={chipText}>
-                {a.type} · {a.description}
-              </span>
-            </button>
-          ))}
-          {runningAgents > 0 && (
-            <span className="text-[11px] text-gray-500">{t.agentsRunning(runningAgents)}</span>
           )}
+          {finished.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setDoneOpen((o) => !o)}
+              aria-expanded={doneOpen}
+              className={`${chip} shrink-0 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200`}
+            >
+              <Bot size={11} aria-hidden className="mt-0.5 shrink-0 text-emerald-400" />
+              {t.agentsDone(finished.length)}
+            </button>
+          )}
+        </div>
+      )}
+
+      {doneOpen && finished.length > 0 && (
+        <div
+          role="group"
+          aria-label={t.agentsDone(finished.length)}
+          className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-md border border-gray-800 bg-gray-900/70 p-1.5"
+        >
+          {[...finished].reverse().map((a) => agentChip(a, false))}
         </div>
       )}
 
