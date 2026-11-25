@@ -191,6 +191,8 @@ function Pills<V extends string>({
     <div
       ref={root}
       role="radiogroup"
+      // No checked pill: on the group, so a <label htmlFor> click activates (selects) no pill
+      id={selected < 0 ? id : undefined}
       aria-label={labelledBy ? undefined : label}
       aria-labelledby={labelledBy}
       aria-disabled={disabled || undefined}
@@ -209,8 +211,8 @@ function Pills<V extends string>({
             }}
             type="button"
             role="radio"
-            // On the tab stop, so <label htmlFor={id}> reaches the checked pill
-            id={i === stop ? id : undefined}
+            // Only on the checked pill: <label htmlFor={id}> focuses it without changing the value
+            id={on ? id : undefined}
             // A <label htmlFor> would otherwise replace the pill's own name
             aria-label={o.label}
             aria-checked={on}

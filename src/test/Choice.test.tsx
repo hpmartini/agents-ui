@@ -431,4 +431,19 @@ describe('Choice hardening', () => {
     await user.click(screen.getByText('Row'));
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
   });
+
+  it('a <label htmlFor={id}> click with no checked pill selects nothing', async () => {
+    const user = userEvent.setup();
+    const spy = vi.fn();
+    render(
+      <>
+        <label htmlFor="c2">Row</label>
+        <Host label="P" id="c2" initial="none" options={opts('A', 'B', 'C')} spy={spy} />
+      </>
+    );
+    expect(document.getElementById('c2')).toBe(screen.getByRole('radiogroup', { name: 'P' }));
+    await user.click(screen.getByText('Row'));
+    expect(spy).not.toHaveBeenCalled();
+    expect(screen.queryByRole('radio', { checked: true })).toBeNull();
+  });
 });
