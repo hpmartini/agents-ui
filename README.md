@@ -17,7 +17,7 @@ How it was cut out of Orkumo, and what maps to what: [`docs/orkumo-inventory.md`
 ## Install
 
 ```sh
-bun add github:hpmartini/agents-ui#v0.4.42  # tagged release; dist/ is committed, no build on install
+bun add github:hpmartini/agents-ui#v0.4.50  # tagged release; dist/ is committed, no build on install
 bun add file:../agents-ui                   # local checkout
 ```
 
