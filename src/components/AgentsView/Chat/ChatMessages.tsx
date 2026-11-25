@@ -368,16 +368,11 @@ const AnswerCard: React.FC<AnswerCardProps> = ({ answer, showSteps, live, harnes
   const card = React.useRef<HTMLElement>(null);
   const [selected, setSelected] = React.useState('');
   const parts = answer?.parts ?? [];
-  let tagged = false;
-  // the tag line of the first text is never shown (any thread's: merged or moved ones too)
+  // a tag line opening any text is never shown (any thread's, also after tool calls)
   const blocks = parts
     .flatMap((m) => m.blocks)
     .filter(Boolean)
-    .map((b) => {
-      if (tagged || b.type !== 'text' || !b.text.trim()) return b;
-      tagged = true;
-      return { ...b, text: stripTag(b.text) };
-    });
+    .map((b) => (b.type === 'text' ? { ...b, text: stripTag(b.text) } : b));
   const visible = showSteps ? blocks : blocks.filter((b) => b.type === 'text');
   const hasBody = visible.some((b) => b.type !== 'text' || b.text);
   const steps = blocks.filter((b) => b.type === 'tool').length;

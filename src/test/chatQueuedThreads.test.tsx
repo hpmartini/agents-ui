@@ -178,15 +178,22 @@ describe('queued prompts go where they belong (AC-14)', () => {
       { type: 'devorbit_queue', op: 'enqueue', text: '' },
       { type: 'devorbit_queue', op: 'enqueue', text: '' },
     ]);
-    expect(queued().filter((b) => aside.contains(b)).map((b) => b.textContent)).toEqual([
-      expect.stringContaining('/status-report'),
-    ]);
+    expect(
+      queued()
+        .filter((b) => aside.contains(b))
+        .map((b) => b.textContent)
+    ).toEqual([expect.stringContaining('/status-report')]);
     expect(queued().filter((b) => !aside.contains(b))).toHaveLength(1);
   });
 
   it('F5: after a merge or a move no thread tag shows (pending, queued, delivered, main)', async () => {
     const TAG_B = threadTag({ project: 'Demo', task: 'B' });
-    const b: ChatThread = { ...thread(), id: 't2', name: { project: 'Demo', task: 'B' }, tag: TAG_B };
+    const b: ChatThread = {
+      ...thread(),
+      id: 't2',
+      name: { project: 'Demo', task: 'B' },
+      tag: TAG_B,
+    };
     const { aside } = await mount(
       [thread(), b],
       [
@@ -200,6 +207,35 @@ describe('queued prompts go where they belong (AC-14)', () => {
     expect(aside.textContent).toContain('Queued in B');
     expect(inMain(aside, 'Moved to main')).toBe(true);
     expect(document.body.textContent).not.toContain('[Thread:');
+  });
+
+  it('F5: a tag that opens a later text of the answer (after tool calls) does not show', async () => {
+    const TAG_B = threadTag({ project: 'Demo', task: 'B' });
+    await mount(thread(), [
+      { type: 'devorbit_user', key: 'u-1', text: 'Run two sleeps', ts: at + 10 },
+      {
+        type: 'assistant',
+        message: { id: 'a1', content: [{ type: 'text', text: 'First sleep.' }] },
+      },
+      {
+        type: 'assistant',
+        message: {
+          id: 'a2',
+          content: [{ type: 'tool_use', id: 'x1', name: 'Bash', input: { command: 'sleep 1' } }],
+        },
+      },
+      {
+        type: 'user',
+        message: { content: [{ type: 'tool_result', tool_use_id: 'x1', content: '' }] },
+      },
+      {
+        type: 'assistant',
+        message: { id: 'a3', content: [{ type: 'text', text: `${TAG_B}\nBoth sleeps done.` }] },
+      },
+    ]);
+    await waitFor(() => expect(document.body.textContent).toContain('Both sleeps done.'));
+    // (the empty thread's hint names its own tag on purpose)
+    expect(document.body.textContent).not.toContain(TAG_B);
   });
 
   it('a main-chat message typed while busy stays in the main chat', async () => {
