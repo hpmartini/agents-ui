@@ -101,6 +101,11 @@ export declare const itemTime: (item: ChatItem) => number | undefined;
 /** Thread of one chat item, null when it stays in the main chat */
 export declare function threadOf(item: ChatItem, threads: ChatThread[]): string | null;
 /**
+ * Commands threads sent while the agent works: Claude Code logs their enqueue without the text, so
+ * each empty queue entry stands for one of the newest marks no logged prompt has claimed yet
+ */
+export declare function queuedCommands(items: ChatItem[], threads: ChatThread[], placeholders: number): string[];
+/**
  * Splits the chat: thread items go to their thread, the main chat keeps the rest plus one marker
  * per thread (after the answer it was opened on, else where its first message was). An answer of
  * tool steps only follows the item before it; a command sent from a thread goes there by its mark

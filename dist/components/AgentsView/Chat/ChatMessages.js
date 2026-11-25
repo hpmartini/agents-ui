@@ -185,7 +185,7 @@ const PlainItem = React.memo(({ item }) => {
     const t = useLabels().terminal;
     switch (item.kind) {
         case 'user':
-            return _jsx(UserMessage, { text: item.text });
+            return _jsx(UserMessage, { text: item.text, queued: item.queued });
         case 'recap':
             return (_jsxs("div", { className: "my-3 flex gap-2 rounded-md border border-gray-800 bg-gray-900/60 px-3 py-2 text-sm text-gray-300", children: [_jsx(History, { size: 14, "aria-hidden": true, className: "mt-0.5 shrink-0 text-gray-500" }), _jsxs("div", { children: [_jsx("span", { className: "text-gray-500", children: t.recapInline }), item.text] })] }));
         case 'result':

@@ -138,8 +138,8 @@ function commandTurns(items, threads, complete, olderTs) {
         if (!complete && !(oldest < mark.at) && !(olderTs !== undefined && olderTs < mark.at))
             continue;
         const own = items.find((i) => i.kind === 'user' &&
-            i.ts !== undefined &&
-            i.ts >= mark.at &&
+            // a queued prompt (no time yet) comes after every logged one
+            (i.queued || (i.ts !== undefined && i.ts >= mark.at)) &&
             !claimed.has(i) &&
             !agentMessage(i.text) &&
             sameCommand(leadingCommand(i.text.trim())?.command ?? '', mark.command) &&
@@ -148,6 +148,23 @@ function commandTurns(items, threads, complete, olderTs) {
             claimed.set(own, mark.id);
     }
     return claimed;
+}
+/**
+ * Commands threads sent while the agent works: Claude Code logs their enqueue without the text, so
+ * each empty queue entry stands for one of the newest marks no logged prompt has claimed yet
+ */
+export function queuedCommands(items, threads, placeholders) {
+    if (!placeholders)
+        return [];
+    return threads
+        .flatMap((t) => t.commands ?? [])
+        .filter((m) => !items.some((i) => i.kind === 'user' &&
+        i.ts !== undefined &&
+        i.ts >= m.at &&
+        sameCommand(leadingCommand(i.text.trim())?.command ?? '', m.command)))
+        .sort((a, b) => a.at - b.at)
+        .slice(-placeholders)
+        .map((m) => m.command);
 }
 /**
  * Splits the chat: thread items go to their thread, the main chat keeps the rest plus one marker
