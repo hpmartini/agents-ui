@@ -6,6 +6,7 @@ import { useLabels } from '../../labels';
 import { computeSuggestions } from '../../utils/agentInput';
 import { submitIntent } from '../../utils/composer';
 import { useAutoGrowTextarea } from '../../hooks/useAutoGrowTextarea';
+import { Choice } from '../Choice';
 import { ModelEffortPicker } from './ModelEffortPicker';
 const MIN_HEIGHT = 96;
 const MAX_HEIGHT = 288;
@@ -131,7 +132,11 @@ export const DispatchInput = ({ value, onChange, onSubmit, onEscape, onOpenEdito
                             ? t.dispatchChatHarness
                             : t.dispatchChatClaude
                         : t.dispatchAgentPrompt
-                    : t.dispatchTaskPrompt, "aria-label": t.dispatchTaskLabel, "aria-autocomplete": "list", "aria-controls": showSuggestions ? listId : undefined, "aria-activedescendant": showSuggestions ? `${listId}-${highlighted}` : undefined, style: { minHeight: MIN_HEIGHT }, className: "block w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-50 placeholder-gray-400 resize-none outline-none font-mono leading-6 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/40", spellCheck: false }), attachments, _jsxs("div", { className: "flex flex-wrap items-center gap-2 mt-3", children: [harness !== undefined && (_jsxs("label", { className: "flex items-center gap-1.5 text-xs text-gray-200", children: [_jsx("span", { children: t.dispatchHarness }), _jsx("select", { value: harness, onChange: (e) => onHarnessChange?.(e.target.value), disabled: disabled, className: "bg-gray-900 border border-gray-600 rounded-md px-1.5 py-1 text-xs text-gray-50 focus-visible:outline-2 focus-visible:outline-blue-400", title: t.dispatchHarnessTitle, children: HARNESSES.map((h) => (_jsxs("option", { value: h.id, disabled: harnessInstalled[h.id] === false, children: [h.label, harnessInstalled[h.id] === false ? t.dispatchNotInstalled : ''] }, h.id))) })] })), harness !== undefined && onModelChange && (harness === 'claude' || harness === 'omp') && (_jsx(ModelEffortPicker, { harness: harness, model: model, effort: effort, defaultModel: defaultModel, disabled: disabled, onPick: (m, e) => {
+                    : t.dispatchTaskPrompt, "aria-label": t.dispatchTaskLabel, "aria-autocomplete": "list", "aria-controls": showSuggestions ? listId : undefined, "aria-activedescendant": showSuggestions ? `${listId}-${highlighted}` : undefined, style: { minHeight: MIN_HEIGHT }, className: "block w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-50 placeholder-gray-400 resize-none outline-none font-mono leading-6 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/40", spellCheck: false }), attachments, _jsxs("div", { className: "flex flex-wrap items-center gap-2 mt-3", children: [harness !== undefined && (_jsxs("div", { className: "flex items-center gap-1.5 text-xs text-gray-200", children: [_jsx("span", { "aria-hidden": true, children: t.dispatchHarness }), _jsx(Choice, { label: t.dispatchHarness, value: harness, onChange: (h) => onHarnessChange?.(h), disabled: disabled, title: t.dispatchHarnessTitle, options: HARNESSES.map((h) => ({
+                                    value: h.id,
+                                    label: `${h.label}${harnessInstalled[h.id] === false ? t.dispatchNotInstalled : ''}`,
+                                    disabled: harnessInstalled[h.id] === false,
+                                })) })] })), harness !== undefined && onModelChange && (harness === 'claude' || harness === 'omp') && (_jsx(ModelEffortPicker, { harness: harness, model: model, effort: effort, defaultModel: defaultModel, disabled: disabled, onPick: (m, e) => {
                             onModelChange(m);
                             onEffortChange?.(e);
                         }, title: harness === 'claude' ? t.dispatchModelTitleClaude : t.dispatchModelTitleOmp })), harness !== undefined &&

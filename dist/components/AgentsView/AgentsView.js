@@ -1549,8 +1549,8 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 moveSelection(e.key === 'ArrowUp' ? 'up' : 'down');
                 return;
             }
-            // Rail, tab strip and popover controls keep their own Enter/Space/arrow behaviour
-            if (target?.closest('button, a, [role="dialog"], [role="tab"], [role="tablist"], [role="menu"]'))
+            // Rail, tab strip and popover controls (Choice popups too) keep their own keys
+            if (target?.closest('button, a, [role="dialog"], [role="tab"], [role="tablist"], [role="menu"], [data-choice]'))
                 return;
             // List / body context
             switch (e.key) {

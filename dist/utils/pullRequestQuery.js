@@ -12,6 +12,7 @@ export const SORT_LABELS = shellEn.pulls.sort;
 export const DEFAULT_QUERY = {
     q: '',
     repo: null,
+    folder: null,
     ci: null,
     merge: null,
     review: null,
@@ -48,6 +49,7 @@ export function parsePullQuery(params) {
     return {
         q: params.get('q') ?? '',
         repo: params.get('repo') || null,
+        folder: params.get('folder') || null,
         ci: pick(params.get('ci'), CI_LABELS),
         merge: pick(params.get('merge'), MERGE_LABELS),
         review: pick(params.get('review'), REVIEW_LABELS),
@@ -74,6 +76,7 @@ export function patchPullParams(params, patch) {
 /** True when any filter (not grouping or sorting) is set */
 export const hasFilters = (q) => !!(q.q.trim() ||
     q.repo ||
+    q.folder ||
     q.ci ||
     q.merge ||
     q.review ||
@@ -85,6 +88,7 @@ export const hasFilters = (q) => !!(q.q.trim() ||
 export const FILTER_RESET = {
     q: '',
     repo: null,
+    folder: null,
     ci: null,
     merge: null,
     review: null,
@@ -99,12 +103,14 @@ function matchesText(pr, text) {
         return true;
     return [pr.title, String(pr.number), pr.headRef, pr.author ?? ''].some((v) => v.toLowerCase().includes(needle));
 }
-/** All filters combine with AND */
-export function filterPulls(rows, q) {
+/** All filters combine with AND; `folders` (lower-case slug → folder key) serves `q.folder` */
+export function filterPulls(rows, q, folders) {
     return rows.filter(({ pr, agents }) => {
         if (!matchesText(pr, q.q))
             return false;
         if (q.repo && pr.repoSlug.toLowerCase() !== q.repo.toLowerCase())
+            return false;
+        if (q.folder && folders?.get(pr.repoSlug.toLowerCase()) !== q.folder)
             return false;
         if (q.ci && pr.ci !== q.ci)
             return false;
@@ -189,7 +195,7 @@ export function pullOptions(rows) {
     };
 }
 /** filter -> sort -> group, as the view shows it */
-export function queryPulls(rows, q, labels) {
-    const shown = sortPulls(filterPulls(rows, q), q.sort, q.dir);
+export function queryPulls(rows, q, labels, folders) {
+    const shown = sortPulls(filterPulls(rows, q, folders), q.sort, q.dir);
     return { shown, groups: groupPulls(shown, q.group, labels) };
 }

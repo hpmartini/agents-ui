@@ -17,7 +17,11 @@ export declare const SELECT_CLS = "bg-gray-850 border border-gray-700 rounded px
 export declare const ICON_BTN = "flex items-center gap-1 px-1.5 py-1 rounded text-xs text-gray-300 hover:text-white hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor";
 type Options = Record<string, string>;
 export declare const asOptions: (values: string[]) => Options;
-/** One select filter; the empty option means "any" (also used by the Issues mode) */
+/**
+ * One filter over `options` (key → text) plus "any" (null), as a `Choice`: pills with a visible
+ * label for up to two values, else a menu (searchable from 7 values). Also used by Orkumo's
+ * Issues and History pages.
+ */
 export declare const Filter: React.FC<{
     label: string;
     value: string | null;
