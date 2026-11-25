@@ -334,7 +334,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             {current.hint && (
               <div className="mt-1.5 text-gray-400">
                 <span className="text-gray-500">{t.arguments}</span>
-                <span className="font-mono text-gray-200">{current.hint}</span>
+                <span className="font-mono text-gray-200 break-all">{current.hint}</span>
               </div>
             )}
             {current.kind !== 'file' && (

@@ -75,7 +75,8 @@ describe('thread composer is the main composer', () => {
     const { input } = composer('mod+enter');
     fireEvent.change(input, { target: { value: '/st', selectionStart: 3 } });
     expect(await screen.findByRole('option', { name: /status-report/ })).toBeTruthy();
-    expect(screen.getByText('[note]')).toBeTruthy();
+    // a hint without spaces (`[start|view|list|stop]`) wraps in the narrow thread panel
+    expect(screen.getByText('[note]').className).toMatch(/\bbreak-all\b/);
     expect(screen.getByText('Send the full status')).toBeTruthy();
   });
 
