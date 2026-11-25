@@ -4,6 +4,7 @@ import {
   quoteHeader,
   parseQuote,
   routeThreads,
+  threadHead,
   threadTag,
   unreadCount,
   type ChatThread,
@@ -273,5 +274,75 @@ describe('answer time', () => {
       message: { id: 'm1', content: [{ type: 'text', text: 'hi' }] },
     });
     expect(s.messages[0]).toMatchObject({ kind: 'assistant', ts: min(7) });
+  });
+});
+
+describe('a command sent from a thread (no tag: the CLI runs a command only as the first word)', () => {
+  it('goes out unchanged; a normal message keeps its tag and quote', () => {
+    const quoted = 'Re your reply: "x"\n\n';
+    expect(threadHead(shop.tag, quoted, '/status-report')).toBeNull();
+    expect(threadHead(shop.tag, quoted, '/skill:ping now')).toBeNull();
+    expect(threadHead(shop.tag, '', '/mattpocock-skills:retro Dann …')).toBeNull();
+    expect(threadHead(shop.tag, quoted, 'how far?')).toBe(`${shop.tag}\n${quoted}`);
+    // a path is text, not a command
+    expect(threadHead(shop.tag, '', '/Users/someone/file.ts broken')).toBe(`${shop.tag}\n`);
+  });
+
+  // the transcript as the host serves it: `/status-report` is the user turn (Claude), then a
+  // turn of tool steps and text without a tag
+  const commandTurn = (at: number) =>
+    groupAnswers(
+      [
+        { type: 'devorbit_user', text: '/status-report', history: true, ts: at },
+        {
+          type: 'assistant',
+          ts: at + 1000,
+          message: { id: 'm1', content: [{ type: 'tool_use', id: 'x1', name: 'Bash', input: {} }] },
+        },
+        {
+          type: 'assistant',
+          ts: at + 2000,
+          message: { id: 'm2', content: [{ type: 'text', text: 'Report sent.' }] },
+        },
+      ].reduce(reduceChat, initialChatState).messages
+    );
+
+  it('its turn (prompt and answer) goes to the thread whose command mark is before it', () => {
+    const marked = { ...shop, commands: [min(1)] };
+    const items = [
+      ...groupAnswers([user('main question', min(0)), answer('main answer', min(0))]),
+      ...commandTurn(min(1) + 500),
+    ];
+    const r = routeThreads(items, [marked, weather]);
+    expect(r.byThread.get('t1')?.map((i) => i.kind)).toEqual(['user', 'answer']);
+    expect(r.main.map((i) => i.kind)).toEqual(['user', 'answer', 'thread']);
+  });
+
+  it('after reload too: the mark is part of the stored thread, routing is the same', () => {
+    const marked = { ...shop, commands: [min(1)] };
+    const items = commandTurn(min(1) + 500);
+    const again = routeThreads(items, JSON.parse(JSON.stringify([marked, weather])));
+    expect(again.byThread.get('t1')).toHaveLength(2);
+  });
+
+  it('one mark claims one command turn; a command from the main chat stays there', () => {
+    const marked = { ...shop, commands: [min(1)] };
+    const items = [...commandTurn(min(2)), ...commandTurn(min(3))];
+    const r = routeThreads(items, [marked, weather]);
+    expect(r.byThread.get('t1')).toHaveLength(2);
+    expect(r.main.filter((i) => i.kind === 'user')).toHaveLength(1);
+  });
+
+  it('a command before the mark, a prompt that is no command, a worker message: not claimed', () => {
+    const marked = { ...shop, commands: [min(5)] };
+    const r = routeThreads(
+      [
+        ...commandTurn(min(1)),
+        ...groupAnswers([user('plain', min(6)), answer('ok', min(6) + 1)]),
+        ...groupAnswers([worker('omp-bbbb', '/status-report', min(7))]),
+      ],
+      [marked, weather]
+    );
+    expect(r.byThread.size).toBe(0);
   });
 });

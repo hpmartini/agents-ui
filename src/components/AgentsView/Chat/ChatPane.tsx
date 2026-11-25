@@ -74,6 +74,7 @@ import {
   quoteHeader,
   stripTag,
   routeThreads,
+  threadHead,
   unreadCount,
 } from '../../../utils/chatThreads';
 import { clampWidth, ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
@@ -736,8 +737,22 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       setOpenThreadId(thread.id);
     }
     const quoted = threadQuote ? quoteHeader(threadQuote.ts, threadQuote.text) : '';
-    const sent = await sendPrompt(`${thread.tag}\n${quoted}`, body, files);
-    if (sent) setThreadQuote(null);
+    const head = threadHead(thread.tag, quoted, body);
+    if (head !== null) {
+      const sent = await sendPrompt(head, body, files);
+      if (sent) setThreadQuote(null);
+      return sent;
+    }
+    // A command: marked first (host time, before it is typed), so its turn lands in the thread
+    try {
+      await threads.update(thread.id, { command: 'start' });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.threadsFailed);
+      return false;
+    }
+    const sent = await sendPrompt('', body, files);
+    // a mark left behind would take the next command of the main chat
+    if (!sent) void threads.update(thread.id, { command: 'cancel' }).catch(() => {});
     return sent;
   };
   const unreadTotal = threadList.reduce(
@@ -1429,6 +1444,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                         submitKey={submitKey}
                         history={threadHistory}
                         agents={state.agents}
+                        commands={state.commands}
                         quote={threadQuote}
                         onClearQuote={() => setThreadQuote(null)}
                         onSend={sendInThread}
