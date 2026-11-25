@@ -152,6 +152,8 @@ export interface TerminalLabels {
     answerSteps: (count: number) => string;
     copyAnswer: string;
     recapInline: string;
+    /** Divider between contexts of a chat: `/clear`, compaction, next session; time as hh:mm */
+    contextDivider: (reason: 'clear' | 'compact' | 'switch', time: string | null) => string;
     reply: string;
     replyToSelection: string;
     replyTo: (time: string) => string;

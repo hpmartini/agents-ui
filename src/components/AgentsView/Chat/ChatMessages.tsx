@@ -538,6 +538,18 @@ const PlainItem: React.FC<{ item: Exclude<ChatItem, ChatAnswer> }> = React.memo(
           <ResultMark result={item} />
         </div>
       );
+    case 'divider':
+      return (
+        <div
+          role="separator"
+          aria-label={t.contextDivider(item.reason, item.ts ? hhmm(item.ts) : null)}
+          className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-gray-400"
+        >
+          <span aria-hidden className="h-px flex-1 bg-gray-700" />
+          <span>{t.contextDivider(item.reason, item.ts ? hhmm(item.ts) : null)}</span>
+          <span aria-hidden className="h-px flex-1 bg-gray-700" />
+        </div>
+      );
     case 'notice':
       return (
         <div className={`my-2 text-xs ${item.tone === 'error' ? 'text-red-300' : 'text-gray-400'}`}>
