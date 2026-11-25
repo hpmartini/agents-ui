@@ -138,10 +138,10 @@ const threadFiles = new Map();
 export const THREAD_COMPOSER_HEIGHT_KEY = 'devOrbitChatThreadComposerHeight';
 /**
  * Composer of the open thread: the main chat's composer (send key from the settings, height grip,
- * `@` files) plus quote, images and files. `/` commands are left out: the tag line in front
- * would turn them into plain text.
+ * `/` commands and skills, `@` files) plus quote, images and files. A command goes out without
+ * the tag line (ChatPane `sendInThread`).
  */
-export const ThreadComposer = ({ chatId, submitKey, history, agents, quote, onClearQuote, onSend, disabled, focusKey, draftKey, }) => {
+export const ThreadComposer = ({ chatId, submitKey, history, agents, commands, quote, onClearQuote, onSend, disabled, focusKey, draftKey, }) => {
     const t = useLabels().terminal;
     const uploads = useTransport().uploads;
     const storeKey = `${chatId}:${draftKey ?? ''}`;
@@ -202,10 +202,9 @@ export const ThreadComposer = ({ chatId, submitKey, history, agents, quote, onCl
                 onClearQuote();
             }
         }, ...(uploads &&
-            imageDropHandlers((picked) => setFiles((prev) => [...prev, ...picked]), (list) => attachableFiles(list, uploads.attachmentExtensions))), children: [quote && _jsx(QuoteChip, { quote: quote, onRemove: onClearQuote }), _jsxs("div", { className: "flex items-end gap-1.5", children: [_jsx(ChatComposer, { chatId: chatId, value: text, onChange: setText, onSubmit: () => void send(), onStop: noop, busy: false, disabled: !!disabled, submitKey: submitKey, history: history, commands: NO_COMMANDS, agents: agents, inputRef: input, label: t.replyInThread, placeholders: { enter: t.threadPlaceholderEnter, modEnter: t.threadPlaceholderModEnter }, heightKey: THREAD_COMPOSER_HEIGHT_KEY, pinMax: threadInputMax }), _jsx("button", { type: "button", "aria-label": t.sendMessage, title: t.sendMessage, onClick: () => void send(), disabled: empty || sending || disabled, className: `mb-0.5 rounded-md bg-blue-600 p-1.5 text-white hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 ${focusRing}`, children: sending ? (_jsx(Loader2, { size: 15, "aria-hidden": true, className: "animate-spin motion-reduce:animate-none" })) : (_jsx(ArrowUp, { size: 15, "aria-hidden": true })) })] }), uploads && (_jsx(ImageAttachments, { images: files, onChange: setFiles, disabled: sending || disabled, files: uploads.attachmentExtensions }))] }));
+            imageDropHandlers((picked) => setFiles((prev) => [...prev, ...picked]), (list) => attachableFiles(list, uploads.attachmentExtensions))), children: [quote && _jsx(QuoteChip, { quote: quote, onRemove: onClearQuote }), _jsxs("div", { className: "flex items-end gap-1.5", children: [_jsx(ChatComposer, { chatId: chatId, value: text, onChange: setText, onSubmit: () => void send(), onStop: noop, busy: false, disabled: !!disabled, submitKey: submitKey, history: history, commands: commands, agents: agents, inputRef: input, label: t.replyInThread, placeholders: { enter: t.threadPlaceholderEnter, modEnter: t.threadPlaceholderModEnter }, heightKey: THREAD_COMPOSER_HEIGHT_KEY, pinMax: threadInputMax }), _jsx("button", { type: "button", "aria-label": t.sendMessage, title: t.sendMessage, onClick: () => void send(), disabled: empty || sending || disabled, className: `mb-0.5 rounded-md bg-blue-600 p-1.5 text-white hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 ${focusRing}`, children: sending ? (_jsx(Loader2, { size: 15, "aria-hidden": true, className: "animate-spin motion-reduce:animate-none" })) : (_jsx(ArrowUp, { size: 15, "aria-hidden": true })) })] }), uploads && (_jsx(ImageAttachments, { images: files, onChange: setFiles, disabled: sending || disabled, files: uploads.attachmentExtensions }))] }));
 };
 const noop = () => { };
-const NO_COMMANDS = [];
 const NewThreadMenu = ({ tasks, onTask, onFree, onDismiss }) => {
     const t = useLabels().terminal;
     const menu = useRef(null);

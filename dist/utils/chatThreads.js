@@ -5,8 +5,14 @@
  * unclear stays in the main chat; nothing is guessed. Pure: the chat pane routes on every render.
  */
 import { agentMessage } from './chatEvents';
+import { leadingCommand } from './chatComposer';
 const TAG_START = '[Thread: ';
 export const threadTag = (name) => `${TAG_START}${name.project} · ${name.task}]`;
+/**
+ * The command a thread message starts with (`/status-report`), else null. The CLI runs a command
+ * only as the first word: it goes out without the tag line and its turn finds the thread by a mark
+ */
+export const threadCommand = (body) => leadingCommand(body.trim())?.command ?? null;
 /** Message text without its thread tag line */
 export function stripTag(text, tag) {
     const t = text.trimStart();
@@ -75,10 +81,31 @@ export function threadOf(item, threads) {
         t.agents.some((a) => sameAgent(a, sender)));
     return linked.length === 1 ? linked[0].id : null;
 }
+/** The marked command, also as the CLI logs it with its plugin prefix (`/retro` → `/x:retro`) */
+const sameCommand = (logged, marked) => logged === marked || logged.endsWith(`:${marked.slice(1)}`);
+/** Command prompts the threads' marks claim: each mark takes the first of its command after it */
+function commandTurns(items, threads) {
+    const claimed = new Map();
+    const marks = threads
+        .flatMap((t) => (t.commands ?? []).map((m) => ({ ...m, id: t.id })))
+        .sort((a, b) => a.at - b.at);
+    for (const mark of marks) {
+        const hit = items.find((i) => i.kind === 'user' &&
+            i.ts !== undefined &&
+            i.ts >= mark.at &&
+            !claimed.has(i) &&
+            !agentMessage(i.text) &&
+            sameCommand(leadingCommand(i.text.trim())?.command ?? '', mark.command) &&
+            !threadOf(i, threads));
+        if (hit)
+            claimed.set(hit, mark.id);
+    }
+    return claimed;
+}
 /**
  * Splits the chat: thread items go to their thread, the main chat keeps the rest plus one marker
  * per thread (after the answer it was opened on, else where its first message was). An answer of
- * tool steps only follows the item before it
+ * tool steps only follows the item before it; a command sent from a thread goes there by its mark
  */
 export function routeThreads(items, threads) {
     const byThread = new Map();
@@ -93,6 +120,7 @@ export function routeThreads(items, threads) {
         return m;
     };
     const parents = new Map(threads.filter((t) => t.parentKey).map((t) => [t.parentKey, t.id]));
+    const commands = commandTurns(items, threads);
     let prev = null;
     for (const item of items) {
         // An answer without a tag (orchestrators started before the tag rule, tool steps only) is the
@@ -102,9 +130,11 @@ export function routeThreads(items, threads) {
         const turn = prev;
         const id = !threads.length
             ? null
-            : untagged
-                ? (threadOf(item, threads) ?? turn)
-                : threadOf(item, threads);
+            : commands.has(item)
+                ? commands.get(item)
+                : untagged
+                    ? (threadOf(item, threads) ?? turn)
+                    : threadOf(item, threads);
         prev = id;
         if (id) {
             byThread.set(id, [...(byThread.get(id) ?? []), item]);

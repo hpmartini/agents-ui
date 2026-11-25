@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ChatThreadList, ChatThreadTask } from '../../../transport';
-import { type ChatItem, type ChatSubmitKey } from '../../../utils/chatEvents';
+import { type ChatCommand, type ChatItem, type ChatSubmitKey } from '../../../utils/chatEvents';
 import { type ChatThread } from '../../../utils/chatThreads';
 import type { ChatQuote } from './ChatMessages';
 export type ThreadsStatus = 'loading' | 'ready' | 'error';
@@ -28,11 +28,15 @@ export declare function useChatThreads(session: string | null | undefined): {
         updateThread: (session: string, id: string, patch: {
             closed?: boolean;
             readAt?: number;
+            command?: string;
+            cancelCommand?: boolean;
         }) => Promise<ChatThread>;
     } | undefined>["createThread"]>[1]) => Promise<ChatThread>;
     update: (id: string, patch: {
         closed?: boolean;
         readAt?: number;
+        command?: string;
+        cancelCommand?: boolean;
     }) => Promise<void>;
 };
 /** First words of a text, for a thread named after an answer or its first message */
@@ -51,8 +55,8 @@ export declare const ThreadMarkerRow: React.FC<{
 export declare const THREAD_COMPOSER_HEIGHT_KEY = "devOrbitChatThreadComposerHeight";
 /**
  * Composer of the open thread: the main chat's composer (send key from the settings, height grip,
- * `@` files) plus quote, images and files. `/` commands are left out: the tag line in front
- * would turn them into plain text.
+ * `/` commands and skills, `@` files) plus quote, images and files. A command goes out without
+ * the tag line (ChatPane `sendInThread`).
  */
 export declare const ThreadComposer: React.FC<{
     chatId: string | null;
@@ -63,6 +67,8 @@ export declare const ThreadComposer: React.FC<{
         name: string;
         description: string;
     }[];
+    /** The chat's commands and skills, as the main composer lists them */
+    commands: ChatCommand[];
     quote: ChatQuote | null;
     onClearQuote: () => void;
     onSend: (text: string, files: File[]) => Promise<boolean>;

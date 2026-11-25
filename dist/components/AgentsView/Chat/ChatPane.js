@@ -11,7 +11,7 @@ import { ChatArtifactsButton, ChatArtifactsModal, artifactRefreshKey, useChatArt
 import { ChatComposer } from './ChatComposer';
 import { ChatIdContext, ChatItemView, ChatRepliesContext, UserMessage, } from './ChatMessages';
 import { DRAFT_THREAD, QuoteChip, ThreadComposer, ThreadMarkerRow, ThreadsPanel, isThreadsMaxKey, firstWords, useChatThreads, } from './ChatThreads';
-import { answerText, hhmm, itemTime, parseQuote, quoteHeader, stripTag, routeThreads, unreadCount, } from '../../../utils/chatThreads';
+import { answerText, hhmm, itemTime, parseQuote, quoteHeader, stripTag, routeThreads, threadCommand, unreadCount, } from '../../../utils/chatThreads';
 import { clampWidth, ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
 import { ChatActivity } from './ChatActivity';
 import { ChatStatusLine } from './ChatStatusLine';
@@ -575,9 +575,25 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
             setOpenThreadId(thread.id);
         }
         const quoted = threadQuote ? quoteHeader(threadQuote.ts, threadQuote.text) : '';
-        const sent = await sendPrompt(`${thread.tag}\n${quoted}`, body, files);
-        if (sent)
-            setThreadQuote(null);
+        const command = threadCommand(body);
+        if (!command) {
+            const sent = await sendPrompt(`${thread.tag}\n${quoted}`, body, files);
+            if (sent)
+                setThreadQuote(null);
+            return sent;
+        }
+        // A command: marked first (host time, before it is typed), so its turn lands in the thread
+        try {
+            await threads.update(thread.id, { command });
+        }
+        catch (e) {
+            setError(e instanceof Error ? e.message : t.threadsFailed);
+            return false;
+        }
+        const sent = await sendPrompt('', body, files);
+        // a mark left behind would take the next same command of the main chat
+        if (!sent)
+            void threads.update(thread.id, { cancelCommand: true }).catch(() => { });
         return sent;
     };
     const unreadTotal = threadList.reduce((n, x) => n + (x.closed ? 0 : unreadCount(routed.byThread.get(x.id) ?? NO_ITEMS, x.readAt)), 0);
@@ -711,7 +727,7 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
                                         const parent = thread?.parentKey
                                             ? items.find((i) => i.key === thread.parentKey)
                                             : undefined;
-                                        return (_jsxs(_Fragment, { children: [_jsxs("div", { ref: threadListRef, className: "min-h-20 flex-1 overflow-y-auto px-3 py-1", children: [needsOlder && (_jsx("div", { role: "status", className: "py-2 text-center text-xs text-gray-500", children: t.loadingThreadHistory })), parent && (_jsx("div", { className: "opacity-70", "data-thread-parent": true, children: _jsx(ChatItemView, { item: parent, showSteps: false, harness: harnessName, model: state.model }) })), _jsx(ChatFileContext.Provider, { value: pane.cwd, children: _jsxs(ChatRepliesContext.Provider, { value: threadReplies, children: [threadItems.map((item) => (_jsx(ChatItemView, { item: item, showSteps: showSteps, live: isLive(item), harness: harnessName, model: state.model }, item.key))), workingCard && thread && lastThread === thread.id && (_jsx(ChatItemView, { item: null, showSteps: showSteps, live: true, harness: harnessName, model: state.model }))] }) }), thread && threadItems.length === 0 && !parent && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.firstThreadMessage(thread.tag) })), !thread && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.threadWithoutTaskHint }))] }), _jsx("div", { className: "shrink-0 px-2 pb-1 text-[11px] text-gray-500", children: _jsx("span", { className: "truncate", children: thread?.binding ? t.boundTo(thread.repo ?? null) : t.notBound }) }), threadsFull && error && (_jsx("div", { role: "alert", className: "px-2 pb-1 text-xs text-red-300", children: error })), _jsx(ThreadComposer, { chatId: chatId, submitKey: submitKey, history: threadHistory, agents: state.agents, quote: threadQuote, onClearQuote: () => setThreadQuote(null), onSend: sendInThread, disabled: !connected, focusKey: `${openThreadId}:${threadsFull}`, draftKey: openThreadId })] }));
+                                        return (_jsxs(_Fragment, { children: [_jsxs("div", { ref: threadListRef, className: "min-h-20 flex-1 overflow-y-auto px-3 py-1", children: [needsOlder && (_jsx("div", { role: "status", className: "py-2 text-center text-xs text-gray-500", children: t.loadingThreadHistory })), parent && (_jsx("div", { className: "opacity-70", "data-thread-parent": true, children: _jsx(ChatItemView, { item: parent, showSteps: false, harness: harnessName, model: state.model }) })), _jsx(ChatFileContext.Provider, { value: pane.cwd, children: _jsxs(ChatRepliesContext.Provider, { value: threadReplies, children: [threadItems.map((item) => (_jsx(ChatItemView, { item: item, showSteps: showSteps, live: isLive(item), harness: harnessName, model: state.model }, item.key))), workingCard && thread && lastThread === thread.id && (_jsx(ChatItemView, { item: null, showSteps: showSteps, live: true, harness: harnessName, model: state.model }))] }) }), thread && threadItems.length === 0 && !parent && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.firstThreadMessage(thread.tag) })), !thread && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.threadWithoutTaskHint }))] }), _jsx("div", { className: "shrink-0 px-2 pb-1 text-[11px] text-gray-500", children: _jsx("span", { className: "truncate", children: thread?.binding ? t.boundTo(thread.repo ?? null) : t.notBound }) }), threadsFull && error && (_jsx("div", { role: "alert", className: "px-2 pb-1 text-xs text-red-300", children: error })), _jsx(ThreadComposer, { chatId: chatId, submitKey: submitKey, history: threadHistory, agents: state.agents, commands: state.commands, quote: threadQuote, onClearQuote: () => setThreadQuote(null), onSend: sendInThread, disabled: !connected, focusKey: `${openThreadId}:${threadsFull}`, draftKey: openThreadId })] }));
                                     } }) })] }))] })] }));
     // tool results load their images from this chat
     return _jsx(ChatIdContext.Provider, { value: chatId, children: view });

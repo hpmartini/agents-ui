@@ -32,6 +32,14 @@ export interface ChatThread {
         project: string;
         task: string;
     } | null;
+    /**
+     * Command marks (`at`: ms, host clock): a command goes out without the tag, so each mark gives
+     * the thread the first turn of that command at or after it
+     */
+    commands?: {
+        at: number;
+        command: string;
+    }[];
 }
 /** Where a thread starts in the main chat: "N replies in thread …" */
 export interface ChatThreadMarker {
@@ -44,6 +52,11 @@ export declare const threadTag: (name: {
     project: string;
     task: string;
 }) => string;
+/**
+ * The command a thread message starts with (`/status-report`), else null. The CLI runs a command
+ * only as the first word: it goes out without the tag line and its turn finds the thread by a mark
+ */
+export declare const threadCommand: (body: string) => string | null;
 /** Message text without its thread tag line */
 export declare function stripTag(text: string, tag: string): string;
 export declare const hhmm: (ms: number) => string;
@@ -65,7 +78,7 @@ export declare function threadOf(item: ChatItem, threads: ChatThread[]): string 
 /**
  * Splits the chat: thread items go to their thread, the main chat keeps the rest plus one marker
  * per thread (after the answer it was opened on, else where its first message was). An answer of
- * tool steps only follows the item before it
+ * tool steps only follows the item before it; a command sent from a thread goes there by its mark
  */
 export declare function routeThreads(items: ChatItem[], threads: ChatThread[]): {
     main: (ChatItem | ChatThreadMarker)[];
