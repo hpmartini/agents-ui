@@ -769,7 +769,7 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
               className={`shrink-0 overflow-y-auto border-gray-800 ${
                 sidebar
                   ? 'w-72 max-w-[40%] border-r'
-                  : `border-b ${openId ? 'max-h-[42%]' : 'flex-1'}`
+                  : `border-b ${openId || statusShown ? 'max-h-[42%]' : 'flex-1'}`
               }`}
             >
               <ul className="py-1">
@@ -778,8 +778,9 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
                     key={x.id}
                     thread={x}
                     items={byThread.get(x.id) ?? []}
-                    open={x.id === openId}
-                    onOpen={() => onOpen(x.id === openId ? null : x.id)}
+                    open={x.id === openId && !statusShown}
+                    // over shown details a click brings the thread back, never collapses it
+                    onOpen={() => onOpen(x.id === openId && !statusShown ? null : x.id)}
                   />
                 ))}
               </ul>

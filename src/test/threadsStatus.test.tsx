@@ -124,6 +124,19 @@ describe('status list in the maximised threads panel', () => {
     expect(document.querySelector('[data-threads-maximized]')).not.toBeNull();
   });
 
+  it('with details shown, the open thread row brings it back instead of collapsing it', () => {
+    const onOpen = vi.fn();
+    panel({
+      onOpen,
+      statusTask: { project: 'site', task: 'hero' },
+      statusView: <div data-testid="host-status">details</div>,
+    });
+    const row = document.querySelector('[data-thread-row="t1"]') as HTMLElement;
+    expect(row).not.toHaveAttribute('aria-current');
+    fireEvent.click(row);
+    expect(onOpen).toHaveBeenCalledWith('t1');
+  });
+
   it('"Show in Status" in a bound thread asks for its task; an unbound thread has none', () => {
     const { onShowStatus, unmount } = panel();
     fireEvent.click(screen.getByRole('button', { name: 'Show in Status' }));

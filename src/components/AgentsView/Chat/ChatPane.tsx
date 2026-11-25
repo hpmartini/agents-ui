@@ -624,7 +624,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [threadsMaxed, setThreadsMaxed] = useState(false);
   const showThreadsPanel = (open: boolean) => {
     setThreadsOpen(open);
-    if (!open) setThreadsMaxed(false);
+    if (!open) {
+      setThreadsMaxed(false);
+      setStatusTask(null);
+    }
     try {
       localStorage.setItem(THREADS_OPEN_KEY, open ? '1' : '0');
     } catch {
