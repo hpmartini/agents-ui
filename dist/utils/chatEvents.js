@@ -313,7 +313,8 @@ export function reduceChat(state, event) {
                     ...state.messages,
                     {
                         kind: 'user',
-                        key: `u${state.messages.length}`,
+                        // the transcript's own key when the host sends one: tidy-up overrides route by it
+                        key: str(event.key) || `u${state.messages.length}`,
                         text: str(event.text),
                         ...(typeof event.ts === 'number' ? { ts: event.ts } : {}),
                         ...(state.boundary ? { initial: true } : {}),
