@@ -55,4 +55,3 @@ describe('AgentSettingsPanel choices', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
-

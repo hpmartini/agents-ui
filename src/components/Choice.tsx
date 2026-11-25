@@ -287,10 +287,11 @@ function Menu<V extends string>({
     // shown.length: a shorter filtered list keeps an upward popup attached to the trigger
   }, [open, shown.length]);
 
-  // Keys go to the search field, else to the listbox
+  // Keys go to the search field, else to the listbox; only once placed, a hidden popup can't take focus
+  const placed = place !== null;
   useEffect(() => {
-    if (open) (search ? popupRef.current?.querySelector('input') : listRef.current)?.focus();
-  }, [open, search]);
+    if (placed) (search ? popupRef.current?.querySelector('input') : listRef.current)?.focus();
+  }, [placed, search]);
 
   useEffect(() => {
     if (!open) return;

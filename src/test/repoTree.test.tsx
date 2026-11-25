@@ -192,7 +192,7 @@ describe('RepoTree', () => {
   it('remembers collapsed folders across mounts', async () => {
     const user = userEvent.setup();
     const { unmount } = render(<Host />);
-    await user.click(screen.getByRole('button', { name: 'Collapse apps' }));
+    await user.click(screen.getByTitle('Collapse apps'));
     expect(JSON.parse(localStorage.getItem(REPO_TREE_COLLAPSED_KEY)!)).toEqual(['apps']);
     unmount();
     render(<Host />);
@@ -206,6 +206,7 @@ describe('RepoTree', () => {
       <RepoTree tree={empty} selection={{ kind: 'all' }} onSelect={() => {}} loading />
     );
     expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: 'All repositories' })).not.toHaveTextContent('0');
     rerender(
       <RepoTree tree={empty} selection={{ kind: 'all' }} onSelect={() => {}} loading={false} />
     );

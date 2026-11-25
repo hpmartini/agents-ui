@@ -170,9 +170,9 @@ export const RepoTree: React.FC<{
             >
               {node.fold ? (
                 <span
-                  role="button"
-                  tabIndex={-1}
-                  aria-label={open ? t.collapseNode(node.label) : t.expandNode(node.label)}
+                  // Mouse affordance only: keyboard and screen readers use Right/Left and aria-expanded
+                  aria-hidden
+                  title={open ? t.collapseNode(node.label) : t.expandNode(node.label)}
                   onClick={(e) => {
                     e.stopPropagation();
                     setFold(node.fold!, open);
@@ -197,11 +197,14 @@ export const RepoTree: React.FC<{
               <span className={`min-w-0 truncate ${node.level === 1 ? 'font-medium' : ''}`}>
                 {node.label}
               </span>
-              <span
-                className={`ml-auto pl-2 shrink-0 tabular-nums ${node.count ? 'text-gray-400' : 'text-gray-600'}`}
-              >
-                {node.count}
-              </span>
+              {/* No count before the first load: 0 would claim there is nothing */}
+              {!(loading && tree.folders.length === 0) && (
+                <span
+                  className={`ml-auto pl-2 shrink-0 tabular-nums ${node.count ? 'text-gray-400' : 'text-gray-600'}`}
+                >
+                  {node.count}
+                </span>
+              )}
             </div>
           );
         })}
