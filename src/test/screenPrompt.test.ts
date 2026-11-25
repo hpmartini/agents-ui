@@ -1,5 +1,17 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { screenPrompt } from '../utils/agentInput';
+import { extractNumberedChoices, screenPrompt } from '../utils/agentInput';
+
+/** A captured screen as `paneScreen(id, 40)` hands it over (blank lines dropped) */
+const fixture = (name: string) =>
+  fs
+    .readFileSync(path.join(__dirname, 'fixtures', 'agentDialogs', `${name}.txt`), 'utf8')
+    .split('\n')
+    .filter((l) => l.trim())
+    .slice(-40)
+    .join('\n');
+const RULE = '─'.repeat(60);
 
 // Screen tails as Claude Code 2.1 draws them (shortened)
 const PERMISSION = [
@@ -55,5 +67,55 @@ describe('question on the agent screen (yellow box)', () => {
   it('no box when the last answer only ends with open questions', () => {
     expect(screenPrompt(ANSWER_WITH_QUESTIONS)).toBeNull();
     expect(screenPrompt('')).toBeNull();
+  });
+
+  // Bug D: an idle orchestrator whose prompt suggestion (ghost text) starts with "1."
+  it('no box for the input line: prompt suggestion, status line, agent list', () => {
+    const idle = fixture('claude-idle-suggestion');
+    expect(screenPrompt(idle)).toBeNull();
+    expect(
+      screenPrompt(`${idle}\n${RULE}\n❯ 1. a typed list\n  2. second line\n${RULE}`)
+    ).toBeNull();
+  });
+
+  it('no box for key hints quoted in an answer above the input line', () => {
+    expect(
+      screenPrompt(`⏺ The dialog says "Esc to cancel · Tab to amend".\n${RULE}\n❯ \n${RULE}`)
+    ).toBeNull();
+  });
+
+  it('a prompt echoed in the transcript is no cursor', () => {
+    expect(
+      screenPrompt(`❯ 1. first point\n  2. second point\n⏺ Done.\n${RULE}\n❯ \n${RULE}`)
+    ).toBeNull();
+  });
+
+  it('real dialogs count: permission, question, review (no footer)', () => {
+    const permission = screenPrompt(fixture('claude-permission-bash'));
+    expect(permission?.split('\n')[0].trim()).toBe('Bash command');
+    expect(permission?.split('\n').at(-1)?.trim()).toBe('Esc to cancel · Tab to amend');
+    expect(screenPrompt(fixture('claude-question-single'))).toContain('Wohin deployen?');
+    expect(screenPrompt(fixture('claude-question-review'))).toContain('Submit answers');
+  });
+
+  it('the excerpt is the dialog only, without the input line, status lines or private glyphs', () => {
+    const trust = [
+      '❯ an earlier prompt',
+      RULE,
+      ' Accessing workspace:',
+      ' /work/demo',
+      ' Quick safety check: Is this a project you created or one you trust?',
+      ' ❯ 1. Yes, I trust this folder',
+      '   2. No, exit',
+      ' Enter to confirm · Esc to cancel',
+      '  \ue0b6 devbox \ue0b4 \uf4bc Opus 5.5',
+    ].join('\n');
+    const text = screenPrompt(trust) ?? '';
+    expect(text.split('\n')[0].trim()).toBe('Accessing workspace:');
+    expect(text).not.toMatch(/an earlier prompt|devbox|[\ue000-\uf8ff]/u);
+    expect(extractNumberedChoices(text).map((c) => c.label)).toEqual([
+      'Yes, I trust this folder',
+      'No, exit',
+    ]);
   });
 });

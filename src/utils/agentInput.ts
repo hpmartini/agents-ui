@@ -306,20 +306,53 @@ export function extractNumberedChoices(output: string): { number: number; label:
 
 /** Claude Code's own status lines under the input (plugin panel, updater): no part of a question */
 const STATUS_LINE_RE = /plugin panel hidden|update installed|restart to (apply|update)|auto-updat/i;
-/** A dialog waiting for a key: a cursor on a numbered option, or the dialog's key hints (omp: ⎋) */
+/** A cursor on a numbered option, and a dialog's key hints (omp: ⎋) */
 const CHOICE_CURSOR_RE = /^\s*[❯›→▶]\s*\d[.)]\s/;
 const DIALOG_HINT_RE = /esc to cancel|enter to (select|confirm)|⎋ cancel|\(y\/n\)|\[y\/n\]/i;
+const RULE_LINE_RE = /^\s*─{10,}/;
+const OPTION_LINE_RE = /^\s*\d+[.)]\s/;
+/** Nerd-Font icons of status lines (private use area): tofu in the page's font */
+const PRIVATE_GLYPHS_RE = /[\uE000-\uF8FF\u{F0000}-\u{10FFFF}]/gu;
+
+const lastIndex = (
+  lines: string[],
+  test: (l: string, i: number) => boolean,
+  before = lines.length
+) => {
+  for (let i = before - 1; i >= 0; i--) if (test(lines[i], i)) return i;
+  return -1;
+};
 
 /**
- * The question on an agent's screen (permission or choice dialog) without the status lines, or
- * null when no dialog waits: an answer that merely ends with open questions is no prompt
+ * Lines [start, end) of the dialog an agent's screen waits on, or null. Claude Code draws its input
+ * line as `❯` right under a rule, with its prompt suggestion (ghost text) and echoed prompts as
+ * `❯ …` as well, so a `❯ 1.` alone is no dialog: it needs a key-hint footer below the last `❯`, or
+ * (the review step has no footer) a cursor on a numbered option, not under a rule, with more below.
+ */
+export function dialogRange(lines: string[]): { start: number; end: number } | null {
+  const cursor = lastIndex(lines, (l) => /^\s*❯/.test(l));
+  let end = lastIndex(lines, (l) => DIALOG_HINT_RE.test(l));
+  if (end < cursor || end < 0) {
+    if (cursor < 0 || !CHOICE_CURSOR_RE.test(lines[cursor])) return null;
+    if (RULE_LINE_RE.test(lines[lastIndex(lines, (l) => !!l.trim(), cursor)] ?? '')) return null;
+    end = lastIndex(lines, (l, i) => i > cursor && OPTION_LINE_RE.test(l));
+    if (end < 0) return null;
+  }
+  const rule = lastIndex(lines, (l) => RULE_LINE_RE.test(l), cursor >= 0 ? cursor : end);
+  return { start: rule + 1, end: end + 1 };
+}
+
+/**
+ * The dialog on an agent's screen (permission or choice) without the input line and status lines
+ * around it, or null when no dialog waits: an answer that merely ends with open questions is no prompt
  */
 export function screenPrompt(screen: string): string | null {
   const lines = stripAnsi(screen)
+    .replace(PRIVATE_GLYPHS_RE, '')
     .split(/\r?\n/)
     .filter((l) => !STATUS_LINE_RE.test(l));
-  const asking = lines.some((l) => CHOICE_CURSOR_RE.test(l) || DIALOG_HINT_RE.test(l));
-  return asking ? lines.join('\n').trim() : null;
+  const range = dialogRange(lines);
+  return range ? lines.slice(range.start, range.end).join('\n').trim() || null : null;
 }
 
 /** `claude --bg` refuses a folder whose trust prompt was never accepted (needs an interactive run there) */

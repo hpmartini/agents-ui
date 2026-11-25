@@ -227,6 +227,14 @@ describe('parseAgentDialog: no dialog', () => {
     ).toBeNull();
   });
 
+  it('the input line is no cursor: prompt suggestion under an answer with options (bug D)', () => {
+    const rule = '─'.repeat(60);
+    expect(
+      parseAgentDialog(`⏺ Two ways:\n  1. Build\n  2. Test\n${rule}\n❯ 3. Ship it today\n${rule}`)
+    ).toBeNull();
+    expect(parseAgentDialog(screen('claude-idle-suggestion'))).toBeNull();
+  });
+
   it('an omp screen without an ask box', () => {
     expect(parseAgentDialog('╭── π > Opus\n╰─ ⇧⇥ to change thinking effort ─╯')).toBeNull();
   });

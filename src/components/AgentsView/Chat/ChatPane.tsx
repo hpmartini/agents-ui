@@ -659,8 +659,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [threadQuote, setThreadQuote] = useState<ChatQuote | null>(null);
   const showThreads = threads.enabled && threadsOpen;
-  // A question of the agent needs the main chat: it shows again until answered
-  const threadsFull = showThreads && threadsMaxed && !dialog && prompt === null;
+  // A question of the agent stays in the main chat: maximising never waits for its answer
+  const threadsFull = showThreads && threadsMaxed;
   // H-6: a report task's details in the maximised panel; the header-toggled host view shows
   // there too, until a thread or an entry is picked (the host keeps its toggle)
   const [statusTask, setStatusTask] = useState<StatusTask | null>(null);

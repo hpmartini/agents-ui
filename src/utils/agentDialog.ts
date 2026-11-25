@@ -11,7 +11,7 @@
  * answered tab marks its pick with ✔, a pick moves on to the next tab, a multi select moves on
  * with its "Next" row. omp shows all questions of one ask in one box, ↑/↓ run through all of them.
  */
-import { stripAnsi } from './agentInput';
+import { dialogRange, stripAnsi } from './agentInput';
 
 export type DialogRole = 'option' | 'other' | 'submit' | 'deny';
 
@@ -60,7 +60,6 @@ export type DialogAnswer =
 
 const OPTION_RE = /^\s*(❯\s*)?(\d+)\.\s(.*)$/;
 const RULE_RE = /^\s*─{10,}/;
-const HINT_RE = /esc to cancel|enter to (select|confirm)/i;
 const TAB_LINE_RE = /^\s*(←\s*)?[☐☒]\s/;
 const TAB_RE = /([☐☒✔])\s+(.+?)(?=\s{2,}|\s*[☐☒✔→]|$)/g;
 
@@ -76,15 +75,14 @@ export function parseAgentDialog(screen: string, activeTab?: string | null): Age
 }
 
 function parseClaude(lines: string[], activeTab: string | null): AgentDialog | null {
+  // The input line's ghost text "❯ 1. …" is no dialog (see dialogRange)
+  const range = dialogRange(lines);
+  if (!range) return null;
   // Bottom up: a numbered list in the agent's answer above the dialog must not shadow it
   let anchor = -1;
-  for (let i = lines.length - 1; i >= 0 && anchor < 0; i--)
+  for (let i = range.end - 1; i >= range.start && anchor < 0; i--)
     if (OPTION_RE.test(lines[i])) anchor = i;
   if (anchor < 0) return null;
-  const waiting =
-    lines.slice(anchor + 1).some((l) => HINT_RE.test(l)) ||
-    lines.some((l) => /^\s*❯\s*\d+\.\s/.test(l));
-  if (!waiting) return null;
 
   const raw: { n: number; text: string; more: string[]; cursor: boolean }[] = [];
   let more: string[] = [];
