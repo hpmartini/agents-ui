@@ -107,7 +107,11 @@ export function useFollowLog(
     follow.current = false;
   }, []);
 
-  useLayoutEffect(toEnd, [mount, toEnd]);
+  useLayoutEffect(() => {
+    // the last look was at the old element: its scrollTop must not read as a scroll up
+    last.current = { top: 0, height: 0, client: 0 };
+    toEnd();
+  }, [mount, toEnd]);
   useEffect(() => {
     const list = listRef.current;
     const content = contentRef.current;

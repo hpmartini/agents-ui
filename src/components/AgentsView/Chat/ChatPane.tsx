@@ -835,8 +835,12 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   );
   const threadListRef = useRef<HTMLDivElement>(null);
   const threadContentRef = useRef<HTMLDivElement>(null);
-  // another thread or a reopened panel (a new log element) starts at its end
-  const threadLog = useFollowLog(threadListRef, threadContentRef, `${openId}:${showThreads}`);
+  // another thread, a reopened panel or back from the Status view (a new log element) starts at its end
+  const threadLog = useFollowLog(
+    threadListRef,
+    threadContentRef,
+    `${openId}:${showThreads}:${!statusView}`
+  );
   useLayoutEffect(threadLog.keep, [threadItems, showSteps, threadLog.keep]);
   useEffect(() => {
     if (quote) inputRef.current?.focus();

@@ -156,10 +156,16 @@ const turn = (n: number, ts: number, tag: string | null) => [
   { type: 'result', ts: ts + 2 },
 ];
 
-function setup({ older = false }: { older?: boolean } = {}) {
+function setup({ older = false, status = false }: { older?: boolean; status?: boolean } = {}) {
   let handlers: ChatHandlers | null = null;
   let resolvePage: (p: ChatHistoryPage) => void = () => {};
-  const list: ChatThreadList = { orchestrator: 'orch', threads: [T1], tasks: [] };
+  const list: ChatThreadList = {
+    orchestrator: 'orch',
+    threads: [T1],
+    tasks: status
+      ? [{ project: 'shop', projectName: 'Shop', task: 'co', title: 'Checkout', repo: null }]
+      : [],
+  };
   const transport = testTransport({
     chat: {
       openTranscriptView: vi.fn(async () => ({
@@ -202,6 +208,7 @@ function setup({ older = false }: { older?: boolean } = {}) {
         onFocus={vi.fn()}
         onClose={vi.fn()}
         onShowTerminal={vi.fn()}
+        renderStatus={status ? () => <div data-testid="host-status">details</div> : undefined}
       />
     </div>,
     { transport }
@@ -422,5 +429,51 @@ describe('main chat log scroll (AC-11)', () => {
     s.push(...turn(21, at + 21_000, null));
     await settle();
     expect(atBottom(list)).toBe(true);
+  });
+
+  it('back from the Status view (a new thread log element) the log opens at its end', async () => {
+    const s = setup({ status: true });
+    await s.ready();
+    await openThreadLog(s);
+    fireEvent.click(screen.getByRole('button', { name: 'Maximize threads' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Checkout\s*Shop/ }));
+    await screen.findByTestId('host-status');
+    // every log mounted from here on gets the layout of a 300 px view
+    const tops = new WeakMap<Element, number>();
+    const isLog = (el: Element) => el.classList.contains('overflow-y-auto');
+    const max = (el: HTMLElement) => Math.max(0, contentHeight(el) - 300);
+    const spies = [
+      vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
+        this: HTMLElement
+      ) {
+        return isLog(this) ? contentHeight(this) : 0;
+      }),
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (
+        this: HTMLElement
+      ) {
+        return isLog(this) ? 300 : 0;
+      }),
+      vi.spyOn(Element.prototype, 'scrollTop', 'get').mockImplementation(function (
+        this: HTMLElement
+      ) {
+        return Math.min(tops.get(this) ?? 0, max(this));
+      }),
+      vi.spyOn(Element.prototype, 'scrollTop', 'set').mockImplementation(function (
+        this: HTMLElement,
+        v: number
+      ) {
+        tops.set(this, Math.max(0, Math.min(v, max(this))));
+      }),
+    ];
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Back to the thread (Esc)' }));
+      const section = await screen.findByRole('region', { name: /^Thread Shop · Checkout/ });
+      const list = section.querySelector<HTMLElement>('.overflow-y-auto')!;
+      await settle();
+      expect(max(list)).toBeGreaterThan(0);
+      expect(list.scrollTop).toBe(max(list));
+    } finally {
+      spies.forEach((x) => x.mockRestore());
+    }
   });
 });
