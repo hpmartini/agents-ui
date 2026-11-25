@@ -104,19 +104,22 @@ export const PullRequestsPage = ({ searchParams: params, setSearchParams: setPar
         return map;
     }, [props.contexts]);
     const folders = useMemo(() => folderKeys(props.rows.map((r) => r.pr.repoSlug), roots), [props.rows, roots]);
-    const { shown, groups } = useMemo(() => queryPulls(props.rows, query, t.pulls, folders), [props.rows, query, t.pulls, folders]);
     // Tree counts follow every filter except the tree's own
     const tree = useMemo(() => buildRepoTree(props.rows, filterPulls(props.rows, { ...query, repo: null, folder: null }), roots), [props.rows, query, roots]);
-    const selection = query.repo
-        ? { kind: 'repo', slug: query.repo }
-        : query.folder
-            ? { kind: 'folder', key: query.folder }
+    // A folder key the tree does not know (older key format, folder gone) means all repositories
+    const known = !query.folder || tree.folders.some((f) => f.key === query.folder);
+    const view = useMemo(() => (known ? query : { ...query, folder: null }), [query, known]);
+    const { shown, groups } = useMemo(() => queryPulls(props.rows, view, t.pulls, folders), [props.rows, view, t.pulls, folders]);
+    const selection = view.repo
+        ? { kind: 'repo', slug: view.repo }
+        : view.folder
+            ? { kind: 'folder', key: view.folder }
             : { kind: 'all' };
     const listRef = useRef(null);
     const narrow = useNarrow(listRef);
     const [treeOpen, setTreeOpen] = useState(false);
     const options = useMemo(() => pullOptions(props.rows), [props.rows]);
-    const filtered = hasFilters(query);
+    const filtered = hasFilters(view);
     // Typing replaces the history entry; every other change is one Back step
     const update = (patch, replace = false) => setParams((prev) => patchPullParams(prev, patch), { replace });
     // Arriving from the popover: its trigger is hidden here, so focus lands on the view
@@ -130,14 +133,23 @@ export const PullRequestsPage = ({ searchParams: params, setSearchParams: setPar
             update(stored, true);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
     }, []);
-    const selectRepos = (s) => {
-        const patch = {
-            repo: s.kind === 'repo' ? s.slug : null,
-            folder: s.kind === 'folder' ? s.key : null,
-        };
-        writeSelection(patch);
-        update(patch);
-    };
+    // Every later selection, also one from a link or Back, is the one the next visit restores
+    const arrived = useRef(false);
+    useEffect(() => {
+        if (!arrived.current) {
+            arrived.current = true;
+            // an empty arrival is about to be restored above, not cleared
+            if (!query.repo && !query.folder)
+                return;
+        }
+        // an unknown folder may still be loading its checkouts: keep what is stored
+        if (known)
+            writeSelection({ repo: query.repo, folder: query.folder });
+    }, [query.repo, query.folder, known]);
+    const selectRepos = (s) => update({
+        repo: s.kind === 'repo' ? s.slug : null,
+        folder: s.kind === 'folder' ? s.key : null,
+    });
     const selectionLabel = selection.kind === 'repo'
         ? selection.slug
         : selection.kind === 'folder'
@@ -158,7 +170,6 @@ export const PullRequestsPage = ({ searchParams: params, setSearchParams: setPar
             openLink(pr.url);
     };
     return (_jsx("div", { ref: viewRef, tabIndex: -1, "aria-label": t.openPullRequests, className: "absolute inset-0 flex flex-col min-h-0 bg-gray-900 outline-none", "data-pulls-view": true, children: _jsxs(Group, { orientation: "horizontal", className: "h-full w-full", children: [_jsx(Panel, { id: "pulls-list", minSize: "20%", defaultSize: "40%", className: "min-h-0 min-w-0", children: _jsxs("div", { className: "h-full flex flex-col min-h-0", children: [_jsxs("div", { className: "px-3 py-2 border-b border-gray-800 shrink-0 space-y-2", children: [_jsxs("div", { className: "flex items-center gap-2 text-sm", children: [_jsx(GitPullRequest, { size: 14, className: "text-gray-400", "aria-hidden": true }), _jsx("span", { className: "font-medium", children: t.openPullRequests }), _jsx("span", { className: "text-gray-500 tabular-nums text-xs", "data-testid": "pulls-count", children: filtered ? t.shownOf(shown.length, props.rows.length) : props.rows.length }), _jsx("div", { className: "flex-1" }), filtered && (_jsxs("button", { onClick: () => {
-                                                    writeSelection(null);
                                                     update(FILTER_RESET);
                                                     // the button unmounts once no filter is left; keep focus in the toolbar
                                                     searchRef.current?.focus();

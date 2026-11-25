@@ -29,7 +29,7 @@ function highlight(text, query) {
     for (let i = lower.indexOf(query); i !== -1; i = lower.indexOf(query, at)) {
         if (i > at)
             parts.push(text.slice(at, i));
-        parts.push(_jsx("mark", { className: "bg-blue-500/30 text-white rounded-sm", children: text.slice(i, i + query.length) }, i));
+        parts.push(_jsx("mark", { className: "bg-transparent text-white font-semibold underline decoration-blue-300 decoration-2 underline-offset-2", children: text.slice(i, i + query.length) }, i));
         at = i + query.length;
     }
     parts.push(text.slice(at));
@@ -42,8 +42,8 @@ export function Choice(props) {
 function Pills({ value, onChange, options, label, disabled, className = '', size = 'sm', id, title, }) {
     const refs = useRef([]);
     const selected = options.findIndex((o) => o.value === value);
-    // Roving tab stop: the checked pill, else the first enabled one
-    const stop = selected >= 0 ? selected : options.findIndex((o) => !o.disabled);
+    // Roving tab stop: the checked pill if enabled, else the first enabled one
+    const stop = selected >= 0 && !options[selected].disabled ? selected : options.findIndex((o) => !o.disabled);
     const pick = (i) => {
         refs.current[i]?.focus();
         if (options[i].value !== value)
@@ -79,7 +79,7 @@ function Pills({ value, onChange, options, label, disabled, className = '', size
             return (_jsx("button", { ref: (el) => {
                     refs.current[i] = el;
                 }, type: "button", role: "radio", "aria-checked": on, tabIndex: i === stop ? 0 : -1, disabled: disabled || o.disabled, title: o.hint, onClick: () => pick(i), onKeyDown: (e) => onKeyDown(e, i), className: `${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${on
-                    ? 'bg-blue-500/20 border-blue-500/70 text-white'
+                    ? 'bg-sel border-blue-300 text-white'
                     : 'border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800'}`, children: o.label }, o.value));
         }) }));
 }

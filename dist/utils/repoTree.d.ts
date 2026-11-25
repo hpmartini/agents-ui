@@ -1,8 +1,10 @@
 /**
  * Repository tree of the /pulls view: All repositories → folder → repo. A folder is the parent
- * directory of the repo's local checkout (`AgentContext.repo.root`), named relative to the
- * common parent of all checkouts, so no absolute path reaches the URL or the screen. A repo
- * without a known checkout is listed under its owner (`@owner`).
+ * directory of the repo's local checkout (`AgentContext.repo.root`). Its key (URL `folder`,
+ * stored selection) is the folder's own name plus a hash of its absolute path: stable whichever
+ * other repos have PRs, and no path reaches the URL. Its label is the path relative to the
+ * common parent of all checkouts. A repo without a known checkout is listed under its owner
+ * (`@owner`).
  */
 import type { PullRequestRow } from './agentSessions';
 /** What the tree has selected; maps to the `folder` / `repo` params of the PR query */
@@ -22,7 +24,7 @@ export interface RepoTreeRepo {
     count: number;
 }
 export interface RepoTreeFolder {
-    /** Value of the `folder` param: relative folder path, or `@owner` */
+    /** Value of the `folder` param: `<name>-<hash of the absolute path>`, or `@owner` */
     key: string;
     label: string;
     count: number;
