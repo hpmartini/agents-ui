@@ -46,8 +46,8 @@ export declare function patchPullParams(params: URLSearchParams, patch: Partial<
 export declare const hasFilters: (q: PullQuery) => boolean;
 /** Drops all filters, keeps grouping and sorting */
 export declare const FILTER_RESET: Partial<PullQuery>;
-/** All filters combine with AND; `folders` (lower-case slug → folder key) serves `q.folder` */
-export declare function filterPulls(rows: PullRequestRow[], q: PullQuery, folders?: Map<string, string>): PullRequestRow[];
+/** All filters combine with AND; `folders` (lower-case slug → keys of the folders holding it) serves `q.folder` */
+export declare function filterPulls(rows: PullRequestRow[], q: PullQuery, folders?: Map<string, string[]>): PullRequestRow[];
 export declare function sortPulls(rows: PullRequestRow[], sort: SortKey, dir: SortDir): PullRequestRow[];
 export interface PullGroup {
     key: string;
@@ -67,7 +67,7 @@ export declare function pullOptions(rows: PullRequestRow[]): {
     bases: string[];
 };
 /** filter -> sort -> group, as the view shows it */
-export declare function queryPulls(rows: PullRequestRow[], q: PullQuery, labels?: PullLabels, folders?: Map<string, string>): {
+export declare function queryPulls(rows: PullRequestRow[], q: PullQuery, labels?: PullLabels, folders?: Map<string, string[]>): {
     shown: PullRequestRow[];
     groups: PullGroup[];
 };

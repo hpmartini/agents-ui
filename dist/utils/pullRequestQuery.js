@@ -103,14 +103,14 @@ function matchesText(pr, text) {
         return true;
     return [pr.title, String(pr.number), pr.headRef, pr.author ?? ''].some((v) => v.toLowerCase().includes(needle));
 }
-/** All filters combine with AND; `folders` (lower-case slug → folder key) serves `q.folder` */
+/** All filters combine with AND; `folders` (lower-case slug → keys of the folders holding it) serves `q.folder` */
 export function filterPulls(rows, q, folders) {
     return rows.filter(({ pr, agents }) => {
         if (!matchesText(pr, q.q))
             return false;
         if (q.repo && pr.repoSlug.toLowerCase() !== q.repo.toLowerCase())
             return false;
-        if (q.folder && folders?.get(pr.repoSlug.toLowerCase()) !== q.folder)
+        if (q.folder && !folders?.get(pr.repoSlug.toLowerCase())?.includes(q.folder))
             return false;
         if (q.ci && pr.ci !== q.ci)
             return false;

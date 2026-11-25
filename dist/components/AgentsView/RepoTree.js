@@ -16,12 +16,13 @@ function readCollapsed() {
     }
 }
 /**
- * WAI-ARIA tree of the repos with open PRs (All repositories → folder → repo), each with its
+ * WAI-ARIA tree of the repos with open PRs (All repositories → nested folders → repo), each with its
  * count. One tab stop; ↑/↓ move, → opens or goes to the first child, ← closes or goes to the
  * parent, Home/End, Enter/Space select, a letter jumps to the next node starting with it.
  */
 export const RepoTree = ({ tree, selection, onSelect, loading, className = '' }) => {
     const t = useLabels().shell;
+    const empty = tree.folders.length === 0 && tree.repos.length === 0;
     const [collapsed, setCollapsed] = useState(readCollapsed);
     const [focusId, setFocusId] = useState(null);
     const refs = useRef(new Map());
@@ -37,34 +38,43 @@ export const RepoTree = ({ tree, selection, onSelect, loading, className = '' })
                 select: { kind: 'all' },
             },
         ];
-        if (collapsed.has(ROOT))
-            return list;
-        for (const f of tree.folders) {
-            const id = `f:${f.key}`;
-            list.push({
-                id,
-                level: 2,
-                label: f.label,
-                count: f.count,
-                fold: f.key,
-                parent: ROOT,
-                owner: f.key.startsWith('@'),
-                select: { kind: 'folder', key: f.key },
-            });
-            if (collapsed.has(f.key))
-                continue;
-            for (const r of f.repos)
+        const repos = (rs, level, parent) => {
+            for (const r of rs)
                 list.push({
                     id: `r:${r.slug.toLowerCase()}`,
-                    level: 3,
+                    level,
                     label: r.name,
                     count: r.count,
                     fold: null,
-                    parent: id,
+                    parent,
                     select: { kind: 'repo', slug: r.slug },
                     title: r.slug,
                 });
-        }
+        };
+        const folders = (fs, level, parent) => {
+            for (const f of fs) {
+                const id = `f:${f.key}`;
+                list.push({
+                    id,
+                    level,
+                    label: f.label,
+                    count: f.count,
+                    fold: f.key,
+                    parent,
+                    icon: f.key.startsWith('@') ? 'owner' : 'folder',
+                    select: { kind: 'folder', key: f.key },
+                    title: f.title,
+                });
+                if (collapsed.has(f.key))
+                    continue;
+                folders(f.folders, level + 1, id);
+                repos(f.repos, level + 1, id);
+            }
+        };
+        if (collapsed.has(ROOT))
+            return list;
+        folders(tree.folders, 2, ROOT);
+        repos(tree.repos, 2, ROOT);
         return list;
     }, [tree, collapsed, t.allRepositories]);
     const selectedId = nodeId(selection);
@@ -138,12 +148,12 @@ export const RepoTree = ({ tree, selection, onSelect, loading, className = '' })
                         }, role: "treeitem", "aria-level": node.level, "aria-selected": selected, "aria-expanded": node.fold ? open : undefined, tabIndex: node.id === stop ? 0 : -1, title: node.title, onClick: () => {
                             setFocusId(node.id);
                             onSelect(node.select);
-                        }, onFocus: () => setFocusId(node.id), onKeyDown: (e) => onKeyDown(e, node, i), style: { paddingLeft: 4 + (node.level - 1) * 14 }, className: `flex items-center gap-1 pr-2 py-1 cursor-pointer rounded outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cursor ${selected
+                        }, onFocus: () => setFocusId(node.id), onKeyDown: (e) => onKeyDown(e, node, i), style: { paddingLeft: 4 + (node.level - 1) * 12 }, className: `flex items-center gap-1 pr-2 py-1 cursor-pointer rounded outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cursor ${selected
                             ? 'bg-blue-500/20 text-white'
                             : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`, children: [node.fold ? (_jsx("span", { "aria-hidden": true, title: open ? t.collapseNode(node.label) : t.expandNode(node.label), onClick: (e) => {
                                     e.stopPropagation();
                                     setFold(node.fold, open);
-                                }, className: "shrink-0 p-0.5 rounded text-gray-400 hover:text-white hover:bg-gray-700", children: open ? (_jsx(ChevronDown, { size: 12, "aria-hidden": true })) : (_jsx(ChevronRight, { size: 12, "aria-hidden": true })) })) : (_jsx("span", { className: "w-4 shrink-0", "aria-hidden": true })), node.level === 2 &&
-                                (node.owner ? (_jsx(User, { size: 12, "aria-hidden": true, className: "shrink-0 text-gray-400" })) : (_jsx(Folder, { size: 12, "aria-hidden": true, className: "shrink-0 text-gray-400" }))), _jsx("span", { className: `min-w-0 truncate ${node.level === 1 ? 'font-medium' : ''}`, children: node.label }), !(loading && tree.folders.length === 0) && (_jsx("span", { className: `ml-auto pl-2 shrink-0 tabular-nums ${node.count ? 'text-gray-400' : 'text-gray-600'}`, children: node.count }))] }, node.id));
-                }) }), tree.folders.length === 0 && (_jsx("p", { className: "px-3 py-1.5 text-gray-400", children: loading ? t.repoTreeLoading : t.repoTreeEmpty }))] }));
+                                }, className: "shrink-0 p-0.5 rounded text-gray-400 hover:text-white hover:bg-gray-700", children: open ? (_jsx(ChevronDown, { size: 12, "aria-hidden": true })) : (_jsx(ChevronRight, { size: 12, "aria-hidden": true })) })) : (_jsx("span", { className: "w-4 shrink-0", "aria-hidden": true })), node.icon &&
+                                (node.icon === 'owner' ? (_jsx(User, { size: 12, "aria-hidden": true, className: "shrink-0 text-gray-400" })) : (_jsx(Folder, { size: 12, "aria-hidden": true, className: "shrink-0 text-gray-400" }))), _jsx("span", { className: `min-w-0 truncate ${node.level === 1 ? 'font-medium' : ''}`, children: node.label }), !(loading && empty) && (_jsx("span", { className: `ml-auto pl-2 shrink-0 tabular-nums ${node.count ? 'text-gray-400' : 'text-gray-600'}`, children: node.count }))] }, node.id));
+                }) }), empty && (_jsx("p", { className: "px-3 py-1.5 text-gray-400", children: loading ? t.repoTreeLoading : t.repoTreeEmpty }))] }));
 };

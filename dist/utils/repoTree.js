@@ -1,5 +1,5 @@
-const parentOf = (p) => p.replace(/\/+$/, '').replace(/\/[^/]*$/, '') || '/';
 const byText = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' });
+const join = (a, b) => (a.endsWith('/') ? a : `${a}/`) + b;
 /** FNV-1a, base 36: short, synchronous, the same in every browser */
 function hash(text) {
     let h = 0x811c9dc5;
@@ -7,44 +7,55 @@ function hash(text) {
         h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
     return (h >>> 0).toString(36);
 }
-/** Stable key of a checkout folder (absolute path) */
-const folderKey = (dir) => `${dir.split('/').pop() || 'root'}-${hash(dir)}`;
+/** Every folder from the top down to the parent of `checkout`, the home dir folded into `~` */
+function dirsAbove(checkout) {
+    const home = checkout.match(/^\/(?:Users|home)\/[^/]+(?=\/)/)?.[0];
+    const top = home ?? '/';
+    const dirs = [{ name: home ? '~' : '/', abs: top, path: home ? '~' : '/' }];
+    const parts = checkout.slice(top.length).split('/').filter(Boolean).slice(0, -1);
+    for (const name of parts) {
+        const up = dirs[dirs.length - 1];
+        dirs.push({ name, abs: join(up.abs, name), path: join(up.path, name) });
+    }
+    return dirs;
+}
+/** Stable key of a folder; `~` and `root` instead of the user's or the root's name */
+const keyOf = (d) => `${d.name === '/' ? 'root' : d.name}-${hash(d.abs)}`;
 /**
- * Folder key per lower-case slug. `roots`: lower-case slug → main checkout path.
+ * Keys of every folder that holds a repo's checkout, deepest first, per lower-case slug;
+ * `[@owner]` without a checkout. `roots`: lower-case slug → main checkout path.
  */
 export function folderKeys(slugs, roots) {
     const keys = new Map();
     for (const slug of slugs) {
         const root = roots[slug.toLowerCase()];
-        keys.set(slug.toLowerCase(), root ? folderKey(parentOf(root)) : `@${slug.split('/')[0]}`);
+        keys.set(slug.toLowerCase(), root ? dirsAbove(root).map(keyOf).reverse() : [`@${slug.split('/')[0]}`]);
     }
     return keys;
 }
-/** Label per folder key: checkout folders relative to the common parent of all of them */
-function folderLabels(slugs, roots) {
-    const parents = [
-        ...new Set(slugs
-            .map((s) => roots[s.toLowerCase()])
-            .filter(Boolean)
-            .map(parentOf)),
-    ];
-    // Common parent directory of all checkout parents, segment by segment
-    let common = parents[0]?.split('/') ?? [];
-    for (const p of parents.slice(1)) {
-        const parts = p.split('/');
-        let i = 0;
-        while (i < common.length && common[i] === parts[i])
-            i++;
-        common = common.slice(0, i);
+/** Folder `key` anywhere in the tree */
+export function findFolder(tree, key) {
+    const find = (fs) => {
+        for (const f of fs) {
+            const hit = f.key === key ? f : find(f.folders);
+            if (hit)
+                return hit;
+        }
+    };
+    return find(tree.folders);
+}
+const sortRepos = (repos) => repos.sort((a, b) => byText(a.name, b.name) || byText(a.slug, b.slug));
+const sortFolders = (folders) => folders.sort((a, b) => byText(a.label, b.label));
+/** Merges single-subfolder chains, sorts, and sums the counts of the subtree */
+function finish(f) {
+    while (f.folders.length === 1 && f.repos.length === 0) {
+        const [only] = f.folders;
+        f = { ...only, label: join(f.label, only.label) };
     }
-    let base = common.join('/');
-    // A folder that is the common parent itself keeps its own name
-    if (parents.includes(base))
-        base = parentOf(base);
-    const labels = new Map();
-    for (const p of parents)
-        labels.set(folderKey(p), p.slice(base === '/' ? 1 : base.length + 1) || p);
-    return labels;
+    const folders = sortFolders(f.folders.map(finish));
+    const repos = sortRepos(f.repos);
+    const count = [...folders, ...repos].reduce((n, c) => n + c.count, 0);
+    return { ...f, folders, repos, count };
 }
 /**
  * Every repo of `rows` in its folder; the counts come from `counted` (the rows that pass the
@@ -54,31 +65,61 @@ export function buildRepoTree(rows, counted, roots) {
     const slugs = [
         ...new Map(rows.map((r) => [r.pr.repoSlug.toLowerCase(), r.pr.repoSlug])).values(),
     ];
-    const keys = folderKeys(slugs, roots);
-    const labels = folderLabels(slugs, roots);
     const counts = new Map();
     for (const r of counted) {
         const slug = r.pr.repoSlug.toLowerCase();
         counts.set(slug, (counts.get(slug) ?? 0) + 1);
     }
-    const folders = new Map();
-    for (const slug of slugs) {
-        const key = keys.get(slug.toLowerCase());
-        const folder = folders.get(key) ?? {
-            key,
-            label: labels.get(key) ?? key.slice(1),
+    const repo = (slug) => ({
+        slug,
+        name: slug.split('/').pop() || slug,
+        count: counts.get(slug.toLowerCase()) ?? 0,
+    });
+    const placed = slugs
+        .filter((s) => roots[s.toLowerCase()])
+        .map((s) => ({ slug: s, dirs: dirsAbove(roots[s.toLowerCase()]) }));
+    // Common root: the folder chain every checkout shares
+    let common = placed[0]?.dirs.length ?? 0;
+    for (const { dirs } of placed) {
+        let i = 0;
+        while (i < common && dirs[i]?.abs === placed[0].dirs[i].abs)
+            i++;
+        common = i;
+    }
+    const top = { key: '', label: '', count: 0, folders: [], repos: [] };
+    for (const { slug, dirs } of placed) {
+        let at = top;
+        for (const d of dirs.slice(common)) {
+            const key = keyOf(d);
+            let next = at.folders.find((f) => f.key === key);
+            if (!next) {
+                next = { key, label: d.name, title: d.path, count: 0, folders: [], repos: [] };
+                at.folders.push(next);
+            }
+            at = next;
+        }
+        at.repos.push(repo(slug));
+    }
+    const owners = new Map();
+    for (const slug of slugs.filter((s) => !roots[s.toLowerCase()])) {
+        const owner = slug.split('/')[0];
+        const f = owners.get(owner) ?? {
+            key: `@${owner}`,
+            label: owner,
             count: 0,
+            folders: [],
             repos: [],
         };
-        const count = counts.get(slug.toLowerCase()) ?? 0;
-        folder.repos.push({ slug, name: slug.split('/').pop() || slug, count });
-        folder.count += count;
-        folders.set(key, folder);
+        f.repos.push(repo(slug));
+        owners.set(owner, f);
     }
-    const list = [...folders.values()];
-    for (const f of list)
-        f.repos.sort((a, b) => byText(a.name, b.name) || byText(a.slug, b.slug));
-    // Checkout folders first, owners (no local checkout) last
-    list.sort((a, b) => Number(a.key.startsWith('@')) - Number(b.key.startsWith('@')) || byText(a.label, b.label));
-    return { folders: list, total: counted.length };
+    return {
+        // Checkout folders first, owners (no local checkout) last
+        folders: [
+            ...sortFolders(top.folders.map(finish)),
+            ...sortFolders([...owners.values()].map(finish)),
+        ],
+        repos: sortRepos(top.repos),
+        total: counted.length,
+    };
 }

@@ -91,7 +91,7 @@ function Pills({ value, onChange, options, label, disabled, className = '', size
         pick(next);
     };
     const pad = size === 'md' ? 'px-3 py-1 text-sm' : 'px-2 py-0.5 text-xs';
-    return (_jsx("div", { ref: root, role: "radiogroup", "aria-label": labelledBy ? undefined : label, "aria-labelledby": labelledBy, "aria-disabled": disabled || undefined, "aria-invalid": invalid || undefined, title: title, "data-choice": "pills", className: `flex flex-wrap gap-1 min-w-0 ${className}`, children: options.map((o, i) => {
+    return (_jsx("div", { ref: root, role: "radiogroup", "aria-label": labelledBy ? undefined : label, "aria-labelledby": labelledBy, "aria-disabled": disabled || undefined, "aria-invalid": invalid || undefined, title: title, "data-choice": "pills", className: `flex flex-wrap gap-1 shrink-0 min-w-0 max-w-full ${className}`, children: options.map((o, i) => {
             const on = i === selected;
             return (_jsx("button", { ref: (el) => {
                     refs.current[i] = el;
@@ -277,7 +277,7 @@ function Menu({ value, onChange, options, label, disabled, placeholder = '', cla
         body.push(group ? (_jsxs("div", { role: "group", "aria-label": group, children: [_jsx("div", { "aria-hidden": true, className: "px-3 pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-gray-500", children: group }), items] }, `g${i}`)) : (items));
         i = end;
     }
-    return (_jsxs("div", { ref: rootRef, className: "relative flex min-w-0 max-w-full", "data-choice": search ? 'search' : 'menu', children: [_jsx("span", { id: `${uid}-label`, hidden: true, children: label }), _jsxs("button", { ref: triggerRef, type: "button", id: id, title: title ?? label, disabled: disabled, "aria-haspopup": "listbox", "aria-expanded": open, "aria-controls": open ? listId : undefined, "aria-labelledby": `${labelledBy ?? `${uid}-label`} ${uid}-value`, "aria-invalid": invalid || undefined, onClick: () => (open ? close(false) : openMenu()), onKeyDown: (e) => {
+    return (_jsxs("div", { ref: rootRef, className: "relative flex shrink-0 min-w-0 max-w-full", "data-choice": search ? 'search' : 'menu', children: [_jsx("span", { id: `${uid}-label`, hidden: true, children: label }), _jsxs("button", { ref: triggerRef, type: "button", id: id, title: title ?? label, disabled: disabled, "aria-haspopup": "listbox", "aria-expanded": open, "aria-controls": open ? listId : undefined, "aria-labelledby": `${labelledBy ?? `${uid}-label`} ${uid}-value`, "aria-invalid": invalid || undefined, onClick: () => (open ? close(false) : openMenu()), onKeyDown: (e) => {
                     if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
                         e.preventDefault();
                         e.stopPropagation();

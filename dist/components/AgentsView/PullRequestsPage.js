@@ -10,7 +10,7 @@ import { FILTER_RESET, hasFilters, parsePullQuery, patchPullParams, filterPulls,
 import { useLabels } from '../../labels';
 import { Choice, choiceMode } from '../Choice';
 import { RepoTree } from './RepoTree';
-import { buildRepoTree, folderKeys } from '../../utils/repoTree';
+import { buildRepoTree, findFolder, folderKeys } from '../../utils/repoTree';
 /** PR data and handlers, provided by AgentsView around the main area of the other routes */
 export const PullRequestsDataContext = createContext(null);
 /** The host's /pulls route: reads the PR data AgentsView already holds (no second data path) */
@@ -106,8 +106,9 @@ export const PullRequestsPage = ({ searchParams: params, setSearchParams: setPar
     const folders = useMemo(() => folderKeys(props.rows.map((r) => r.pr.repoSlug), roots), [props.rows, roots]);
     // Tree counts follow every filter except the tree's own
     const tree = useMemo(() => buildRepoTree(props.rows, filterPulls(props.rows, { ...query, repo: null, folder: null }), roots), [props.rows, query, roots]);
-    // A folder key the tree does not know (older key format, folder gone) means all repositories
-    const known = !query.folder || tree.folders.some((f) => f.key === query.folder);
+    // A folder key the tree does not know (older key format, folder gone or merged into a compact
+    // folder) means all repositories
+    const known = !query.folder || !!findFolder(tree, query.folder);
     const view = useMemo(() => (known ? query : { ...query, folder: null }), [query, known]);
     const { shown, groups } = useMemo(() => queryPulls(props.rows, view, t.pulls, folders), [props.rows, view, t.pulls, folders]);
     const selection = view.repo
@@ -153,7 +154,7 @@ export const PullRequestsPage = ({ searchParams: params, setSearchParams: setPar
     const selectionLabel = selection.kind === 'repo'
         ? selection.slug
         : selection.kind === 'folder'
-            ? (tree.folders.find((f) => f.key === selection.key)?.label ?? selection.key)
+            ? (findFolder(tree, selection.key)?.label ?? selection.key)
             : t.allRepositories;
     const repoTree = (_jsx(RepoTree, { tree: tree, selection: selection, onSelect: selectRepos, loading: Object.keys(props.contexts).length === 0 }));
     const openPr = (pr) => {
