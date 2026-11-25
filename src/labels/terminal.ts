@@ -212,7 +212,8 @@ export interface TerminalLabels {
   threadsSidebar: string;
   firstThreadMessage: (tag: string) => string;
   boundTo: (repo: string | null) => string;
-  notBound: string;
+  undoTidy: string;
+  undoTidyTitle: string;
   resizeThreads: string;
   threadLog: (name: string) => string;
   loadingThreadHistory: string;
@@ -494,7 +495,7 @@ export const terminalEn: TerminalLabels = {
   newThread: 'New thread',
   bindToTask: 'Bind to a task from the status report',
   threadWithoutTask: 'Thread without a task',
-  threadWithoutTaskHint: 'Named after its first message',
+  threadWithoutTaskHint: 'The orchestrator names it after its project',
   noReportTasks: 'No status report yet',
   threadReplies: (count) => `${count} ${count === 1 ? 'reply' : 'replies'}`,
   inThread: 'in thread',
@@ -527,7 +528,8 @@ export const terminalEn: TerminalLabels = {
   firstThreadMessage: (tag) =>
     `Write the first message. It goes to the orchestrator tagged ${tag}.`,
   boundTo: (repo) => `Bound to status task${repo ? ` · ${repo}` : ''}`,
-  notBound: 'Not bound to a status task',
+  undoTidy: 'Undo tidy-up',
+  undoTidyTitle: 'Restore the threads as they were before the last tidy-up',
   resizeThreads: 'Resize threads panel',
   threadLog: (name) => `Thread ${name}`,
   loadingThreadHistory: 'Loading earlier messages of this thread…',
@@ -818,7 +820,7 @@ export const terminalDe: TerminalLabels = {
   newThread: 'Neuer Thread',
   bindToTask: 'An eine Aufgabe aus dem Status-Bericht binden',
   threadWithoutTask: 'Thread ohne Aufgabe',
-  threadWithoutTaskHint: 'Benannt nach der ersten Nachricht',
+  threadWithoutTaskHint: 'Der Orchestrator benennt ihn nach seinem Projekt',
   noReportTasks: 'Noch kein Status-Bericht',
   threadReplies: (count) => `${count} ${count === 1 ? 'Antwort' : 'Antworten'}`,
   inThread: 'im Thread',
@@ -851,7 +853,8 @@ export const terminalDe: TerminalLabels = {
   firstThreadMessage: (tag) =>
     `Erste Nachricht schreiben. Sie geht mit der Kennung ${tag} an den Orchestrator.`,
   boundTo: (repo) => `An Status-Aufgabe gebunden${repo ? ` · ${repo}` : ''}`,
-  notBound: 'Nicht an eine Status-Aufgabe gebunden',
+  undoTidy: 'Aufräumen rückgängig',
+  undoTidyTitle: 'Threads wiederherstellen wie vor dem letzten Aufräumen',
   resizeThreads: 'Breite des Thread-Panels ändern',
   threadLog: (name) => `Thread ${name}`,
   loadingThreadHistory: 'Frühere Nachrichten dieses Threads werden geladen…',

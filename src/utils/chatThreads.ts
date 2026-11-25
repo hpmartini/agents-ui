@@ -33,6 +33,52 @@ export interface ChatThread {
    * the thread the first prompt at or after it that is the command
    */
   commands?: { at: number; command: string }[];
+  /** Renamed by the user in the UI: never named automatically again */
+  renamed?: boolean;
+}
+
+/** The orchestrator's tidy-up layer over the transcript (`orkumo thread move/merge`) */
+export interface ChatThreadOverrides {
+  /** Entry key (`entryKey`) → thread id, or 'main' */
+  entries: Record<string, string>;
+  /** Merged source thread id → target thread id; sources are hidden */
+  merged: Record<string, string>;
+}
+
+/** Routing key of an item: its transcript key without the history page prefixes `h<before>:` */
+export const entryKey = (item: { key: string }) => item.key.replace(/^(?:h\d+:)+/, '');
+
+/** Final thread of `id` along the merge chain; an unknown target (or a cycle) keeps `id` */
+export function threadTarget(
+  id: string,
+  threads: ChatThread[],
+  overrides?: ChatThreadOverrides
+): string {
+  const merged = overrides?.merged ?? {};
+  const seen = new Set<string>();
+  let to = id;
+  while (merged[to] && !seen.has(to)) {
+    seen.add(to);
+    to = merged[to];
+  }
+  return to !== id && threads.some((t) => t.id === to) ? to : id;
+}
+
+/** Threads the panel lists: merged sources are gone */
+export const visibleThreads = (threads: ChatThread[], overrides?: ChatThreadOverrides) =>
+  overrides ? threads.filter((t) => threadTarget(t.id, threads, overrides) === t.id) : threads;
+
+/** Markdown left in old stored names (`**`, backticks, leading "- " or "#") */
+const plainName = (s: string) =>
+  s
+    .replace(/\*\*|`/g, '')
+    .replace(/^\s*(?:[-*]\s+|#+\s*)+/, '')
+    .trim();
+
+/** Shown name: "Project · Task", Markdown stripped, a doubled part once */
+export function threadTitle(name: { project: string; task: string }): string {
+  const parts = [plainName(name.project), plainName(name.task)].filter(Boolean);
+  return [...new Set(parts)].join(' · ');
 }
 
 /** Where a thread starts in the main chat: "N replies in thread …" */
@@ -161,7 +207,8 @@ function commandTurns(
   items: ChatItem[],
   threads: ChatThread[],
   complete: boolean,
-  olderTs: number | undefined
+  olderTs: number | undefined,
+  overrides: ChatThreadOverrides | undefined
 ): Map<ChatItem, string> {
   const claimed = new Map<ChatItem, string>();
   const marks = threads
@@ -179,7 +226,8 @@ function commandTurns(
         !claimed.has(i) &&
         !agentMessage(i.text) &&
         sameCommand(leadingCommand(i.text.trim())?.command ?? '', mark.command) &&
-        !threadOf(i, threads)
+        !threadOf(i, threads) &&
+        !overrides?.entries[entryKey(i)]
     );
     if (own) claimed.set(own, mark.id);
   }
@@ -197,7 +245,9 @@ export function routeThreads(
   /** The items are the whole history (no older page left to load) */
   complete = false,
   /** ms of the newest prompt before the loaded items (host's `devorbit_page`), if known */
-  olderTs?: number
+  olderTs?: number,
+  /** The orchestrator's tidy-up layer: decides before every other rule */
+  overrides?: ChatThreadOverrides
 ): { main: (ChatItem | ChatThreadMarker)[]; byThread: Map<string, ChatItem[]> } {
   const byThread = new Map<string, ChatItem[]>();
   const main: (ChatItem | ChatThreadMarker)[] = [];
@@ -210,8 +260,12 @@ export function routeThreads(
     }
     return m;
   };
-  const parents = new Map(threads.filter((t) => t.parentKey).map((t) => [t.parentKey, t.id]));
-  const commands = commandTurns(items, threads, complete, olderTs);
+  const parents = new Map(
+    threads.flatMap((t) => (t.parentKey ? [[entryKey({ key: t.parentKey }), t.id] as const] : []))
+  );
+  const known = new Set(threads.map((t) => t.id));
+  const target = (id: string | null) => id && threadTarget(id, threads, overrides);
+  const commands = commandTurns(items, threads, complete, olderTs, overrides);
   let prev: string | null = null;
   for (const item of items) {
     // An answer without a tag (orchestrators started before the tag rule, tool steps only) is the
@@ -219,13 +273,20 @@ export function routeThreads(
     const untagged = item.kind === 'answer' && !firstText(item).startsWith(TAG_START);
     // closed threads too: closing must not move their answers back into the main chat
     const turn: string | null = prev;
-    const id: string | null = !threads.length
-      ? null
-      : commands.has(item)
-        ? commands.get(item)!
-        : untagged
-          ? (threadOf(item, threads) ?? turn)
-          : threadOf(item, threads);
+    // a tidy-up move wins; one to a thread this list does not know falls back to the rules
+    const moved = overrides?.entries[entryKey(item)];
+    const id: string | null =
+      moved === 'main'
+        ? null
+        : moved && known.has(moved)
+          ? target(moved)
+          : !threads.length
+            ? null
+            : commands.has(item)
+              ? target(commands.get(item)!)
+              : untagged
+                ? (target(threadOf(item, threads)) ?? turn)
+                : target(threadOf(item, threads));
     prev = id;
     if (id) {
       byThread.set(id, [...(byThread.get(id) ?? []), item]);
@@ -234,8 +295,10 @@ export function routeThreads(
       continue;
     }
     main.push(item);
-    const opened = parents.get(item.key);
-    if (opened) main.push(marker(opened));
+    const opened = parents.get(entryKey(item));
+    // a merged thread shows under its target's marker only
+    if (opened && target(opened) === opened && !main.includes(marker(opened)))
+      main.push(marker(opened));
   }
   for (const [id, m] of markers) m.count = byThread.get(id)?.length ?? 0;
   return { main, byThread };

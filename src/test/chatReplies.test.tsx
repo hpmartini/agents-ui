@@ -180,7 +180,7 @@ describe('threads panel', () => {
     expect(screen.getByText('Closed (1)')).toBeTruthy();
   });
 
-  it('a bound thread whose report task has no repo is not shown as unbound', () => {
+  it('no "Not bound" line: an unbound thread shows its repo or nothing', () => {
     panel({
       threads: [
         thread('t1', { repo: null, binding: { project: 'shop', task: 't1' } }),
@@ -188,7 +188,17 @@ describe('threads panel', () => {
       ],
     });
     expect(screen.getByRole('button', { name: /Task t1/ }).textContent).not.toContain('Not bound');
-    expect(screen.getByRole('button', { name: /Task t2/ }).textContent).toContain('Not bound');
+    expect(screen.getByRole('button', { name: /Task t2/ }).textContent).not.toContain('Not bound');
+  });
+
+  it('Undo tidy-up shows only when the host can undo, and calls it', () => {
+    const onUndo = vi.fn();
+    const { unmount } = panel({ canUndo: true });
+    expect(screen.queryByRole('button', { name: 'Undo tidy-up' })).toBeNull();
+    unmount();
+    panel({ canUndo: true, onUndo });
+    fireEvent.click(screen.getByRole('button', { name: 'Undo tidy-up' }));
+    expect(onUndo).toHaveBeenCalled();
   });
 
   it('new thread: bind to a report task or start without one', () => {
