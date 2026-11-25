@@ -100,7 +100,7 @@ function Pills({ value, onChange, options, label, disabled, className = '', size
                 }, type: "button", role: "radio", 
                 // Only on the checked pill: <label htmlFor={id}> focuses it without changing the value
                 id: on ? id : undefined, "aria-label": o.label, "aria-checked": on, tabIndex: i === stop ? 0 : -1, disabled: disabled || o.disabled, title: o.hint, "data-muted": o.muted || undefined, onClick: () => pick(i), onKeyDown: (e) => onKeyDown(e, i), className: `${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${on
-                    ? `bg-sel ${invalid ? 'border-red-400' : 'border-blue-300'} ${o.muted ? 'text-gray-100' : 'text-white'}`
+                    ? `bg-sel ${invalid ? 'border-red-400' : 'border-blue-300'} ${o.muted ? 'text-gray-200' : 'text-white'}`
                     : `${invalid ? 'border-red-400' : 'border-gray-700'} ${o.muted ? 'text-gray-500 hover:text-gray-200' : 'text-gray-300 hover:text-white'} hover:bg-gray-800`}`, children: o.label }, o.value));
         }) }));
 }
