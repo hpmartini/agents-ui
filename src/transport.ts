@@ -294,9 +294,13 @@ export interface AgentsTransport {
   };
   /** Images and files attached to prompts */
   uploads?: {
-    uploadAttachment: (file: File) => Promise<StoredAttachment>;
+    /**
+     * `session`: pane the prompt goes to; the file must be stored on that pane's instance (cluster
+     * mode), not the picker's. Without one: the current target (a new agent's dispatch)
+     */
+    uploadAttachment: (file: File, session?: string) => Promise<StoredAttachment>;
     /** Preview URL of an uploaded image path; null for any other path */
-    agentImageUrl: (path: string) => string | null;
+    agentImageUrl: (path: string, chatId?: string) => string | null;
     /** File extensions the server accepts as non-image attachments (lowercase, without dot) */
     attachmentExtensions: readonly string[];
   };

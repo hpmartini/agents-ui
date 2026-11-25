@@ -82,8 +82,10 @@ const OwnMessage = ({ text, queued }) => {
     // `/skill args`: the command as a chip, its text after it
     const command = leadingCommand(body);
     const uploads = useTransport().uploads;
+    const chatId = React.useContext(ChatIdContext) ?? undefined;
     const t = useLabels().terminal;
-    const previews = images.map((p) => ({ path: p, url: uploads?.agentImageUrl(p) ?? null }));
+    // from the chat's instance: in cluster mode the image is stored where the agent runs
+    const previews = images.map((p) => ({ path: p, url: uploads?.agentImageUrl(p, chatId) ?? null }));
     return (_jsxs("div", { className: "flex flex-col items-end my-3", "data-queued": queued || undefined, children: [_jsxs("div", { className: `max-w-[85%] rounded-lg px-3 py-2 text-sm text-gray-100 whitespace-pre-wrap break-words border ${queued
                     ? 'bg-blue-900/25 border-dashed border-blue-700/70'
                     : 'bg-blue-900/50 border-blue-800/60'}`, children: [quote && _jsx(QuoteBox, { time: quote.time, text: quote.quote }), command ? (_jsxs(_Fragment, { children: [_jsx("span", { "data-command": true, className: "mr-1.5 inline-block rounded border border-blue-400/40 bg-blue-500/15 px-1.5 py-px font-mono text-xs text-blue-200", children: command.command }), command.rest] })) : (body), previews.length > 0 && (_jsx("div", { className: `flex flex-wrap gap-1.5 ${body ? 'mt-2' : ''}`, children: previews.map(({ path, url }) => url ? (_jsx("a", { href: url, target: "_blank", rel: "noreferrer", title: path, children: _jsx("img", { src: url, alt: t.attachedImage, loading: "lazy", className: "h-20 max-w-[10rem] rounded border border-blue-800/60 object-cover hover:opacity-90" }) }, path)) : (_jsx("span", { className: "text-xs text-blue-200/80 font-mono", children: t.imageRef(path) }, path))) }))] }), queued && (_jsxs("span", { className: "mt-1 flex items-center gap-1 text-[11px] text-blue-300/80", children: [_jsx(Clock, { size: 11, "aria-hidden": true }), " ", t.queuedNote] }))] }));
@@ -182,6 +184,8 @@ const PlainItem = React.memo(({ item }) => {
         case 'result':
             // A result without an answer before it (an interrupted turn that wrote nothing)
             return (_jsx("div", { className: "my-2 flex items-center gap-1.5 text-[11px] text-gray-500", children: _jsx(ResultMark, { result: item }) }));
+        case 'divider':
+            return (_jsxs("div", { role: "separator", "aria-label": t.contextDivider(item.reason, item.ts ? hhmm(item.ts) : null), className: "my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-gray-400", children: [_jsx("span", { "aria-hidden": true, className: "h-px flex-1 bg-gray-700" }), _jsx("span", { children: t.contextDivider(item.reason, item.ts ? hhmm(item.ts) : null) }), _jsx("span", { "aria-hidden": true, className: "h-px flex-1 bg-gray-700" })] }));
         case 'notice':
             return (_jsx("div", { className: `my-2 text-xs ${item.tone === 'error' ? 'text-red-300' : 'text-gray-400'}`, children: item.text }));
     }

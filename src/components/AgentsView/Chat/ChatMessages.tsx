@@ -250,8 +250,10 @@ const OwnMessage: React.FC<{ text: string; queued?: boolean }> = ({ text, queued
   // `/skill args`: the command as a chip, its text after it
   const command = leadingCommand(body);
   const uploads = useTransport().uploads;
+  const chatId = React.useContext(ChatIdContext) ?? undefined;
   const t = useLabels().terminal;
-  const previews = images.map((p) => ({ path: p, url: uploads?.agentImageUrl(p) ?? null }));
+  // from the chat's instance: in cluster mode the image is stored where the agent runs
+  const previews = images.map((p) => ({ path: p, url: uploads?.agentImageUrl(p, chatId) ?? null }));
   return (
     <div className="flex flex-col items-end my-3" data-queued={queued || undefined}>
       <div
@@ -522,6 +524,18 @@ const PlainItem: React.FC<{ item: Exclude<ChatItem, ChatAnswer> }> = React.memo(
       return (
         <div className="my-2 flex items-center gap-1.5 text-[11px] text-gray-500">
           <ResultMark result={item} />
+        </div>
+      );
+    case 'divider':
+      return (
+        <div
+          role="separator"
+          aria-label={t.contextDivider(item.reason, item.ts ? hhmm(item.ts) : null)}
+          className="my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-gray-400"
+        >
+          <span aria-hidden className="h-px flex-1 bg-gray-700" />
+          <span>{t.contextDivider(item.reason, item.ts ? hhmm(item.ts) : null)}</span>
+          <span aria-hidden className="h-px flex-1 bg-gray-700" />
         </div>
       );
     case 'notice':
