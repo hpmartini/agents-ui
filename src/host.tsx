@@ -131,12 +131,17 @@ export interface AgentsHost {
    * A view of the host in place of a pane's body (same argument as `renderPaneActions`), e.g. a
    * mode toggled by one of its buttons; null shows the pane as usual. Header stays, the terminal
    * stays mounted underneath (its PTY is the agent) and takes no focus meanwhile.
+   * With `statusTask` (H-6): the details of that task of the orchestrator's status report, shown
+   * in the maximised threads panel of a UI view; `onClose` goes back to the thread (the view's
+   * Esc). Null there: the host has no Status view, the panel offers none.
    */
   renderPaneView?: (pane: {
     paneId: string;
     session: AgentSession;
     orchestrator: boolean;
     role: string | null;
+    statusTask?: { project: string; task: string };
+    onClose?: () => void;
   }) => ReactNode;
   /**
    * Window title while the view is shown (agents awaiting input first, `documentTitle`); null

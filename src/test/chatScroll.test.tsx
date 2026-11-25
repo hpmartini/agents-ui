@@ -292,7 +292,9 @@ describe('thread log scroll (AC-11)', () => {
     wheelTo(list, 300);
     const first = firstVisible(list);
     const before = first.top();
-    const poll = timers.mock.calls.find(([, ms]) => ms === 15_000)![0] as () => void;
+    const poll = timers.mock.calls.find(
+      ([, ms]) => ms === 2_000 || ms === 15_000
+    )![0] as () => void;
     await act(async () => poll());
     await waitFor(() => expect(s.transport.threads!.fetchThreads).toHaveBeenCalledTimes(2));
     await settle();

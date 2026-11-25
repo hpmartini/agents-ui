@@ -191,6 +191,12 @@ export interface TerminalLabels {
     maximizeThreadsTitle: (shortcut: string) => string;
     restoreThreadsTitle: (shortcut: string) => string;
     threadsSidebar: string;
+    /** H-6: the report tasks under the thread list of the maximised panel, and their details */
+    statusList: string;
+    statusOf: (title: string) => string;
+    taskState: (state: string) => string;
+    showInStatus: string;
+    backToThread: string;
     firstThreadMessage: (tag: string) => string;
     boundTo: (repo: string | null) => string;
     undoTidy: string;

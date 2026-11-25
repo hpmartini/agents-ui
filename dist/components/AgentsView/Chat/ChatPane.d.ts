@@ -1,6 +1,7 @@
 import React from 'react';
 import type { AgentSession } from '../../../types';
 import { type ChatSubmitKey } from '../../../utils/chatEvents';
+import { type StatusTask } from './ChatThreads';
 /** Main chat beside the panel: answer footers, model chip and the host's usage bars fit uncut */
 export declare const CHAT_MAIN_MIN = 460;
 /**
@@ -36,6 +37,11 @@ interface ChatPaneProps {
     hostActions?: React.ReactNode;
     /** Host view over the chat body (`host.renderPaneView`) */
     paneView?: React.ReactNode;
+    /**
+     * Details of one report task from the host (`host.renderPaneView` with `statusTask`), shown in
+     * the maximised threads panel; null when the host has no Status view
+     */
+    renderStatus?: (task: StatusTask, onClose: () => void) => React.ReactNode;
     /** Linked PRs, issues and running servers (same items as a terminal pane's header) */
     meta?: React.ReactNode;
 }

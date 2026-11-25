@@ -68,8 +68,14 @@ interface AgentWorkspaceProps {
   renderPaneMeta?: (session: AgentSession) => React.ReactNode;
   /** Host buttons in a pane's header (`host.renderPaneActions`) */
   renderPaneActions?: (session: AgentSession) => React.ReactNode;
-  /** Host view in place of a pane's body (`host.renderPaneView`); null: the pane as usual */
-  renderPaneView?: (session: AgentSession) => React.ReactNode;
+  /**
+   * Host view in place of a pane's body (`host.renderPaneView`); null: the pane as usual. With
+   * `status`: one report task's details for the maximised threads panel of a UI view
+   */
+  renderPaneView?: (
+    session: AgentSession,
+    status?: { statusTask: { project: string; task: string }; onClose: () => void }
+  ) => React.ReactNode;
   /** Parked workspace of another context: terminals stay connected but never count as visible */
   hidden?: boolean;
   /** UI views (#189): key that sends a message */
@@ -554,6 +560,10 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               onShowTerminal={() => onSetView?.(session.id, 'terminal')}
               hostActions={hostActions}
               paneView={paneView}
+              renderStatus={
+                renderPaneView &&
+                ((statusTask, onClose) => renderPaneView(session, { statusTask, onClose }))
+              }
               headerProps={dragHeader}
             />
           </div>

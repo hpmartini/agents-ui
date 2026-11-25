@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   ArrowUp,
   ChevronRight,
+  Layers,
   ChevronUp,
   FolderGit2,
   Loader2,
@@ -717,7 +719,20 @@ export interface ThreadsPanelProps {
   canUndo?: boolean;
   /** Undo the last tidy-up; absent when the host cannot */
   onUndo?: () => void;
+  /**
+   * Details of a report task from the host (its Status view); without it no Status list and no
+   * "Show in Status" in a bound thread
+   */
+  onShowStatus?: (task: StatusTask) => void;
+  /** The task whose details `statusView` shows (null: the host's whole status) */
+  statusTask?: StatusTask | null;
+  /** Host view in the main area in place of the open thread (maximised panel) */
+  statusView?: React.ReactNode;
+  /** Back from `statusView` to the thread (Esc, Back) */
+  onCloseStatus?: () => void;
 }
+
+export type StatusTask = { project: string; task: string };
 
 export const THREADS_SIDEBAR_KEY = 'agents-ui:threads-sidebar';
 /** Mod+Shift+M: maximise or restore the threads panel of the active pane */
@@ -751,6 +766,10 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
   onHide,
   canUndo,
   onUndo,
+  onShowStatus,
+  statusTask = null,
+  statusView = null,
+  onCloseStatus,
 }) => {
   const t = useLabels().terminal;
   const [menu, setMenu] = useState(false);
@@ -797,6 +816,12 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
     return () => observer.disconnect();
   }, []);
   const unread = active.reduce((n, x) => n + unreadCount(byThread.get(x.id) ?? [], x.readAt), 0);
+  const statusListId = useId();
+  const statusList = maximized && !!onShowStatus && tasks.length > 0;
+  const statusShown = maximized && statusView !== null && statusView !== false;
+  const shownTask = statusTask
+    ? tasks.find((x) => x.project === statusTask.project && x.task === statusTask.task)
+    : undefined;
 
   return (
     <div
@@ -936,71 +961,144 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
         data-threads-layout={sidebar ? 'sidebar' : 'top'}
         className={`flex min-h-0 flex-1 ${sidebar ? 'flex-row' : 'flex-col'}`}
       >
-        {status === 'ready' && threads.length > 0 && !(short && (open || draft) && !sidebar) && (
-          <div
-            className={`shrink-0 overflow-y-auto border-gray-800 ${
-              sidebar
-                ? 'w-72 max-w-[40%] border-r'
-                : `border-b ${openId ? 'max-h-[42%]' : 'flex-1'}`
-            }`}
-          >
-            <ul className="py-1">
-              {active.map((x) => (
-                <ThreadListRow
-                  key={x.id}
-                  thread={x}
-                  items={byThread.get(x.id) ?? []}
-                  open={x.id === openId}
-                  // the open one stays open: closing it moved the rows under a double-click
-                  onOpen={() => onOpen(x.id)}
-                  renaming={renaming === `list:${x.id}`}
-                  onRename={rename('list', x.id)}
-                />
-              ))}
-            </ul>
-            {closed.length > 0 && (
-              <div className="border-t border-gray-800/70 py-1 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setClosedOpen((o) => !o)}
-                  aria-expanded={closedOpen}
-                  className={`flex w-full items-center gap-1 px-3 py-1 text-gray-500 hover:text-gray-300 ${focusRing}`}
-                >
-                  <ChevronRight
-                    size={12}
-                    aria-hidden
-                    className={`transition-transform motion-reduce:transition-none ${closedOpen ? 'rotate-90' : ''}`}
+        {status === 'ready' &&
+          (threads.length > 0 || statusList) &&
+          !(short && (open || draft || statusShown) && !sidebar) && (
+            <div
+              className={`shrink-0 overflow-y-auto border-gray-800 ${
+                sidebar
+                  ? 'w-72 max-w-[40%] border-r'
+                  : `border-b ${openId || statusShown ? 'max-h-[42%]' : 'flex-1'}`
+              }`}
+            >
+              <ul className="py-1">
+                {active.map((x) => (
+                  <ThreadListRow
+                    key={x.id}
+                    thread={x}
+                    items={byThread.get(x.id) ?? []}
+                    open={x.id === openId && !statusShown}
+                    // the open one stays open (closing it moved the rows under a double-click);
+                    // over shown details a click brings the thread back
+                    onOpen={() => onOpen(x.id)}
+                    renaming={renaming === `list:${x.id}`}
+                    onRename={rename('list', x.id)}
                   />
-                  {t.closedThreads(closed.length)}
-                </button>
-                {closedOpen && (
-                  <ul>
-                    {closed.map((x) => (
-                      <li key={x.id} className="flex items-center gap-2 px-3 py-1 pl-7">
-                        <button
-                          type="button"
-                          onClick={() => onOpen(x.id)}
-                          className={`min-w-0 flex-1 truncate text-left text-gray-400 hover:text-gray-200 ${focusRing}`}
-                        >
-                          {threadName(x)}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onClose(x.id, false)}
-                          className={smallBtn}
-                        >
-                          {t.reopenThread}
-                        </button>
-                      </li>
-                    ))}
+                ))}
+              </ul>
+              {closed.length > 0 && (
+                <div className="border-t border-gray-800/70 py-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setClosedOpen((o) => !o)}
+                    aria-expanded={closedOpen}
+                    className={`flex w-full items-center gap-1 px-3 py-1 text-gray-500 hover:text-gray-300 ${focusRing}`}
+                  >
+                    <ChevronRight
+                      size={12}
+                      aria-hidden
+                      className={`transition-transform motion-reduce:transition-none ${closedOpen ? 'rotate-90' : ''}`}
+                    />
+                    {t.closedThreads(closed.length)}
+                  </button>
+                  {closedOpen && (
+                    <ul>
+                      {closed.map((x) => (
+                        <li key={x.id} className="flex items-center gap-2 px-3 py-1 pl-7">
+                          <button
+                            type="button"
+                            onClick={() => onOpen(x.id)}
+                            className={`min-w-0 flex-1 truncate text-left text-gray-400 hover:text-gray-200 ${focusRing}`}
+                          >
+                            {threadName(x)}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onClose(x.id, false)}
+                            className={smallBtn}
+                          >
+                            {t.reopenThread}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {statusList && (
+                <div className="border-t border-gray-800 py-1">
+                  <div
+                    id={statusListId}
+                    className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium text-gray-400"
+                  >
+                    <Layers size={11} aria-hidden className="shrink-0" />
+                    {t.statusList}
+                  </div>
+                  <ul aria-labelledby={statusListId}>
+                    {tasks.map((x) => {
+                      const shown =
+                        statusShown &&
+                        x.project === statusTask?.project &&
+                        x.task === statusTask.task;
+                      return (
+                        <li key={`${x.project}/${x.task}`}>
+                          <button
+                            type="button"
+                            onClick={() => onShowStatus?.({ project: x.project, task: x.task })}
+                            aria-current={shown || undefined}
+                            data-status-row={`${x.project}/${x.task}`}
+                            className={`block w-full border-l-2 px-3 py-1.5 text-left ${focusRing} ${
+                              shown
+                                ? 'border-blue-400 bg-blue-500/10'
+                                : 'border-transparent hover:bg-gray-800/60'
+                            }`}
+                          >
+                            <span className="block truncate text-sm text-gray-200">{x.title}</span>
+                            <span className="mt-0.5 block truncate text-[11px] text-gray-500">
+                              {x.projectName}
+                              {x.state && ` · ${t.taskState(x.state)}`}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                </div>
+              )}
+            </div>
+          )}
 
-        {(open || draft) && (
+        {statusShown && (
+          <section
+            aria-label={shownTask ? t.statusOf(shownTask.title) : t.statusList}
+            data-threads-status
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
+            onKeyDown={(e) => {
+              // a host view that took its Esc (its own back) leaves it alone
+              if (e.key !== 'Escape' || e.defaultPrevented) return;
+              e.preventDefault();
+              onCloseStatus?.();
+            }}
+          >
+            <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-gray-800 px-2 text-xs">
+              <button
+                type="button"
+                onClick={onCloseStatus}
+                aria-label={t.backToThread}
+                title={t.backToThread}
+                className={`${smallBtn} px-1`}
+              >
+                <ArrowLeft size={12} aria-hidden />
+              </button>
+              <Layers size={12} aria-hidden className="shrink-0 text-blue-300" />
+              <span className="min-w-0 truncate font-medium text-gray-200">
+                {shownTask ? t.statusOf(shownTask.title) : t.statusList}
+              </span>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col">{statusView}</div>
+          </section>
+        )}
+        {!statusShown && (open || draft) && (
           <section
             aria-label={t.threadLog(open ? threadName(open) : t.newThread)}
             className="flex min-h-0 min-w-0 flex-1 flex-col"
@@ -1017,6 +1115,16 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
                 </span>
               )}
               <span className="flex-1" />
+              {open?.binding && onShowStatus && (
+                <button
+                  type="button"
+                  onClick={() => open.binding && onShowStatus(open.binding)}
+                  className={smallBtn}
+                >
+                  <Layers size={11} aria-hidden />
+                  {t.showInStatus}
+                </button>
+              )}
               {open && <ThreadMenu onRename={() => setRenaming(`header:${open.id}`)} />}
               {open && !open.closed && (
                 <button type="button" onClick={() => onClose(open.id, true)} className={smallBtn}>
@@ -1036,7 +1144,7 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
             {renderThread(open)}
           </section>
         )}
-        {status === 'ready' && threads.length > 0 && !openId && (
+        {status === 'ready' && threads.length > 0 && !openId && !statusShown && (
           <p className="px-3 py-2 text-[11px] text-gray-600">{t.pickThread}</p>
         )}
       </div>
