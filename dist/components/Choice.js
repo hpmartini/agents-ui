@@ -91,13 +91,15 @@ function Pills({ value, onChange, options, label, disabled, className = '', size
         pick(next);
     };
     const pad = size === 'md' ? 'px-3 py-1 text-sm' : 'px-2 py-0.5 text-xs';
-    return (_jsx("div", { ref: root, role: "radiogroup", "aria-label": labelledBy ? undefined : label, "aria-labelledby": labelledBy, "aria-disabled": disabled || undefined, "aria-invalid": invalid || undefined, title: title, "data-choice": "pills", className: `flex flex-wrap gap-1 min-w-0 ${className}`, children: options.map((o, i) => {
+    return (_jsx("div", { ref: root, role: "radiogroup", 
+        // No checked pill: on the group, so a <label htmlFor> click activates (selects) no pill
+        id: selected < 0 ? id : undefined, "aria-label": labelledBy ? undefined : label, "aria-labelledby": labelledBy, "aria-disabled": disabled || undefined, "aria-invalid": invalid || undefined, title: title, "data-choice": "pills", className: `flex flex-wrap gap-1 min-w-0 ${className}`, children: options.map((o, i) => {
             const on = i === selected;
             return (_jsx("button", { ref: (el) => {
                     refs.current[i] = el;
                 }, type: "button", role: "radio", 
-                // On the tab stop, so <label htmlFor={id}> reaches the checked pill
-                id: i === stop ? id : undefined, "aria-label": o.label, "aria-checked": on, tabIndex: i === stop ? 0 : -1, disabled: disabled || o.disabled, title: o.hint, onClick: () => pick(i), onKeyDown: (e) => onKeyDown(e, i), className: `${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${on
+                // Only on the checked pill: <label htmlFor={id}> focuses it without changing the value
+                id: on ? id : undefined, "aria-label": o.label, "aria-checked": on, tabIndex: i === stop ? 0 : -1, disabled: disabled || o.disabled, title: o.hint, onClick: () => pick(i), onKeyDown: (e) => onKeyDown(e, i), className: `${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${on
                     ? `bg-sel ${invalid ? 'border-red-400' : 'border-blue-300'} text-white`
                     : `${invalid ? 'border-red-400' : 'border-gray-700'} text-gray-300 hover:text-white hover:bg-gray-800`}`, children: o.label }, o.value));
         }) }));
