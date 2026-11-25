@@ -21,6 +21,9 @@ export function useChatThreads(session) {
     const [status, setStatus] = useState('loading');
     // no orchestrator: nothing to poll for
     const noThreads = useRef(false);
+    // the session shown now: an answer for the one before (tab switch) is dropped
+    const current = useRef(session);
+    current.current = session;
     const load = useCallback((quiet = false) => {
         if (!api || !session || noThreads.current)
             return;
@@ -29,12 +32,14 @@ export function useChatThreads(session) {
         api
             .fetchThreads(session)
             .then((l) => {
+            if (current.current !== session)
+                return;
             noThreads.current = !l.orchestrator;
             setList(l);
             setStatus('ready');
         })
             // the last list stays known: the panel shows the error and recovers on the next poll
-            .catch(() => setStatus('error'));
+            .catch(() => current.current === session && setStatus('error'));
     }, [api, session]);
     useEffect(() => {
         noThreads.current = false;
@@ -57,13 +62,16 @@ export function useChatThreads(session) {
         if (!api || !session)
             throw new Error('no threads');
         const thread = await api.createThread(session, body);
-        put(thread);
+        if (current.current === session)
+            put(thread);
         return thread;
     }, [api, session, put]);
     const update = useCallback(async (id, patch) => {
         if (!api || !session)
             return;
-        put(await api.updateThread(session, id, patch));
+        const thread = await api.updateThread(session, id, patch);
+        if (current.current === session)
+            put(thread);
     }, [api, session, put]);
     // only a known orchestrator chat gets the panel: other panes never flash it while loading
     const enabled = !!list?.orchestrator;
