@@ -57,7 +57,15 @@ export type ChatMessage =
     kind: 'recap';
     key: string;
     text: string;
+}
+/** Where a context ends: `/clear`, a compaction, or the pane's agent on its next session */
+ | {
+    kind: 'divider';
+    key: string;
+    reason: DividerReason;
+    ts?: number;
 };
+export type DividerReason = 'clear' | 'compact' | 'switch';
 export type AssistantMessage = Extract<ChatMessage, {
     kind: 'assistant';
 }>;

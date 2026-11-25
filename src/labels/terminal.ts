@@ -169,6 +169,8 @@ export interface TerminalLabels {
   answerSteps: (count: number) => string;
   copyAnswer: string;
   recapInline: string;
+  /** Divider between contexts of a chat: `/clear`, compaction, next session; time as hh:mm */
+  contextDivider: (reason: 'clear' | 'compact' | 'switch', time: string | null) => string;
 
   // Reply and threads (orchestrator chats)
   reply: string;
@@ -487,6 +489,8 @@ export const terminalEn: TerminalLabels = {
   answerSteps: (count) => `${count} ${count === 1 ? 'step' : 'steps'}`,
   copyAnswer: 'Copy answer',
   recapInline: 'recap: ',
+  contextDivider: (reason, time) =>
+    `${{ clear: 'Context cleared', compact: 'Context compacted', switch: 'New session' }[reason]}${time ? ` · ${time}` : ''}`,
 
   reply: 'Reply',
   replyToSelection: 'Reply to selection',
@@ -815,6 +819,8 @@ export const terminalDe: TerminalLabels = {
   answerSteps: (count) => `${count} ${count === 1 ? 'Schritt' : 'Schritte'}`,
   copyAnswer: 'Antwort kopieren',
   recapInline: 'Zusammenfassung: ',
+  contextDivider: (reason, time) =>
+    `${{ clear: 'Kontext geleert', compact: 'Kontext komprimiert', switch: 'Neue Session' }[reason]}${time ? ` · ${time}` : ''}`,
 
   reply: 'Antworten',
   replyToSelection: 'Auf Markierung antworten',
