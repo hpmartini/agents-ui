@@ -10,8 +10,6 @@ export interface PanelsLabels {
     settingsTaskCwd: string;
     settingsTaskCwdPlaceholder: string;
     settingsGroupBy: string;
-    settingsGroupState: string;
-    settingsGroupDirectory: string;
     settingsCardDensity: string;
     settingsDensityComfortable: string;
     settingsDensityCompact: string;

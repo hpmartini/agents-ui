@@ -99,9 +99,9 @@ function Pills({ value, onChange, options, label, disabled, className = '', size
                     refs.current[i] = el;
                 }, type: "button", role: "radio", 
                 // Only on the checked pill: <label htmlFor={id}> focuses it without changing the value
-                id: on ? id : undefined, "aria-label": o.label, "aria-checked": on, tabIndex: i === stop ? 0 : -1, disabled: disabled || o.disabled, title: o.hint, onClick: () => pick(i), onKeyDown: (e) => onKeyDown(e, i), className: `${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${on
-                    ? `bg-sel ${invalid ? 'border-red-400' : 'border-blue-300'} text-white`
-                    : `${invalid ? 'border-red-400' : 'border-gray-700'} text-gray-300 hover:text-white hover:bg-gray-800`}`, children: o.label }, o.value));
+                id: on ? id : undefined, "aria-label": o.label, "aria-checked": on, tabIndex: i === stop ? 0 : -1, disabled: disabled || o.disabled, title: o.hint, "data-muted": o.muted || undefined, onClick: () => pick(i), onKeyDown: (e) => onKeyDown(e, i), className: `${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${on
+                    ? `bg-sel ${invalid ? 'border-red-400' : 'border-blue-300'} ${o.muted ? 'text-gray-100' : 'text-white'}`
+                    : `${invalid ? 'border-red-400' : 'border-gray-700'} ${o.muted ? 'text-gray-500 hover:text-gray-200' : 'text-gray-300 hover:text-white'} hover:bg-gray-800`}`, children: o.label }, o.value));
         }) }));
 }
 function Menu({ value, onChange, options, label, disabled, placeholder = '', className = '', size = 'sm', id, title, icon, search, searchPlaceholder = 'Search…', noResults = 'No results', invalid, labelledBy, root: rootRef, }) {
@@ -263,11 +263,15 @@ function Menu({ value, onChange, options, label, disabled, placeholder = '', cla
     const triggerSize = size === 'md' ? 'px-2 py-1.5 text-sm' : 'px-2 py-1 text-xs';
     const listId = `${uid}-list`;
     const activeId = active >= 0 && active < shown.length ? optionId(active) : undefined;
-    const renderOption = (o, i) => (_jsxs("div", { id: optionId(i), role: "option", "aria-selected": o.value === value, "aria-disabled": o.disabled || undefined, 
+    const renderOption = (o, i) => (_jsxs("div", { id: optionId(i), role: "option", "aria-selected": o.value === value, "aria-disabled": o.disabled || undefined, "data-muted": o.muted || undefined, 
         // Focus stays in the listbox / search field
         onMouseDown: (e) => e.preventDefault(), onMouseMove: () => !o.disabled && active !== i && setActive(i), onClick: () => choose(i), className: `flex items-center gap-2 px-3 py-1.5 ${o.disabled
             ? 'opacity-40 cursor-not-allowed text-gray-300'
-            : `cursor-pointer ${i === active ? 'bg-gray-700 text-white' : 'text-gray-200'}`}`, children: [_jsx("span", { className: "w-3 shrink-0 text-blue-300", children: o.value === value && _jsx(Check, {}) }), _jsx("span", { className: "min-w-0 break-words", children: highlight(o.label, needle) }), o.hint && _jsx("span", { className: "ml-auto pl-2 shrink-0 text-[10px] text-gray-400", children: o.hint })] }, o.value));
+            : `cursor-pointer ${i === active
+                ? `bg-gray-700 ${o.muted ? 'text-gray-100' : 'text-white'}`
+                : o.muted
+                    ? 'text-gray-500'
+                    : 'text-gray-200'}`}`, children: [_jsx("span", { className: "w-3 shrink-0 text-blue-300", children: o.value === value && _jsx(Check, {}) }), _jsx("span", { className: "min-w-0 break-words", children: highlight(o.label, needle) }), o.hint && _jsx("span", { className: "ml-auto pl-2 shrink-0 text-[10px] text-gray-400", children: o.hint })] }, o.value));
     // Options in order, each run of one group under its header
     const body = [];
     for (let i = 0; i < shown.length;) {

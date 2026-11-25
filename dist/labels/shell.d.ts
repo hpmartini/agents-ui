@@ -141,7 +141,6 @@ export interface ShellLabels {
     newKinds: Record<'task' | 'agent' | 'chat' | 'issue', string>;
     imagesNote: string;
     groupModes: Record<AgentGrouping, string>;
-    groupAgentsByCurrent: (label: string) => string;
     groupAgentsByTitle: string;
     groupAgentsBy: string;
     expandAllGroups: string;

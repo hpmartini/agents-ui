@@ -246,7 +246,6 @@ export const shellEn = {
     imagesNote: 'Stays local, handed to the agent by path',
     // ProjectsRail
     groupModes: { project: 'Project', state: 'Status', directory: 'Directory', none: 'None' },
-    groupAgentsByCurrent: (label) => `Group agents by: ${label} (Ctrl+S)`,
     groupAgentsByTitle: 'Group agents by (Ctrl+S)',
     groupAgentsBy: 'Group agents by',
     expandAllGroups: 'Expand all groups',
@@ -729,7 +728,6 @@ export const shellDe = {
     imagesNote: 'Bleibt lokal, der Agent bekommt den Pfad',
     // ProjectsRail
     groupModes: { project: 'Projekt', state: 'Status', directory: 'Verzeichnis', none: 'Keine' },
-    groupAgentsByCurrent: (label) => `Agents gruppieren nach: ${label} (Ctrl+S)`,
     groupAgentsByTitle: 'Agents gruppieren nach (Ctrl+S)',
     groupAgentsBy: 'Agents gruppieren nach',
     expandAllGroups: 'Alle Gruppen aufklappen',

@@ -19,6 +19,8 @@ export interface ChoiceOption<V extends string = string> {
     /** Muted text after the label (menu, search) or tooltip (pills) */
     hint?: string;
     disabled?: boolean;
+    /** Dimmed text, still selectable (e.g. a hidden board slice); `disabled` wins */
+    muted?: boolean;
     /** Options with the same group are listed under its header (menu, search) */
     group?: string;
 }

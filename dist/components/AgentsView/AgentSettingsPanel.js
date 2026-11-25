@@ -4,6 +4,7 @@ import { X, Settings2, AlertTriangle, Power, RefreshCw } from 'lucide-react';
 import { useHost, useTransport } from '../../host';
 import { useLabels } from '../../labels';
 import { Choice } from '../Choice';
+import { GROUP_MODES } from './ProjectsRail';
 import { DEFAULT_AGENT_CARD_FIELDS } from '../../types';
 import { CARD_ELEMENTS, CARD_SLOTS, HARNESSES } from '../../utils/agentSessions';
 const PERMISSION_MODES = [
@@ -65,10 +66,10 @@ export const AgentSettingsPanel = ({ open, onClose, settings, onUpdate, userSett
                                                             value: repo.path,
                                                             label: `${repo.name} — ${repo.path}`,
                                                         })),
-                                                    ] })] }), _jsxs("div", { children: [_jsx("label", { className: label, htmlFor: "agent-task-cwd", children: t.settingsTaskCwd }), _jsx("input", { id: "agent-task-cwd", className: field, placeholder: t.settingsTaskCwdPlaceholder, defaultValue: settings.taskCwd || '', onBlur: (e) => onUpdate({ taskCwd: e.target.value.trim() || null }) })] }), _jsxs("div", { children: [_jsx("span", { className: label, children: t.settingsGroupBy }), _jsx(Choice, { ...md, label: t.settingsGroupBy, value: settings.grouping, onChange: (grouping) => onUpdate({ grouping }), options: [
-                                                        { value: 'state', label: t.settingsGroupState },
-                                                        { value: 'directory', label: t.settingsGroupDirectory },
-                                                    ] })] }), _jsxs("div", { children: [_jsx("span", { className: label, children: t.settingsCardDensity }), _jsx(Choice, { ...md, id: "agent-card-density", label: t.settingsCardDensity, value: settings.cardDensity, onChange: (cardDensity) => onUpdate({ cardDensity }), options: [
+                                                    ] })] }), _jsxs("div", { children: [_jsx("label", { className: label, htmlFor: "agent-task-cwd", children: t.settingsTaskCwd }), _jsx("input", { id: "agent-task-cwd", className: field, placeholder: t.settingsTaskCwdPlaceholder, defaultValue: settings.taskCwd || '', onBlur: (e) => onUpdate({ taskCwd: e.target.value.trim() || null }) })] }), _jsxs("div", { children: [_jsx("span", { className: label, children: t.settingsGroupBy }), _jsx(Choice, { ...md, label: t.settingsGroupBy, value: settings.grouping, onChange: (grouping) => onUpdate({ grouping }), options: GROUP_MODES.map((mode) => ({
+                                                        value: mode,
+                                                        label: labels.shell.groupModes[mode],
+                                                    })) })] }), _jsxs("div", { children: [_jsx("span", { className: label, children: t.settingsCardDensity }), _jsx(Choice, { ...md, id: "agent-card-density", label: t.settingsCardDensity, value: settings.cardDensity, onChange: (cardDensity) => onUpdate({ cardDensity }), options: [
                                                         { value: 'comfortable', label: t.settingsDensityComfortable },
                                                         { value: 'compact', label: t.settingsDensityCompact },
                                                     ] })] }), _jsxs("div", { children: [_jsx("span", { className: label, children: t.settingsChatSubmit }), _jsx(Choice, { ...md, id: "agent-chat-submit-key", label: t.settingsChatSubmit, value: settings.chatSubmitKey, onChange: (chatSubmitKey) => onUpdate({ chatSubmitKey }), options: [

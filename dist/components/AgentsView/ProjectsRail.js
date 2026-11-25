@@ -1,59 +1,18 @@
-import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Code2, Layers, ListChevronsDownUp, ListChevronsUpDown, } from 'lucide-react';
+import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
+import { useState } from 'react';
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Code2, Layers, ListChevronsDownUp, ListChevronsUpDown, } from 'lucide-react';
 import { useHost } from '../../host';
 import { useLabels } from '../../labels';
-const GROUP_MODES = ['project', 'state', 'directory', 'none'];
+import { Choice } from '../Choice';
+/** Every value `AgentGrouping` accepts, in the order the picker, the settings and Ctrl+S use */
+export const GROUP_MODES = ['project', 'state', 'directory', 'none'];
 const PROJECTS_COLLAPSED_KEY = 'devOrbitAgentProjectsCollapsed';
-/** Pointer may cross the gap between trigger and menu without the menu closing */
-const HOVER_CLOSE_MS = 150;
-/** Grouping of the agent list: shows only the current grouping; hovering (or clicking) opens the others */
+/** Grouping of the agent list: a Choice menu with the four groupings */
 export const GroupingPicker = ({ grouping, onGrouping }) => {
     const t = useLabels().shell;
-    const [open, setOpen] = useState(false);
-    const rootRef = useRef(null);
-    const closeTimer = useRef(undefined);
-    const current = GROUP_MODES.includes(grouping) ? grouping : GROUP_MODES[0];
-    const cancelClose = () => window.clearTimeout(closeTimer.current);
-    useEffect(() => cancelClose, []);
-    useEffect(() => {
-        if (!open)
-            return;
-        const onDown = (e) => {
-            if (!rootRef.current?.contains(e.target))
-                setOpen(false);
-        };
-        const onKey = (e) => {
-            if (e.key !== 'Escape')
-                return;
-            e.stopImmediatePropagation();
-            setOpen(false);
-            if (rootRef.current?.contains(document.activeElement))
-                rootRef.current.querySelector('[aria-haspopup]')?.focus();
-        };
-        document.addEventListener('mousedown', onDown);
-        document.addEventListener('keydown', onKey, true);
-        return () => {
-            document.removeEventListener('mousedown', onDown);
-            document.removeEventListener('keydown', onKey, true);
-        };
-    }, [open]);
-    const run = (action) => {
-        setOpen(false);
-        action();
-    };
-    const item = 'w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-700 hover:text-white focus-visible:bg-gray-700 focus-visible:outline-none disabled:opacity-40 disabled:pointer-events-none';
-    return (_jsxs("div", { ref: rootRef, className: "relative shrink-0", onMouseEnter: () => {
-            cancelClose();
-            setOpen(true);
-        }, onMouseLeave: () => {
-            cancelClose();
-            closeTimer.current = window.setTimeout(() => setOpen(false), HOVER_CLOSE_MS);
-        }, children: [_jsxs("button", { type: "button", 
-                // Hover already opened it for the mouse; Enter / Space (detail 0) toggles
-                onClick: (e) => setOpen((v) => (e.detail === 0 ? !v : true)), "aria-haspopup": "menu", "aria-expanded": open, "aria-label": t.groupAgentsByCurrent(t.groupModes[current]), title: t.groupAgentsByTitle, className: `flex items-center gap-1 px-1.5 py-1 rounded border text-gray-300 hover:bg-gray-800 ${open ? 'bg-gray-800 border-gray-700' : 'border-gray-800'}`, children: [_jsx(Layers, { size: 12, "aria-hidden": true }), t.groupModes[current]] }), open && (
-            // pt-1 instead of mt-1: the pointer stays inside the hover area on its way to the menu
-            _jsx("div", { className: "absolute left-0 top-full pt-1 z-30", children: _jsx("div", { role: "menu", "aria-label": t.groupAgentsBy, className: "min-w-[180px] bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1", children: GROUP_MODES.map((mode) => (_jsxs("button", { type: "button", role: "menuitemradio", "aria-checked": mode === grouping, onClick: () => run(() => onGrouping(mode)), className: item, children: [_jsx("span", { className: "w-3", children: mode === grouping && _jsx(Check, { size: 12 }) }), t.groupModes[mode]] }, mode))) }) }))] }));
+    return (_jsx(Choice, { label: t.groupAgentsBy, title: t.groupAgentsByTitle, icon: _jsx(Layers, { size: 12, "aria-hidden": true, className: "shrink-0 text-gray-400" }), 
+        // Raw value: a stale stored grouping shows the placeholder and Project stays pickable
+        value: grouping, placeholder: t.groupModes[GROUP_MODES[0]], onChange: onGrouping, options: GROUP_MODES.map((mode) => ({ value: mode, label: t.groupModes[mode] })) }));
 };
 const foldButton = 'shrink-0 p-1 rounded text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed';
 /**

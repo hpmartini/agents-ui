@@ -16,7 +16,7 @@ import { confirmDelete } from '../../utils/agentDelete';
 import { parseDispatchInput, parseFilter, applySessionFilter, isUntrustedWorkspaceError, } from '../../utils/agentInput';
 import { agentFolder, groupSessions, railItems, documentTitle, applyQuickFilters, applyTextQuery, applyLinkFilter, collectLinkEntries, sessionsInContext, matchesQuickFilter, mergeServers, collectPullRequests, summarizeContext, formatModelName, groupRepoSlug, DEFAULT_SORT, QUICK_FILTERS, SORT_OPTIONS, harnessLabel, HARNESSES, sessionHarness, withBranchPullRequests, sessionsWithBranchPullRequests, terminalResumeArgs, UI_VIEW_HARNESSES, HARNESS_MODEL_FLAG, isOmpStoreSession, withOrchestratorSessions, isOrchestrator, orchestratorKey, withoutOrchestrator, orchestratorRole, withoutOrchestratorRole, ORCHESTRATORS_GROUP_KEY, } from '../../utils/agentSessions';
 import { AgentList } from './AgentList';
-import { FoldButtons, GroupingPicker, ProjectsSection } from './ProjectsRail';
+import { FoldButtons, GROUP_MODES, GroupingPicker, ProjectsSection, } from './ProjectsRail';
 import { NewTaskButton } from './NewTaskButton';
 import { AgentSummaryBar, AgentFilterBar } from './AgentSummaryBar';
 import { PullRequestsPanel } from './PullRequestsPanel';
@@ -1408,8 +1408,9 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         refresh();
     }, [messaging, refresh]);
     const toggleGrouping = useCallback(() => {
-        const order = ['project', 'state', 'directory', 'none'];
-        updateSettings({ grouping: order[(order.indexOf(settings.grouping) + 1) % order.length] });
+        updateSettings({
+            grouping: GROUP_MODES[(GROUP_MODES.indexOf(settings.grouping) + 1) % GROUP_MODES.length],
+        });
     }, [settings.grouping, updateSettings]);
     const copyJson = useCallback(async () => {
         if (!manage)
