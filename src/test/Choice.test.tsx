@@ -446,4 +446,28 @@ describe('Choice hardening', () => {
     expect(spy).not.toHaveBeenCalled();
     expect(screen.queryByRole('radio', { checked: true })).toBeNull();
   });
+
+  it('a muted option is dimmed but stays enabled and selectable, in pills and the menu', async () => {
+    const user = userEvent.setup();
+    const spy = vi.fn();
+    const muted = (n: number): ChoiceOption[] =>
+      opts('Alpha', 'Beta', 'Gamma', 'Delta').slice(0, n).map((o, i) => ({ ...o, muted: i === 1 }));
+    render(<Host label="Pill" initial="alpha" options={muted(2)} spy={spy} />);
+    const pill = screen.getByRole('radio', { name: 'Beta' });
+    expect(pill).toHaveAttribute('data-muted');
+    expect(pill).toHaveClass('text-gray-500');
+    expect(pill).toBeEnabled();
+    expect(screen.getByRole('radio', { name: 'Alpha' })).not.toHaveAttribute('data-muted');
+    await user.click(pill);
+    expect(spy).toHaveBeenLastCalledWith('beta');
+    cleanup();
+    render(<Host label="Menu" initial="alpha" options={muted(4)} spy={spy} />);
+    await user.click(screen.getByRole('button', { name: /^Menu/ }));
+    const row = screen.getByRole('option', { name: 'Beta' });
+    expect(row).toHaveAttribute('data-muted');
+    expect(row).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByRole('option', { name: 'Alpha' })).not.toHaveAttribute('data-muted');
+    await user.click(row);
+    expect(spy).toHaveBeenLastCalledWith('beta');
+  });
 });

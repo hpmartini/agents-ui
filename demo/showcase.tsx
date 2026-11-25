@@ -35,6 +35,14 @@ const repos: ChoiceOption[] = [
   })),
 ];
 
+const slices: ChoiceOption[] = [
+  { value: 'inbox', label: 'Inbox' },
+  { value: 'sprint', label: 'Sprint' },
+  { value: 'icebox', label: 'Icebox', muted: true, hint: 'hidden' },
+  { value: 'archive', label: 'Archive', muted: true, hint: 'hidden' },
+  { value: 'review', label: 'Review' },
+];
+
 const Row: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <section className="space-y-1.5">
     <h3 className="text-xs text-gray-400">{title}</h3>
@@ -49,6 +57,8 @@ export const ChoiceShowcase: React.FC = () => {
   const [harness, setHarness] = useState('claude');
   const [repo, setRepo] = useState('acme/web');
   const [bottom, setBottom] = useState('globex/tools');
+  const [slice, setSlice] = useState('inbox');
+  const [lane, setLane] = useState('todo');
   const [theme, setTheme] = useState('');
   const [invalidLetter, setInvalidLetter] = useState('');
   const [live, setLive] = useState('beta');
@@ -107,6 +117,21 @@ export const ChoiceShowcase: React.FC = () => {
         </Row>
         <Row title="Menu with a disabled option and a hint">
           <Choice label="Harness" value={harness} onChange={setHarness} options={harnesses} />
+        </Row>
+        <Row title="Muted options (hidden board slices): dimmed, still selectable">
+          <div className="flex flex-wrap items-center gap-2">
+            <Choice label="Slice" value={slice} onChange={setSlice} options={slices} />
+            <Choice
+              label="Lane"
+              value={lane}
+              onChange={setLane}
+              options={[
+                { value: 'todo', label: 'Todo' },
+                { value: 'doing', label: 'Doing' },
+                { value: 'parked', label: 'Parked', muted: true },
+              ]}
+            />
+          </div>
         </Row>
         <Row title="Search (11 options, grouped)">
           <Choice label="Repository" value={repo} onChange={setRepo} options={repos} />

@@ -25,6 +25,8 @@ export interface ChoiceOption<V extends string = string> {
   /** Muted text after the label (menu, search) or tooltip (pills) */
   hint?: string;
   disabled?: boolean;
+  /** Dimmed text, still selectable (e.g. a hidden board slice); `disabled` wins */
+  muted?: boolean;
   /** Options with the same group are listed under its header (menu, search) */
   group?: string;
 }
@@ -219,12 +221,13 @@ function Pills<V extends string>({
             tabIndex={i === stop ? 0 : -1}
             disabled={disabled || o.disabled}
             title={o.hint}
+            data-muted={o.muted || undefined}
             onClick={() => pick(i)}
             onKeyDown={(e) => onKeyDown(e, i)}
             className={`${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${
               on
-                ? `bg-sel ${invalid ? 'border-red-400' : 'border-blue-300'} text-white`
-                : `${invalid ? 'border-red-400' : 'border-gray-700'} text-gray-300 hover:text-white hover:bg-gray-800`
+                ? `bg-sel ${invalid ? 'border-red-400' : 'border-blue-300'} ${o.muted ? 'text-gray-300' : 'text-white'}`
+                : `${invalid ? 'border-red-400' : 'border-gray-700'} ${o.muted ? 'text-gray-500 hover:text-gray-200' : 'text-gray-300 hover:text-white'} hover:bg-gray-800`
             }`}
           >
             {o.label}
@@ -418,6 +421,7 @@ function Menu<V extends string>({
       role="option"
       aria-selected={o.value === value}
       aria-disabled={o.disabled || undefined}
+      data-muted={o.muted || undefined}
       // Focus stays in the listbox / search field
       onMouseDown={(e) => e.preventDefault()}
       onMouseMove={() => !o.disabled && active !== i && setActive(i)}
@@ -425,7 +429,13 @@ function Menu<V extends string>({
       className={`flex items-center gap-2 px-3 py-1.5 ${
         o.disabled
           ? 'opacity-40 cursor-not-allowed text-gray-300'
-          : `cursor-pointer ${i === active ? 'bg-gray-700 text-white' : 'text-gray-200'}`
+          : `cursor-pointer ${
+              i === active
+                ? `bg-gray-700 ${o.muted ? 'text-gray-300' : 'text-white'}`
+                : o.muted
+                  ? 'text-gray-500'
+                  : 'text-gray-200'
+            }`
       }`}
     >
       <span className="w-3 shrink-0 text-blue-300">{o.value === value && <Check />}</span>
