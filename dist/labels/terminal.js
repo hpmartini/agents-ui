@@ -207,6 +207,7 @@ export const terminalEn = {
     undoTidyTitle: 'Restore the threads as they were before the last tidy-up',
     resizeThreads: 'Resize threads panel',
     threadLog: (name) => `Thread ${name}`,
+    newMessages: 'New messages',
     loadingThreadHistory: 'Loading earlier messages of this thread…',
     // ChatPane
     notConnected: 'The terminal is not connected: use Reattach above, then send again',
@@ -503,6 +504,7 @@ export const terminalDe = {
     undoTidyTitle: 'Threads wiederherstellen wie vor dem letzten Aufräumen',
     resizeThreads: 'Breite des Thread-Panels ändern',
     threadLog: (name) => `Thread ${name}`,
+    newMessages: 'Neue Nachrichten',
     loadingThreadHistory: 'Frühere Nachrichten dieses Threads werden geladen…',
     // ChatPane
     notConnected: 'Das Terminal ist nicht verbunden: oben neu verbinden, dann erneut senden',

@@ -203,6 +203,8 @@ export interface TerminalLabels {
     undoTidyTitle: string;
     resizeThreads: string;
     threadLog: (name: string) => string;
+    /** Button over a log scrolled up while new content came in */
+    newMessages: string;
     loadingThreadHistory: string;
     notConnected: string;
     questionChanged: string;
