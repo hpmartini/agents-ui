@@ -95,7 +95,13 @@ import {
   ORCHESTRATORS_GROUP_KEY,
 } from '../../utils/agentSessions';
 import { AgentList, AgentRowAction } from './AgentList';
-import { FoldButtons, GroupingPicker, ProjectsSection, RailNavProps } from './ProjectsRail';
+import {
+  FoldButtons,
+  GROUP_MODES,
+  GroupingPicker,
+  ProjectsSection,
+  RailNavProps,
+} from './ProjectsRail';
 import { NewTaskButton, type NewMenuKind } from './NewTaskButton';
 import { AgentSummaryBar, AgentFilterBar } from './AgentSummaryBar';
 import { PullRequestsPanel } from './PullRequestsPanel';
@@ -1869,8 +1875,9 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   );
 
   const toggleGrouping = useCallback(() => {
-    const order = ['project', 'state', 'directory', 'none'] as const;
-    updateSettings({ grouping: order[(order.indexOf(settings.grouping) + 1) % order.length] });
+    updateSettings({
+      grouping: GROUP_MODES[(GROUP_MODES.indexOf(settings.grouping) + 1) % GROUP_MODES.length],
+    });
   }, [settings.grouping, updateSettings]);
 
   const copyJson = useCallback(async () => {
