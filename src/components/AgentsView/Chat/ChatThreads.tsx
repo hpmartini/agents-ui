@@ -160,11 +160,11 @@ export function useChatThreads(session: string | null | undefined, active = fals
 }
 
 /** What a thread list row shows of an item */
-function itemPreview(item: ChatItem, tag: string): string {
-  if (item.kind === 'answer') return stripTag(answerText(item), tag);
+function itemPreview(item: ChatItem): string {
+  if (item.kind === 'answer') return stripTag(answerText(item));
   if (item.kind !== 'user') return '';
   const sent = agentMessage(item.text);
-  return splitImages(stripTag(sent ? sent.body : item.text, tag)).text;
+  return splitImages(stripTag(sent ? sent.body : item.text)).text;
 }
 
 const lastTime = (thread: ChatThread, items: ChatItem[]) => {
@@ -638,7 +638,7 @@ const ThreadListRow: React.FC<{
 }> = ({ thread, items, open, onOpen, renaming, onRename }) => {
   const t = useLabels().terminal;
   const unread = unreadCount(items, thread.readAt);
-  const first = items.map((i) => itemPreview(i, thread.tag)).find(Boolean);
+  const first = items.map((i) => itemPreview(i)).find(Boolean);
   if (renaming)
     return (
       <li className="flex border-l-2 border-blue-400 px-3 py-1.5">
@@ -1005,24 +1005,35 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
                   </button>
                   {closedOpen && (
                     <ul>
-                      {closed.map((x) => (
-                        <li key={x.id} className="flex items-center gap-2 px-3 py-1 pl-7">
-                          <button
-                            type="button"
-                            onClick={() => onOpen(x.id)}
-                            className={`min-w-0 flex-1 truncate text-left text-gray-400 hover:text-gray-200 ${focusRing}`}
-                          >
-                            {threadName(x)}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onClose(x.id, false)}
-                            className={smallBtn}
-                          >
-                            {t.reopenThread}
-                          </button>
-                        </li>
-                      ))}
+                      {closed.map((x) =>
+                        renaming === `list:${x.id}` ? (
+                          <li key={x.id} className="flex px-3 py-1 pl-7">
+                            <RenameField thread={x} onDone={rename('list', x.id)} />
+                          </li>
+                        ) : (
+                          <li key={x.id} className="group flex items-center gap-2 px-3 py-1 pl-7">
+                            <button
+                              type="button"
+                              onClick={() => onOpen(x.id)}
+                              onDoubleClick={() => setRenaming(`list:${x.id}`)}
+                              className={`min-w-0 flex-1 truncate text-left text-gray-400 hover:text-gray-200 ${focusRing}`}
+                            >
+                              {threadName(x)}
+                            </button>
+                            <ThreadMenu
+                              onRename={() => setRenaming(`list:${x.id}`)}
+                              className="relative opacity-0 focus-within:opacity-100 group-hover:opacity-100"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => onClose(x.id, false)}
+                              className={smallBtn}
+                            >
+                              {t.reopenThread}
+                            </button>
+                          </li>
+                        )
+                      )}
                     </ul>
                   )}
                 </div>

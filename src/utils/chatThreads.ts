@@ -113,10 +113,15 @@ export function threadCommand(body: string, commands: { name: string }[]): strin
     : null;
 }
 
-/** Message text without its thread tag line */
-export function stripTag(text: string, tag: string): string {
-  const t = text.trimStart();
-  return t.startsWith(tag) ? t.slice(tag.length).replace(/^[ \t]*\n?/, '') : text;
+/** A leading thread tag: names never hold `[` or `]` (the server cleans them) */
+const LEADING_TAG_RE = /^\s*\[Thread: [^[\]\n]*\][ \t]*\n?/;
+
+/**
+ * Message text without its leading thread tag line, whichever thread's: after a merge or a move
+ * a message keeps its source's tag, shown in another thread or the main chat
+ */
+export function stripTag(text: string): string {
+  return text.replace(LEADING_TAG_RE, '');
 }
 
 export const hhmm = (ms: number) => {
@@ -235,15 +240,18 @@ function commandTurns(
 
 /**
  * Commands threads sent while the agent works: Claude Code logs their enqueue without the text, so
- * each empty queue entry stands for one of the newest marks no logged prompt has claimed yet
+ * each empty queue entry stands for one of the newest marks no logged prompt has claimed yet; the
+ * rest are main-chat commands, shown as `command` so nothing typed disappears
  */
 export function queuedCommands(
   items: ChatItem[],
   threads: ChatThread[],
-  placeholders: number
+  placeholders: number,
+  /** What a placeholder no mark claims shows in the main chat: a main `/command` waiting */
+  command: string
 ): string[] {
   if (!placeholders) return [];
-  return threads
+  const marked = threads
     .flatMap((t) => t.commands ?? [])
     .filter(
       (m) =>
@@ -258,6 +266,7 @@ export function queuedCommands(
     .sort((a, b) => a.at - b.at)
     .slice(-placeholders)
     .map((m) => m.command);
+  return [...marked, ...Array<string>(placeholders - marked.length).fill(command)];
 }
 
 /**

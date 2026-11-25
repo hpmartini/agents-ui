@@ -194,13 +194,13 @@ function setup({ older = false, status = false }: { older?: boolean; status?: bo
       })),
     },
   });
-  const view = renderWithAgents(
+  const ui = (active: boolean) => (
     <div style={{ height: 600 }}>
       <ChatPane
         pane={pane}
         agent={pane}
         sessionId="s1"
-        active
+        active={active}
         focused={false}
         submitKey="enter"
         showSteps={false}
@@ -210,9 +210,9 @@ function setup({ older = false, status = false }: { older?: boolean; status?: bo
         onShowTerminal={vi.fn()}
         renderStatus={status ? () => <div data-testid="host-status">details</div> : undefined}
       />
-    </div>,
-    { transport }
+    </div>
   );
+  const view = renderWithAgents(ui(true), { transport });
   const push = (...events: unknown[]) =>
     act(() => {
       for (const e of events) handlers!.onEvent(e);
@@ -221,6 +221,9 @@ function setup({ older = false, status = false }: { older?: boolean; status?: bo
     view,
     transport,
     push,
+    setActive: (active: boolean) => view.rerender(ui(active)),
+    /** The server view opened again (reconnect): the whole history replays after a reset */
+    reopen: () => act(() => handlers!.onOpen()),
     ready: async () => {
       await waitFor(() => expect(handlers).not.toBeNull());
       if (older) push({ type: 'devorbit_page', before: 7, more: true });
@@ -518,5 +521,95 @@ describe('main chat log scroll (AC-11)', () => {
     } finally {
       spies.forEach((x) => x.mockRestore());
     }
+  });
+});
+
+describe('the 40 px zone and coming back (F6, F7)', () => {
+  const sleep = (ms: number) => act(() => new Promise((r) => setTimeout(r, ms)));
+
+  it('F7: a small wheel up while content arrives before its scroll event keeps following', async () => {
+    const s = setup();
+    await s.ready();
+    const { list } = await openMainLog(s);
+    fireEvent.wheel(list, { deltaY: -10 });
+    list.scrollTop -= 10;
+    s.push(...turn(20, at + 20_000, null));
+    await settle();
+    fireEvent.scroll(list);
+    await sleep(400);
+    await settle();
+    expect(atBottom(list)).toBe(true);
+    expect(screen.queryByRole('button', { name: /New messages/ })).toBeNull();
+  });
+
+  it('F7: a wheel beyond 40 px with content before its scroll event is never pulled back', async () => {
+    const s = setup();
+    await s.ready();
+    const { list } = await openMainLog(s);
+    fireEvent.wheel(list, { deltaY: -100 });
+    list.scrollTop -= 100;
+    const first = firstVisible(list);
+    const before = first.top();
+    s.push(...turn(20, at + 20_000, null));
+    await settle();
+    fireEvent.scroll(list);
+    await sleep(400);
+    s.push(...turn(21, at + 21_000, null));
+    await settle();
+    expect(atBottom(list)).toBe(false);
+    expect(Math.abs(first.top() - before)).toBeLessThanOrEqual(2);
+  });
+
+  it('F6: back on the tab, a scrolled-up log keeps its place (the hidden log read top 0)', async () => {
+    const s = setup();
+    await s.ready();
+    const { list, resize } = await openMainLog(s);
+    wheelTo(list, 300);
+    const first = firstVisible(list);
+    const before = first.top();
+    // another tab: the log is hidden (no height) and the browser drops its scroll offset
+    s.setActive(false);
+    resize(0);
+    await settle();
+    list.scrollTop = 0;
+    fireEvent.scroll(list);
+    s.push(...turn(20, at + 20_000, null));
+    await settle();
+    resize(300);
+    s.setActive(true);
+    await settle();
+    expect(Math.abs(first.top() - before)).toBeLessThanOrEqual(2);
+    expect(screen.getByRole('button', { name: /New messages/ })).toBeTruthy();
+  });
+
+  it('F6: back on the tab, a log at its end follows what came meanwhile', async () => {
+    const s = setup();
+    await s.ready();
+    const { list, resize } = await openMainLog(s);
+    s.setActive(false);
+    resize(0);
+    await settle();
+    s.push(...turn(20, at + 20_000, null));
+    await settle();
+    resize(300);
+    s.setActive(true);
+    await settle();
+    expect(atBottom(list)).toBe(true);
+  });
+
+  it('F6: a reconnect (reset, whole history again) keeps a scrolled-up place', async () => {
+    const s = setup();
+    await s.ready();
+    const { list } = await openMainLog(s);
+    wheelTo(list, 300);
+    const key = firstVisible(list).row.getAttribute('data-chat-key');
+    const before = firstVisible(list).top();
+    s.reopen();
+    await settle();
+    for (let n = 0; n < 12; n++) s.push(...turn(n, at + n * 1000, null));
+    await settle();
+    const row = list.querySelector(`[data-chat-key="${key}"]`)!;
+    expect(row).not.toBeNull();
+    expect(Math.abs(row.getBoundingClientRect().top - before)).toBeLessThanOrEqual(2);
   });
 });

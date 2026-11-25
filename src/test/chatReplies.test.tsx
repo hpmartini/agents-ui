@@ -1,7 +1,7 @@
 // Reply quotes on answers, the threads panel and its resize handle
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { renderWithAgents } from './agents';
 import { groupAnswers, type ChatAnswer, type ChatMessage } from '../utils/chatEvents';
 import { quoteHeader, threadTag, type ChatThread } from '../utils/chatThreads';
@@ -76,10 +76,10 @@ describe('reply on an answer', () => {
     expect(screen.getByText('Go ahead')).toBeTruthy();
   });
 
-  it('inside a thread the tag line is hidden', () => {
+  it('the tag line of an answer is hidden (any thread, main chat too)', () => {
     const tag = threadTag({ project: 'Shop', task: 'Checkout' });
     renderWithAgents(
-      <ChatRepliesContext.Provider value={{ reply: vi.fn(), tag }}>
+      <ChatRepliesContext.Provider value={{ reply: vi.fn() }}>
         <ChatItemView
           item={answerOf(`${tag}\nForm is done.`)}
           showSteps={false}
@@ -93,9 +93,8 @@ describe('reply on an answer', () => {
   });
 
   it('a command sent from a thread shows there as a chip with its text', () => {
-    const tag = threadTag({ project: 'Shop', task: 'Checkout' });
     renderWithAgents(
-      <ChatRepliesContext.Provider value={{ reply: vi.fn(), tag }}>
+      <ChatRepliesContext.Provider value={{ reply: vi.fn() }}>
         <ChatItemView
           item={{ kind: 'user', key: 'u1', ts: at, text: '/status-report only open tasks' }}
           showSteps={false}
@@ -178,6 +177,22 @@ describe('threads panel', () => {
     expect(row.textContent).toContain('How far is the form?');
     expect(row.textContent).toContain('1 new');
     expect(screen.getByText('Closed (1)')).toBeTruthy();
+  });
+
+  it('F10: a closed thread renames like an open one (double-click or its menu)', () => {
+    const onRename = vi.fn();
+    panel({ threads: [thread('t1'), thread('t2', { closed: true })], onRename });
+    fireEvent.click(screen.getByText('Closed (1)'));
+    fireEvent.doubleClick(screen.getByText('Shop · Task t2'));
+    const field = screen.getByRole('textbox', { name: /^Thread name/ });
+    fireEvent.change(field, { target: { value: 'Shop · Archived' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(onRename).toHaveBeenCalledWith('t2', { project: 'Shop', task: 'Archived' });
+    // the menu as well
+    const closedRow = screen.getByText('Shop · Task t2').closest('li')!;
+    fireEvent.click(within(closedRow).getByRole('button', { name: 'Thread actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Rename/ }));
+    expect(screen.getByRole('textbox', { name: /^Thread name/ })).toBeTruthy();
   });
 
   it('no "Not bound" line: an unbound thread shows its repo or nothing', () => {

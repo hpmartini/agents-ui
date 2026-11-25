@@ -380,17 +380,22 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat, pane.id, pane.cwd, harness, sessionId, generation]);
 
+  // the session the log last opened on: a reopen of the same one replays its history
+  const openedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!chatId || !chat) return;
     return chat.subscribeToChat(chatId, {
       onOpen: () => {
-        mainLog.toEnd();
+        // a reconnect keeps a scrolled-up place; another session starts at its end
+        if (openedFor.current === sessionId) mainLog.replay();
+        else mainLog.toEnd();
+        openedFor.current = sessionId ?? null;
         dispatch({ type: 'reset' });
       },
       onEvent: (event) => dispatch({ type: 'event', event }),
       onGone: () => setGeneration((g) => g + 1),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- toEnd only reads refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toEnd/replay only read refs; sessionId changes chatId
   }, [chat, chatId]);
 
   // Older turns load page by page near the top; the view keeps its place while they go in front
@@ -418,17 +423,18 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     if (el && el.scrollHeight <= el.clientHeight + LOAD_OLDER_PX) loadOlder();
   }, [state.older, loadOlder]);
   useLayoutEffect(mainLog.keep, [state.messages, showSteps, mainLog.keep]);
-  // Back on a hidden tab: jump to the newest messages
+  // Back on a hidden tab: at its end the log shows the newest, scrolled up it stays where it was
   useEffect(() => {
-    if (active) mainLog.toEnd();
-  }, [active, mainLog.toEnd]);
+    if (active) mainLog.keep();
+  }, [active, mainLog.keep]);
 
   const history = useMemo(
     () =>
       state.messages
         .filter((m): m is Extract<typeof m, { kind: 'user' }> => m.kind === 'user')
         .filter((m) => !agentMessage(m.text))
-        .map((m) => splitImages(m.text).text)
+        // a message moved here from a thread: recalled without its tag (it would route back)
+        .map((m) => splitImages(stripTag(m.text)).text)
         .filter(Boolean),
     [state.messages]
   );
@@ -451,9 +457,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const pending = useMemo(
     () => [
       ...pendingPrompts(state),
-      ...queuedCommands(items, threadList, state.queued.filter((q) => !q.trim()).length),
+      ...queuedCommands(
+        items,
+        threadList,
+        state.queued.filter((q) => !q.trim()).length,
+        t.queuedCommand
+      ),
     ],
-    [state, items, threadList]
+    [state, items, threadList, t.queuedCommand]
   );
   const routed = useMemo(
     () =>
@@ -798,11 +809,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       threadItems
         .filter((i): i is Extract<ChatItem, { kind: 'user' }> => i.kind === 'user')
         .map((i) => {
-          const text = openThread ? stripTag(i.text, openThread.tag) : i.text;
+          const text = stripTag(i.text);
           return splitImages(parseQuote(text)?.body ?? text).text;
         })
         .filter(Boolean),
-    [threadItems, openThread]
+    [threadItems]
   );
   // The running turn: its answer (or the working card) shows where its last item went
   const lastItem = items.at(-1);
@@ -844,10 +855,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [threads.enabled, threads.create]
   );
-  const threadReplies = useMemo<ChatReplies>(
-    () => ({ reply: setThreadQuote, tag: openThread?.tag ?? null }),
-    [openThread?.tag]
-  );
+  const threadReplies = useMemo<ChatReplies>(() => ({ reply: setThreadQuote }), []);
   const threadListRef = useRef<HTMLDivElement>(null);
   const threadContentRef = useRef<HTMLDivElement>(null);
   // another thread, a reopened panel or back from the Status view (a new log element) starts at its end

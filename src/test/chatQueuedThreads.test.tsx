@@ -6,7 +6,7 @@ import { act, screen, waitFor } from '@testing-library/react';
 import { renderWithAgents, testTransport } from './agents';
 import { ChatPane } from '../components/AgentsView/Chat/ChatPane';
 import { threadTag, type ChatThread } from '../utils/chatThreads';
-import type { ChatHandlers } from '../transport';
+import type { ChatHandlers, ChatThreadList } from '../transport';
 import type { AgentSession } from '../types';
 
 afterEach(() => localStorage.clear());
@@ -40,7 +40,12 @@ const thread = (extra: Partial<ChatThread> = {}): ChatThread => ({
 });
 
 /** Busy orchestrator: one prompt and its running answer, then `events` */
-async function mount(t: ChatThread, events: object[]) {
+async function mount(
+  t: ChatThread | ChatThread[],
+  events: object[],
+  overrides?: ChatThreadList['overrides']
+) {
+  const threads = [t].flat();
   let push: (e: object) => void = () => {};
   renderWithAgents(
     <ChatPane
@@ -59,9 +64,9 @@ async function mount(t: ChatThread, events: object[]) {
     {
       transport: testTransport({
         threads: {
-          fetchThreads: vi.fn(async () => ({ orchestrator: 'o1', threads: [t], tasks: [] })),
-          createThread: vi.fn(async () => t),
-          updateThread: vi.fn(async () => t),
+          fetchThreads: vi.fn(async () => ({ orchestrator: 'o1', threads, tasks: [], overrides })),
+          createThread: vi.fn(async () => threads[0]),
+          updateThread: vi.fn(async () => threads[0]),
         },
         chat: {
           openTranscriptView: vi.fn(async () => ({
@@ -152,7 +157,7 @@ describe('queued prompts go where they belong (AC-14)', () => {
     expect(inMain(aside, '/status-report')).toBe(false);
   });
 
-  it('a command placeholder without an open thread mark shows nowhere as a thread item', async () => {
+  it('F9: a command placeholder without an open thread mark waits in the main chat', async () => {
     const { aside } = await mount(
       thread({ commands: [{ at: at - 120_000, command: '/status-report' }] }),
       [
@@ -161,6 +166,40 @@ describe('queued prompts go where they belong (AC-14)', () => {
       ]
     );
     expect(queued().filter((b) => aside.contains(b))).toHaveLength(0);
+    // a main /command (Claude logs its enqueue without text) never disappears
+    const main = queued().filter((b) => !aside.contains(b));
+    expect(main).toHaveLength(1);
+    expect(main[0].textContent).toContain('Command');
+    expect(main[0].textContent).toContain('waits for the current turn');
+  });
+
+  it('F9: two placeholders, one thread mark: one waits in the thread, one in the main chat', async () => {
+    const { aside } = await mount(thread({ commands: [{ at, command: '/status-report' }] }), [
+      { type: 'devorbit_queue', op: 'enqueue', text: '' },
+      { type: 'devorbit_queue', op: 'enqueue', text: '' },
+    ]);
+    expect(queued().filter((b) => aside.contains(b)).map((b) => b.textContent)).toEqual([
+      expect.stringContaining('/status-report'),
+    ]);
+    expect(queued().filter((b) => !aside.contains(b))).toHaveLength(1);
+  });
+
+  it('F5: after a merge or a move no thread tag shows (pending, queued, delivered, main)', async () => {
+    const TAG_B = threadTag({ project: 'Demo', task: 'B' });
+    const b: ChatThread = { ...thread(), id: 't2', name: { project: 'Demo', task: 'B' }, tag: TAG_B };
+    const { aside } = await mount(
+      [thread(), b],
+      [
+        { type: 'devorbit_user', key: 'u-b1', text: `${TAG_B}\nDelivered in B`, ts: at + 10 },
+        { type: 'devorbit_user', key: 'u-b2', text: `${TAG_B}\nMoved to main`, ts: at + 20 },
+        { type: 'devorbit_queue', op: 'enqueue', text: `${TAG_B}\nQueued in B` },
+      ],
+      { entries: { 'u-b2': 'main' }, merged: { t2: 't1' } }
+    );
+    await waitFor(() => expect(aside.textContent).toContain('Delivered in B'));
+    expect(aside.textContent).toContain('Queued in B');
+    expect(inMain(aside, 'Moved to main')).toBe(true);
+    expect(document.body.textContent).not.toContain('[Thread:');
   });
 
   it('a main-chat message typed while busy stays in the main chat', async () => {

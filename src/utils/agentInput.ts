@@ -327,15 +327,18 @@ const lastIndex = (
  * Lines [start, end) of the dialog an agent's screen waits on, or null. Claude Code draws its input
  * line as `❯` right under a rule, with its prompt suggestion (ghost text) and echoed prompts as
  * `❯ …` as well, so a `❯ 1.` alone is no dialog: it needs a key-hint footer below the last `❯`, or
- * (the review step has no footer) a cursor on a numbered option, not under a rule, with more below.
+ * (the review step has no footer) a cursor on a numbered option with more below; never when the
+ * last `❯` is the input line (under a rule), whose typed text may hold a hint as well.
  */
 export function dialogRange(lines: string[]): { start: number; end: number } | null {
   const cursor = lastIndex(lines, (l) => /^\s*❯/.test(l));
-  let end = lastIndex(lines, (l) => DIALOG_HINT_RE.test(l));
+  // a footer is a line of its own: a numbered line with a hint is typed text or an option
+  let end = lastIndex(lines, (l) => DIALOG_HINT_RE.test(l) && !OPTION_LINE_RE.test(l));
+  // the input line sits right under a rule; what follows it there is typed text, hints too
+  const above = cursor >= 0 ? (lines[lastIndex(lines, (l) => !!l.trim(), cursor)] ?? '') : '';
+  if (cursor >= 0 && RULE_LINE_RE.test(above)) return null;
   if (end < cursor || end < 0) {
     if (cursor < 0 || !CHOICE_CURSOR_RE.test(lines[cursor])) return null;
-    const above = lines[lastIndex(lines, (l) => !!l.trim(), cursor)] ?? '';
-    if (RULE_LINE_RE.test(above)) return null;
     end = lastIndex(lines, (l, i) => i > cursor && OPTION_LINE_RE.test(l));
     // the cursor on the last option: its neighbour is above
     if (end < 0 && OPTION_LINE_RE.test(above)) end = cursor;

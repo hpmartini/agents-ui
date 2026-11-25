@@ -160,6 +160,8 @@ export interface TerminalLabels {
   attachedImage: string;
   imageRef: (path: string) => string;
   queuedNote: string;
+  /** A main-chat `/command` queued while busy (the CLI logs it without its text) */
+  queuedCommand: string;
   resultDone: string;
   resultInterrupted: string;
   resultError: (subtype: string) => string;
@@ -484,6 +486,7 @@ export const terminalEn: TerminalLabels = {
   attachedImage: 'Attached image',
   imageRef: (path) => `[Image: ${path}]`,
   queuedNote: 'sent · waits for the current turn',
+  queuedCommand: 'Command',
   resultDone: 'Done',
   resultInterrupted: 'Interrupted',
   resultError: (subtype) => `Error (${subtype})`,
@@ -817,6 +820,7 @@ export const terminalDe: TerminalLabels = {
   attachedImage: 'Angehängtes Bild',
   imageRef: (path) => `[Bild: ${path}]`,
   queuedNote: 'gesendet · wartet auf den laufenden Turn',
+  queuedCommand: 'Befehl',
   resultDone: 'Fertig',
   resultInterrupted: 'Unterbrochen',
   resultError: (subtype) => `Fehler (${subtype})`,

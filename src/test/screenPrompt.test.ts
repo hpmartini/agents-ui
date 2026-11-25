@@ -78,6 +78,18 @@ describe('question on the agent screen (yellow box)', () => {
     ).toBeNull();
   });
 
+  // F8: a key hint typed into the input box is no dialog footer
+  it('no box for a key hint inside the input text (under the input rule)', () => {
+    expect(screenPrompt(`${RULE}\n❯ 1. first point\n  2. Esc to cancel\n${RULE}`)).toBeNull();
+    expect(screenPrompt(`${RULE}\n❯ 1. first point\n2. Esc to cancel\n${RULE}`)).toBeNull();
+    // one line, the hint in the typed text
+    expect(screenPrompt(`${RULE}\n❯ press Esc to cancel the deploy\n${RULE}`)).toBeNull();
+    // the hint on a continuation line of a long input
+    expect(
+      screenPrompt(`⏺ Done.\n${RULE}\n❯ write a note that says\n  Enter to confirm · Esc to cancel\n${RULE}`)
+    ).toBeNull();
+  });
+
   it('no box for key hints quoted in an answer above the input line', () => {
     expect(
       screenPrompt(`⏺ The dialog says "Esc to cancel · Tab to amend".\n${RULE}\n❯ \n${RULE}`)

@@ -79,14 +79,10 @@ export interface ChatQuote {
   text: string;
 }
 
-/**
- * Reply and thread actions of a message list; without a provider answers have no actions.
- * `tag`: the thread whose list this is (its tag line is hidden in front of each message)
- */
+/** Reply and thread actions of a message list; without a provider answers have no actions */
 export interface ChatReplies {
   reply: (quote: ChatQuote) => void;
   openThread?: (answer: ChatAnswer) => void;
-  tag?: string | null;
 }
 export const ChatRepliesContext = React.createContext<ChatReplies | null>(null);
 
@@ -212,10 +208,9 @@ const AgentMessage: React.FC<{ id: string | null; name: string | null; body: str
   body,
 }) => {
   const actions = React.useContext(ViewActionsContext);
-  const tag = React.useContext(ChatRepliesContext)?.tag;
   const t = useLabels().terminal;
   const label = name || id || t.unknownAgent;
-  const text = tag ? stripTag(body, tag) : body;
+  const text = stripTag(body);
   return (
     <div className="flex flex-col items-start my-3" data-agent-message>
       <div className="max-w-[85%] rounded-lg border border-violet-800/60 bg-violet-950/40 px-3 py-2 text-sm text-gray-100">
@@ -248,8 +243,7 @@ export const UserMessage: React.FC<{ text: string; queued?: boolean }> = ({ text
 };
 
 const OwnMessage: React.FC<{ text: string; queued?: boolean }> = ({ text, queued }) => {
-  const tag = React.useContext(ChatRepliesContext)?.tag;
-  const { text: typed, images } = splitImages(tag ? stripTag(text, tag) : text);
+  const { text: typed, images } = splitImages(stripTag(text));
   // a reply: its quote as a box, the user's text below
   const quote = parseQuote(typed);
   const body = quote ? quote.body : typed;
@@ -374,16 +368,15 @@ const AnswerCard: React.FC<AnswerCardProps> = ({ answer, showSteps, live, harnes
   const card = React.useRef<HTMLElement>(null);
   const [selected, setSelected] = React.useState('');
   const parts = answer?.parts ?? [];
-  const tag = replies?.tag;
   let tagged = false;
-  // inside a thread the tag line of the first text is not shown
+  // the tag line of the first text is never shown (any thread's: merged or moved ones too)
   const blocks = parts
     .flatMap((m) => m.blocks)
     .filter(Boolean)
     .map((b) => {
-      if (!tag || tagged || b.type !== 'text' || !b.text.trim()) return b;
+      if (tagged || b.type !== 'text' || !b.text.trim()) return b;
       tagged = true;
-      return { ...b, text: stripTag(b.text, tag) };
+      return { ...b, text: stripTag(b.text) };
     });
   const visible = showSteps ? blocks : blocks.filter((b) => b.type === 'text');
   const hasBody = visible.some((b) => b.type !== 'text' || b.text);
