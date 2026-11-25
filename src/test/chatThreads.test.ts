@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { groupAnswers, initialChatState, reduceChat, type ChatMessage } from '../utils/chatEvents';
+import {
+  groupAnswers,
+  initialChatState,
+  prependHistory,
+  reduceChat,
+  type ChatMessage,
+} from '../utils/chatEvents';
 import {
   quoteHeader,
   parseQuote,
@@ -362,15 +368,76 @@ describe('a command sent from a thread (no tag: the CLI runs a command only as t
     expect(routeThreads(items, [marked, weather], true).byThread.get('t1')).toHaveLength(2);
   });
 
-  it('a mark takes the first prompt after it only: a later same command from the main chat stays', () => {
+  // Claude Code hands a prompt typed during a running turn to that turn (`queued_command`); a
+  // command waits and is logged when the turn ends, after the main prompt typed later
+  it('busy orchestrator: a main prompt typed after the queued thread command stays in main', () => {
     const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
     const items = [
-      ...groupAnswers([user('main question', min(0)), answer('main answer', min(0))]),
-      ...groupAnswers([user('plain', min(2)), answer('ok', min(2) + 1)]),
-      ...commandTurn(min(30)),
+      ...groupAnswers([user('busy turn', min(0)), answer('working', min(0) + 1)]),
+      ...groupAnswers([user('Antworte nur mit MAINQ.', min(1) + 2000), answer('MAINQ', min(2))]),
+      ...commandTurn(min(2) + 30_000),
     ];
     const r = routeThreads(items, [marked, weather], true);
-    expect(r.byThread.size).toBe(0);
+    expect(r.byThread.get('t1')?.map((i) => i.kind)).toEqual(['user', 'answer']);
+    expect(
+      r.main.filter((i) => i.kind === 'user').map((i) => (i as { text: string }).text)
+    ).toEqual(['busy turn', 'Antworte nur mit MAINQ.']);
+  });
+
+  it('a Status-view instruction of another thread typed between mark and queued command', () => {
+    const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
+    const items = [
+      ...groupAnswers([
+        user(`${weather.tag}\nbitte X`, min(1) + 100),
+        answer(`${weather.tag}\nok`, min(1) + 200),
+      ]),
+      ...commandTurn(min(2)),
+    ];
+    const r = routeThreads(items, [marked, weather], true);
+    expect(r.byThread.get('t1')).toHaveLength(2);
+    expect(r.byThread.get('t2')).toHaveLength(2);
+  });
+
+  it('a worker message between mark and command (agent busy): the command still goes to the thread', () => {
+    const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
+    const items = [
+      ...groupAnswers([worker('omp-bbbb', 'done', min(1) + 100), answer('ok', min(1) + 200)]),
+      ...commandTurn(min(2)),
+    ];
+    expect(routeThreads(items, [marked, weather], true).byThread.get('t1')).toHaveLength(2);
+  });
+
+  it('two marks claim one command each; a third identical command from main stays', () => {
+    const marked = {
+      ...shop,
+      commands: [
+        { at: min(1), command: '/status-report' },
+        { at: min(1) + 10, command: '/status-report' },
+      ],
+    };
+    const items = [
+      ...groupAnswers([user('plain', min(1) + 500), answer('ok', min(1) + 600)]),
+      ...commandTurn(min(2)),
+      ...commandTurn(min(3)),
+      ...commandTurn(min(4)),
+    ];
+    const r = routeThreads(items, [marked, weather], true);
+    expect(r.byThread.get('t1')).toHaveLength(4);
+    expect(r.main.filter((i) => i.kind === 'user')).toHaveLength(2);
+  });
+
+  it('window starting at the thread command: claimed when the prompt before the window is older than the mark', () => {
+    const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
+    const items = [
+      ...commandTurn(min(1) + 300),
+      ...groupAnswers([user('later main', min(3)), answer('x', min(4))]),
+    ];
+    expect(routeThreads(items, [marked, weather], false, min(0)).byThread.get('t1')).toHaveLength(
+      2
+    );
+    // no proof (older host) or a prompt at/after the mark before the window: undecided, main
+    expect(routeThreads(items, [marked, weather], false).byThread.size).toBe(0);
+    expect(routeThreads(items, [marked, weather], false, min(1)).byThread.size).toBe(0);
   });
 
   it('paged window: the thread turn is paged out, a later main /status-report stays in main', () => {
@@ -379,6 +446,8 @@ describe('a command sent from a thread (no tag: the CLI runs a command only as t
     const r = routeThreads(items, [marked, weather], false);
     expect(r.main.filter((i) => i.kind === 'user')).toHaveLength(1);
     expect(r.byThread.size).toBe(0);
+    // the host names the thread's own command as the prompt before the window: still main
+    expect(routeThreads(items, [marked, weather], false, min(1) + 500).byThread.size).toBe(0);
     // once the older pages are in, the mark finds its own turn again
     const all = routeThreads([...commandTurn(min(1) + 500), ...items], [marked, weather], true);
     expect(all.byThread.get('t1')).toHaveLength(2);
@@ -396,5 +465,47 @@ describe('a command sent from a thread (no tag: the CLI runs a command only as t
       [marked, weather]
     );
     expect(r.byThread.size).toBe(0);
+  });
+});
+
+describe('a replay page that starts at the thread command (devorbit_page olderTs)', () => {
+  const marked = { ...shop, commands: [{ at: T0 + 1000, command: '/status-report' }] };
+  const turn = (text: string, at: number, i: number) => [
+    { type: 'devorbit_user', text, history: true, ts: at },
+    {
+      type: 'assistant',
+      ts: at + 500,
+      message: { id: `m${i}`, content: [{ type: 'text', text: `answer ${i}` }] },
+    },
+  ];
+  const events = (olderTs?: number) => [
+    { type: 'system', subtype: 'init', model: 'x' },
+    { type: 'devorbit_page', before: 40, more: true, ...(olderTs ? { olderTs } : {}) },
+    ...turn('/status-report', T0 + 1200, 0),
+    ...Array.from({ length: 19 }, (_, i) => turn(`main ${i}`, T0 + 10_000 * (i + 1), i + 1)).flat(),
+  ];
+  const routed = (olderTs?: number) => {
+    const state = events(olderTs).reduce(reduceChat, initialChatState);
+    return routeThreads(
+      groupAnswers(state.messages),
+      [marked, weather],
+      !state.older?.more,
+      state.older?.olderTs
+    );
+  };
+  it('the command turn routes to the thread although the window starts at it', () => {
+    expect(routed(T0 + 500).byThread.get('t1')).toHaveLength(2);
+  });
+  it('without the host proof it waits for the older page', () => {
+    expect(routed().byThread.size).toBe(0);
+  });
+  it('an older page keeps the proof of the page before it', () => {
+    const state = prependHistory(events().reduce(reduceChat, initialChatState), {
+      events: [],
+      before: 0,
+      more: true,
+      olderTs: T0 + 500,
+    });
+    expect(state.older?.olderTs).toBe(T0 + 500);
   });
 });

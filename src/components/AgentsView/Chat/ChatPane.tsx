@@ -474,7 +474,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       routeThreads(
         items.filter((item) => item !== recap),
         threadList,
-        !state.older?.more
+        !state.older?.more,
+        state.older?.olderTs
       ),
     [items, recap, threadList, state.older]
   );

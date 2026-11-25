@@ -30,7 +30,7 @@ export interface ChatThread {
   binding?: { project: string; task: string } | null;
   /**
    * Command marks (`at`: ms, host clock): a command goes out without the tag, so each mark gives
-   * the thread the first prompt at or after it, when that prompt is the command
+   * the thread the first prompt at or after it that is the command
    */
   commands?: { at: number; command: string }[];
 }
@@ -148,15 +148,20 @@ export function threadOf(item: ChatItem, threads: ChatThread[]): string | null {
 }
 
 /**
- * Command prompts the threads' marks claim: a mark is one turn, so it takes the first prompt
- * typed after it, and only when that prompt is its command. Only while the loaded items reach
- * back to the mark (or are the whole history): with its turn paged out, a later prompt would
- * look first; the mark claims again once the older pages are in
+ * Command prompts the threads' marks claim: a mark is one turn, so it takes the first prompt at or
+ * after it that is its command, one each. Prompts in between are skipped: Claude Code logs a
+ * command typed while the agent works only when the turn ends, after prompts typed later. Only
+ * while the loaded items reach back to the mark (an item before it, the host's `olderTs`: the
+ * prompt before the window, or the whole history): with its turn paged out, a later identical
+ * command would look first; the mark claims again once the older pages are in.
+ * shortcut: a mark whose command never got logged (interrupted, queue taken back) claims the next
+ * identical command from the main chat; upgrade when the host drops such marks
  */
 function commandTurns(
   items: ChatItem[],
   threads: ChatThread[],
-  complete: boolean
+  complete: boolean,
+  olderTs: number | undefined
 ): Map<ChatItem, string> {
   const claimed = new Map<ChatItem, string>();
   const marks = threads
@@ -164,21 +169,19 @@ function commandTurns(
     .sort((a, b) => a.at - b.at);
   const oldest = Math.min(...items.map((i) => itemTime(i) ?? Infinity));
   for (const mark of marks) {
-    if (!complete && !(oldest < mark.at)) continue;
-    const first = items.find(
+    // strictly before: an item at the mark's time may be its own command, no proof of reach
+    if (!complete && !(oldest < mark.at) && !(olderTs !== undefined && olderTs < mark.at)) continue;
+    const own = items.find(
       (i) =>
         i.kind === 'user' &&
         i.ts !== undefined &&
         i.ts >= mark.at &&
         !claimed.has(i) &&
-        !agentMessage(i.text)
+        !agentMessage(i.text) &&
+        sameCommand(leadingCommand(i.text.trim())?.command ?? '', mark.command) &&
+        !threadOf(i, threads)
     );
-    if (
-      first?.kind === 'user' &&
-      sameCommand(leadingCommand(first.text.trim())?.command ?? '', mark.command) &&
-      !threadOf(first, threads)
-    )
-      claimed.set(first, mark.id);
+    if (own) claimed.set(own, mark.id);
   }
   return claimed;
 }
@@ -192,7 +195,9 @@ export function routeThreads(
   items: ChatItem[],
   threads: ChatThread[],
   /** The items are the whole history (no older page left to load) */
-  complete = false
+  complete = false,
+  /** ms of the newest prompt before the loaded items (host's `devorbit_page`), if known */
+  olderTs?: number
 ): { main: (ChatItem | ChatThreadMarker)[]; byThread: Map<string, ChatItem[]> } {
   const byThread = new Map<string, ChatItem[]>();
   const main: (ChatItem | ChatThreadMarker)[] = [];
@@ -206,7 +211,7 @@ export function routeThreads(
     return m;
   };
   const parents = new Map(threads.filter((t) => t.parentKey).map((t) => [t.parentKey, t.id]));
-  const commands = commandTurns(items, threads, complete);
+  const commands = commandTurns(items, threads, complete, olderTs);
   let prev: string | null = null;
   for (const item of items) {
     // An answer without a tag (orchestrators started before the tag rule, tool steps only) is the
