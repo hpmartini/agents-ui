@@ -62,6 +62,7 @@ import {
   ThreadComposer,
   ThreadMarkerRow,
   ThreadsPanel,
+  type StatusTask,
   isThreadsMaxKey,
   firstWords,
   useChatThreads,
@@ -288,6 +289,11 @@ interface ChatPaneProps {
   hostActions?: React.ReactNode;
   /** Host view over the chat body (`host.renderPaneView`) */
   paneView?: React.ReactNode;
+  /**
+   * Details of one report task from the host (`host.renderPaneView` with `statusTask`), shown in
+   * the maximised threads panel; null when the host has no Status view
+   */
+  renderStatus?: (task: StatusTask, onClose: () => void) => React.ReactNode;
   /** Linked PRs, issues and running servers (same items as a terminal pane's header) */
   meta?: React.ReactNode;
 }
@@ -312,6 +318,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   headerProps,
   hostActions,
   paneView = null,
+  renderStatus,
   meta,
 }) => {
   const [state, dispatch] = useReducer(reducer, initialChatState);
@@ -651,10 +658,33 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const showThreads = threads.enabled && threadsOpen;
   // A question of the agent needs the main chat: it shows again until answered
   const threadsFull = showThreads && threadsMaxed && !dialog && prompt === null;
+  // H-6: a report task's details in the maximised panel; the header-toggled host view shows
+  // there too, until a thread or an entry is picked (the host keeps its toggle)
+  const [statusTask, setStatusTask] = useState<StatusTask | null>(null);
+  const hostView = paneView !== null && paneView !== false && paneView !== undefined;
+  const [hostViewOff, setHostViewOff] = useState(false);
+  useEffect(() => setHostViewOff(false), [hostView]);
   const maximizeThreads = (on: boolean) => {
     if (on) showThreadsPanel(true);
+    else setStatusTask(null);
     setThreadsMaxed(on);
   };
+  const closeStatus = () => {
+    setStatusTask(null);
+    setHostViewOff(true);
+  };
+  const statusView = !threadsFull
+    ? null
+    : statusTask
+      ? (renderStatus?.(statusTask, closeStatus) ?? null)
+      : hostView && !hostViewOff
+        ? paneView
+        : null;
+  // the host renders a Status view at all (Orkumo with the Status module): list and buttons
+  const firstTask = threads.tasks[0];
+  const statusAvailable =
+    !!firstTask &&
+    !!renderStatus?.({ project: firstTask.project, task: firstTask.task }, closeStatus);
   // On the window: maximising hides the focused main input and focus falls to <body>, where a
   // handler on the pane never hears the key. Keys inside this pane, or on <body> for the active pane on screen.
   const paneRef = useRef<HTMLDivElement>(null);
@@ -710,6 +740,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     setOpenThreadId(id);
     setThreadQuote(null);
     if (id) showThreadsPanel(true);
+    if (statusView) closeStatus();
   };
   const openThread = threads.threads.find((x) => x.id === openThreadId) ?? null;
   const openFromAnswer = async (answer: ChatAnswer) => {
@@ -1023,8 +1054,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         <div
           className={`relative flex-1 min-w-0 min-h-0 flex flex-col ${threadsFull ? 'hidden' : ''}`}
         >
-          {paneView !== null && paneView !== false && (
-            <div data-pane-view className="absolute inset-0 z-20 flex flex-col bg-gray-950">
+          {/* maximised threads take it into their main area; over an open drawer (z-30) */}
+          {hostView && !threadsFull && (
+            <div data-pane-view className="absolute inset-0 z-40 flex flex-col bg-gray-950">
               {paneView}
             </div>
           )}
@@ -1376,6 +1408,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 maximized={threadsFull}
                 onMaximize={maximizeThreads}
                 onHide={() => showThreadsPanel(false)}
+                onShowStatus={
+                  statusAvailable
+                    ? (task) => {
+                        maximizeThreads(true);
+                        setStatusTask(task);
+                      }
+                    : undefined
+                }
+                statusTask={statusTask}
+                statusView={statusView}
+                onCloseStatus={closeStatus}
                 renderThread={(thread) => {
                   const parent = thread?.parentKey
                     ? items.find((i) => i.key === thread.parentKey)
