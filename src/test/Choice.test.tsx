@@ -355,10 +355,13 @@ describe('Choice hardening', () => {
     );
     expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-invalid', 'true');
     for (const r of screen.getAllByRole('radio')) expect(r.className).toContain('border-red-400');
+    rerender(<Choice label="P" value="a" onChange={() => {}} options={opts('A', 'B')} invalid />);
+    expect(screen.getByRole('radio', { name: 'A' }).className).toContain('border-red-400');
     rerender(<Choice label="P" value="x" onChange={() => {}} options={five} invalid />);
     const trigger = screen.getByRole('button', { name: /^P/ });
     expect(trigger).toHaveAttribute('aria-invalid', 'true');
     expect(trigger.className).toContain('border-red-400');
+    expect(trigger.className).not.toContain('hover:border-gray-600');
     rerender(<Choice label="P" value="x" onChange={() => {}} options={five} />);
     expect(screen.getByRole('button', { name: /^P/ })).not.toHaveAttribute('aria-invalid');
   });

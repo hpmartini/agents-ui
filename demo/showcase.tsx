@@ -126,6 +126,18 @@ export const ChoiceShowcase: React.FC = () => {
             />
           </div>
         </Row>
+        <Row title="Invalid with a selected value">
+          <Choice
+            label="Server-rejected theme"
+            value="dark"
+            onChange={() => {}}
+            invalid
+            options={[
+              { value: 'dark', label: 'Dark' },
+              { value: 'light', label: 'Light' },
+            ]}
+          />
+        </Row>
         <Row title="Runtime changes (after 2 s)">
           <div className="flex flex-wrap items-center gap-2">
             <Choice
