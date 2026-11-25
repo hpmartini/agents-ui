@@ -18,10 +18,12 @@ export declare function fitHeight(content: number, { min, max, pinned }: {
  * Returns props for a drag handle that pins the height (remembered under storageKey);
  * double-click, Delete or Backspace on the handle goes back to auto-grow.
  */
-export declare function useAutoGrowTextarea(ref: React.RefObject<HTMLTextAreaElement | null>, value: string, { min, max, storageKey }: {
+export declare function useAutoGrowTextarea(ref: React.RefObject<HTMLTextAreaElement | null>, value: string, { min, max, storageKey, pinMax, }: {
     min: number;
     max: number;
     storageKey?: string;
+    /** Tallest the field may be, dragged or grown by typing, read at use (default 70 % of the window) */
+    pinMax?: (el: HTMLTextAreaElement) => number;
 }): {
     pinned: boolean;
     handleProps: {

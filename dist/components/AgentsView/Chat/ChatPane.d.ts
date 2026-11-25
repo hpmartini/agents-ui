@@ -1,6 +1,17 @@
 import React from 'react';
 import type { AgentSession } from '../../../types';
 import { type ChatSubmitKey } from '../../../utils/chatEvents';
+/** Main chat beside the panel: answer footers, model chip and the host's usage bars fit uncut */
+export declare const CHAT_MAIN_MIN = 460;
+/**
+ * Threads panel beside the main chat, which keeps CHAT_MAIN_MIN; a pane too narrow for both
+ * (splits) gets the panel as a drawer over the chat, up to the pane's width. 0: not measured yet.
+ */
+export declare function threadsLayout(row: number): {
+    overlay: boolean;
+    min: number;
+    max: number;
+};
 interface ChatPaneProps {
     /** Terminal pane whose agent this view shows; input is typed into its PTY */
     pane: AgentSession;

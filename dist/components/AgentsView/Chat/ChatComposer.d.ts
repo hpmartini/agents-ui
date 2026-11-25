@@ -34,6 +34,8 @@ interface ChatComposerProps {
     };
     /** Where the dragged height is remembered; default the main input's key */
     heightKey?: string;
+    /** Tallest dragged height, read at use (keep the function stable); default 70 % of the window */
+    pinMax?: (el: HTMLTextAreaElement) => number;
 }
 /** Chat input: grows with its content, TUI-like keys, `/` and `@` picker with details */
 export declare const ChatComposer: React.FC<ChatComposerProps>;

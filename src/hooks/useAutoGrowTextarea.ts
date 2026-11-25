@@ -44,20 +44,47 @@ function savePinned(key: string | undefined, value: number | null) {
 export function useAutoGrowTextarea(
   ref: React.RefObject<HTMLTextAreaElement | null>,
   value: string,
-  { min, max, storageKey }: { min: number; max: number; storageKey?: string }
+  {
+    min,
+    max,
+    storageKey,
+    pinMax,
+  }: {
+    min: number;
+    max: number;
+    storageKey?: string;
+    /** Tallest the field may be, dragged or grown by typing, read at use (default 70 % of the window) */
+    pinMax?: (el: HTMLTextAreaElement) => number;
+  }
 ) {
   const [pinned, setPinned] = useState(() => readPinned(storageKey));
+  const capOf = useCallback(
+    (el: HTMLTextAreaElement | null) =>
+      Math.max(min, el && pinMax ? pinMax(el) : window.innerHeight * 0.7),
+    [min, pinMax]
+  );
 
   const fit = useCallback(() => {
     const el = ref.current;
     if (!el || !el.clientWidth) return; // hidden: the ResizeObserver fits it once it shows
+    const cap = capOf(el); // before 'auto': a cap read from the layout needs the current height
     el.style.height = 'auto';
     // border-box: scrollHeight excludes the border, so add it or the text scrolls by 2px
     const content = el.scrollHeight + el.offsetHeight - el.clientHeight;
-    const { height, scroll } = fitHeight(content, { min, max, pinned });
+    // a stored height above the cap (smaller pane or window since) shows capped, stays stored
+    // an empty field shows its whole placeholder: the cap is for typed text
+    const floor = el.value ? min : Math.max(min, content);
+    const { height, scroll } = fitHeight(content, {
+      min: floor,
+      max: el.value ? Math.min(max, cap) : Math.max(max, floor),
+      pinned: pinned === null ? null : Math.max(Math.min(pinned, cap), floor),
+    });
     el.style.height = `${height}px`;
     el.style.overflowY = scroll ? 'auto' : 'hidden';
-  }, [ref, min, max, pinned]);
+    // a refit field that scrolls keeps the caret in view when it sits at the end
+    if (scroll && document.activeElement === el && el.selectionEnd === el.value.length)
+      el.scrollTop = el.scrollHeight;
+  }, [ref, min, max, pinned, capOf]);
 
   useLayoutEffect(fit, [fit, value]);
 
@@ -65,24 +92,34 @@ export function useAutoGrowTextarea(
     const el = ref.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     let width = -1;
-    const observer = new ResizeObserver(() => {
-      // Only width changes matter; fit() itself changes the height
-      if (el.clientWidth === width) return;
+    let frame = 0;
+    const observer = new ResizeObserver((entries) => {
+      // the field: only width changes matter, fit() itself changes its height
+      if (entries?.every((e) => e.target === el) && el.clientWidth === width) return;
       width = el.clientWidth;
-      fit();
+      // next frame: the containers settle first (a panel leaving its short layout
+      // resizes the section after the pane) and no observer loop
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
     });
     observer.observe(el);
-    return () => observer.disconnect();
+    // pane and section: when either gets shorter (divider, window, panel layout) the cap
+    // drops, so refit on any change of theirs
+    for (const box of [el.closest('[data-chat-pane]'), el.closest('section')])
+      if (box) observer.observe(box);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [ref, fit]);
 
   const pin = useCallback(
     (next: number | null) => {
-      const clamped =
-        next === null ? null : Math.min(Math.max(next, min), window.innerHeight * 0.7);
+      const clamped = next === null ? null : Math.min(Math.max(next, min), capOf(ref.current));
       setPinned(clamped);
       savePinned(storageKey, clamped);
     },
-    [min, storageKey]
+    [min, storageKey, capOf, ref]
   );
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {

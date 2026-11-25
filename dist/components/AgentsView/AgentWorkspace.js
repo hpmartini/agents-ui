@@ -23,7 +23,10 @@ const ZONE_HIGHLIGHT = {
     bottom: 'inset-x-0 bottom-0 h-1/2',
 };
 /** Panes narrower than this are unreadable terminals: stack them instead */
-const MIN_PANE_PX = 400;
+/** Narrowest pane that shows its header, chat and composer uncut: panes side by side stack below it, the split divider stops at it */
+const MIN_PANE_PX = 420;
+/** Stacked: header, a few log lines, composer, model chip and usage */
+const MIN_PANE_HEIGHT_PX = 360;
 /** Stand-in session for a browser pane, so tab strip, titles and drag treat it like any pane */
 function browserSession(id) {
     const url = browserUrl(id);
@@ -306,7 +309,10 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
         }
         // The stored tree stays; only the rendering stacks panes that would be too narrow
         const stacked = node.dir === 'column' || width / node.children.length < MIN_PANE_PX;
-        return (_jsx(Group, { orientation: stacked ? 'vertical' : 'horizontal', className: "h-full w-full", children: node.children.map((child, index) => (_jsxs(React.Fragment, { children: [index > 0 && (_jsx(Separator, { className: `${stacked ? 'h-1 cursor-row-resize' : 'w-1 cursor-col-resize'} bg-gray-800 hover:bg-blue-500/50 transition-colors` })), _jsx(Panel, { id: `agent-pane-${resolved.tab.id}-${child.id}`, minSize: 10, className: "min-h-0 min-w-0", children: renderNode(resolved, child, visible, stacked ? width : width / node.children.length) })] }, child.id))) }));
+        const group = (_jsx(Group, { orientation: stacked ? 'vertical' : 'horizontal', className: "h-full w-full", 
+            // stacked panes keep their minimum height; a window too short for all scrolls
+            style: stacked ? { minHeight: node.children.length * (MIN_PANE_HEIGHT_PX + 4) } : undefined, children: node.children.map((child, index) => (_jsxs(React.Fragment, { children: [index > 0 && (_jsx(Separator, { className: `${stacked ? 'h-1 cursor-row-resize' : 'w-1 cursor-col-resize'} bg-gray-800 hover:bg-blue-500/50 transition-colors` })), _jsx(Panel, { id: `agent-pane-${resolved.tab.id}-${child.id}`, minSize: stacked ? MIN_PANE_HEIGHT_PX : MIN_PANE_PX, className: "min-h-0 min-w-0", children: renderNode(resolved, child, visible, stacked ? width : width / node.children.length) })] }, child.id))) }));
+        return stacked ? _jsx("div", { className: "h-full w-full overflow-y-auto", children: group }) : group;
     };
     const renderPanes = (resolved, visible) => 'pane' in resolved.root ? (renderNode(resolved, resolved.root, visible, bodyWidth)) : (_jsx("div", { className: "h-full p-1", children: renderNode(resolved, resolved.root, visible, bodyWidth) }));
     const dropOnTab = (targetId, position) => {

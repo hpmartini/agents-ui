@@ -39,40 +39,64 @@ function savePinned(key, value) {
  * Returns props for a drag handle that pins the height (remembered under storageKey);
  * double-click, Delete or Backspace on the handle goes back to auto-grow.
  */
-export function useAutoGrowTextarea(ref, value, { min, max, storageKey }) {
+export function useAutoGrowTextarea(ref, value, { min, max, storageKey, pinMax, }) {
     const [pinned, setPinned] = useState(() => readPinned(storageKey));
+    const capOf = useCallback((el) => Math.max(min, el && pinMax ? pinMax(el) : window.innerHeight * 0.7), [min, pinMax]);
     const fit = useCallback(() => {
         const el = ref.current;
         if (!el || !el.clientWidth)
             return; // hidden: the ResizeObserver fits it once it shows
+        const cap = capOf(el); // before 'auto': a cap read from the layout needs the current height
         el.style.height = 'auto';
         // border-box: scrollHeight excludes the border, so add it or the text scrolls by 2px
         const content = el.scrollHeight + el.offsetHeight - el.clientHeight;
-        const { height, scroll } = fitHeight(content, { min, max, pinned });
+        // a stored height above the cap (smaller pane or window since) shows capped, stays stored
+        // an empty field shows its whole placeholder: the cap is for typed text
+        const floor = el.value ? min : Math.max(min, content);
+        const { height, scroll } = fitHeight(content, {
+            min: floor,
+            max: el.value ? Math.min(max, cap) : Math.max(max, floor),
+            pinned: pinned === null ? null : Math.max(Math.min(pinned, cap), floor),
+        });
         el.style.height = `${height}px`;
         el.style.overflowY = scroll ? 'auto' : 'hidden';
-    }, [ref, min, max, pinned]);
+        // a refit field that scrolls keeps the caret in view when it sits at the end
+        if (scroll && document.activeElement === el && el.selectionEnd === el.value.length)
+            el.scrollTop = el.scrollHeight;
+    }, [ref, min, max, pinned, capOf]);
     useLayoutEffect(fit, [fit, value]);
     useLayoutEffect(() => {
         const el = ref.current;
         if (!el || typeof ResizeObserver === 'undefined')
             return;
         let width = -1;
-        const observer = new ResizeObserver(() => {
-            // Only width changes matter; fit() itself changes the height
-            if (el.clientWidth === width)
+        let frame = 0;
+        const observer = new ResizeObserver((entries) => {
+            // the field: only width changes matter, fit() itself changes its height
+            if (entries?.every((e) => e.target === el) && el.clientWidth === width)
                 return;
             width = el.clientWidth;
-            fit();
+            // next frame: the containers settle first (a panel leaving its short layout
+            // resizes the section after the pane) and no observer loop
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(fit);
         });
         observer.observe(el);
-        return () => observer.disconnect();
+        // pane and section: when either gets shorter (divider, window, panel layout) the cap
+        // drops, so refit on any change of theirs
+        for (const box of [el.closest('[data-chat-pane]'), el.closest('section')])
+            if (box)
+                observer.observe(box);
+        return () => {
+            cancelAnimationFrame(frame);
+            observer.disconnect();
+        };
     }, [ref, fit]);
     const pin = useCallback((next) => {
-        const clamped = next === null ? null : Math.min(Math.max(next, min), window.innerHeight * 0.7);
+        const clamped = next === null ? null : Math.min(Math.max(next, min), capOf(ref.current));
         setPinned(clamped);
         savePinned(storageKey, clamped);
-    }, [min, storageKey]);
+    }, [min, storageKey, capOf, ref]);
     const onPointerDown = (e) => {
         const el = ref.current;
         if (!el || e.button !== 0)

@@ -131,7 +131,10 @@ const ZONE_HIGHLIGHT: Record<DropZone, string> = {
 };
 
 /** Panes narrower than this are unreadable terminals: stack them instead */
-const MIN_PANE_PX = 400;
+/** Narrowest pane that shows its header, chat and composer uncut: panes side by side stack below it, the split divider stops at it */
+const MIN_PANE_PX = 420;
+/** Stacked: header, a few log lines, composer, model chip and usage */
+const MIN_PANE_HEIGHT_PX = 360;
 
 /** Stand-in session for a browser pane, so tab strip, titles and drag treat it like any pane */
 function browserSession(id: string): AgentSession | null {
@@ -577,8 +580,13 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     }
     // The stored tree stays; only the rendering stacks panes that would be too narrow
     const stacked = node.dir === 'column' || width / node.children.length < MIN_PANE_PX;
-    return (
-      <Group orientation={stacked ? 'vertical' : 'horizontal'} className="h-full w-full">
+    const group = (
+      <Group
+        orientation={stacked ? 'vertical' : 'horizontal'}
+        className="h-full w-full"
+        // stacked panes keep their minimum height; a window too short for all scrolls
+        style={stacked ? { minHeight: node.children.length * (MIN_PANE_HEIGHT_PX + 4) } : undefined}
+      >
         {node.children.map((child, index) => (
           <React.Fragment key={child.id}>
             {index > 0 && (
@@ -588,7 +596,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             )}
             <Panel
               id={`agent-pane-${resolved.tab.id}-${child.id}`}
-              minSize={10}
+              minSize={stacked ? MIN_PANE_HEIGHT_PX : MIN_PANE_PX}
               className="min-h-0 min-w-0"
             >
               {renderNode(resolved, child, visible, stacked ? width : width / node.children.length)}
@@ -597,6 +605,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
         ))}
       </Group>
     );
+    return stacked ? <div className="h-full w-full overflow-y-auto">{group}</div> : group;
   };
 
   const renderPanes = (resolved: ResolvedTab, visible: boolean) =>

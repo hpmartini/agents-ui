@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowUp,
   ChevronRight,
+  ChevronUp,
   FolderGit2,
   Loader2,
   Expand,
@@ -211,6 +212,22 @@ export const ThreadMarkerRow: React.FC<{
   );
 };
 
+/** Below this height the panel shows list or open thread, not both */
+const SHORT_PANEL = 520;
+/**
+ * The thread input beside its log: dragged at most 40 % of the chat pane's height, and in a short
+ * (stacked) pane 40 % of the thread view, so header, log and Attach stay inside the panel
+ */
+/** Room the open thread keeps above its input: thread header, binding line, a few log lines */
+const THREAD_VIEW_ROOM = 230;
+const threadInputMax = (el: HTMLTextAreaElement) =>
+  Math.min(
+    (el.closest('[data-chat-pane]')?.clientHeight ?? window.innerHeight) * 0.4,
+    (el.closest('section')?.clientHeight ?? window.innerHeight) - THREAD_VIEW_ROOM
+  );
+/** Unsent thread input per chat and thread: hiding the panel unmounts the composer */
+const threadDrafts = new Map<string, string>();
+const threadFiles = new Map<string, File[]>();
 export const THREAD_COMPOSER_HEIGHT_KEY = 'devOrbitChatThreadComposerHeight';
 
 /**
@@ -230,11 +247,47 @@ export const ThreadComposer: React.FC<{
   disabled?: boolean;
   /** Focus the input when this changes (thread opened, quote added, panel maximised) */
   focusKey?: unknown;
-}> = ({ chatId, submitKey, history, agents, quote, onClearQuote, onSend, disabled, focusKey }) => {
+  /** The open thread (its unsent text survives hiding the panel) */
+  draftKey?: string | null;
+}> = ({
+  chatId,
+  submitKey,
+  history,
+  agents,
+  quote,
+  onClearQuote,
+  onSend,
+  disabled,
+  focusKey,
+  draftKey,
+}) => {
   const t = useLabels().terminal;
   const uploads = useTransport().uploads;
-  const [text, setText] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
+  const storeKey = `${chatId}:${draftKey ?? ''}`;
+  const [text, setTextState] = useState(() => threadDrafts.get(storeKey) ?? '');
+  useEffect(() => setTextState(threadDrafts.get(storeKey) ?? ''), [storeKey]);
+  const setText = useCallback(
+    (value: string) => {
+      if (value) threadDrafts.set(storeKey, value);
+      else threadDrafts.delete(storeKey);
+      setTextState(value);
+    },
+    [storeKey]
+  );
+  const currentKey = useRef(storeKey);
+  currentKey.current = storeKey;
+  const [files, setFilesState] = useState<File[]>(() => threadFiles.get(storeKey) ?? []);
+  useEffect(() => setFilesState(threadFiles.get(storeKey) ?? []), [storeKey]);
+  const setFiles = useCallback(
+    (next: File[] | ((prev: File[]) => File[])) =>
+      setFilesState((prev) => {
+        const value = typeof next === 'function' ? next(prev) : next;
+        if (value.length) threadFiles.set(storeKey, value);
+        else threadFiles.delete(storeKey);
+        return value;
+      }),
+    [storeKey]
+  );
   const [sending, setSending] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -244,10 +297,17 @@ export const ThreadComposer: React.FC<{
   const send = async () => {
     if (empty || sending || disabled) return;
     setSending(true);
+    const sentKey = storeKey;
     try {
       if (await onSend(text.trim(), files)) {
-        setText('');
-        setFiles([]);
+        // another thread opened meanwhile: only the sent thread's draft goes
+        if (sentKey === currentKey.current) {
+          setText('');
+          setFiles([]);
+        } else {
+          threadDrafts.delete(sentKey);
+          threadFiles.delete(sentKey);
+        }
       }
     } finally {
       setSending(false);
@@ -288,6 +348,7 @@ export const ThreadComposer: React.FC<{
           label={t.replyInThread}
           placeholders={{ enter: t.threadPlaceholderEnter, modEnter: t.threadPlaceholderModEnter }}
           heightKey={THREAD_COMPOSER_HEIGHT_KEY}
+          pinMax={threadInputMax}
         />
         <button
           type="button"
@@ -468,6 +529,8 @@ export interface ThreadsPanelProps {
   /** Over the whole pane, the main chat hidden */
   maximized: boolean;
   onMaximize: (maximized: boolean) => void;
+  /** Hide the whole panel (the pane header's threads button shows it again) */
+  onHide: () => void;
 }
 
 export const THREADS_SIDEBAR_KEY = 'agents-ui:threads-sidebar';
@@ -498,6 +561,7 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
   renderThread,
   maximized,
   onMaximize,
+  onHide,
 }) => {
   const t = useLabels().terminal;
   const [menu, setMenu] = useState(false);
@@ -524,12 +588,25 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
   const open = threads.find((x) => x.id === openId) ?? null;
   const draft = openId === DRAFT_THREAD;
   const dismissMenu = useCallback(() => setMenu(false), []);
+  // A short panel (stacked split) has no room for list and thread: the open thread takes it,
+  // "Back to the list" in its header brings the list back
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [short, setShort] = useState(false);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => setShort(el.clientHeight < SHORT_PANEL));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   const unread = active.reduce((n, x) => n + unreadCount(byThread.get(x.id) ?? [], x.readAt), 0);
 
   return (
     <div
+      ref={rootRef}
       className="relative flex h-full min-h-0 flex-col bg-gray-950"
       data-threads-panel
+      data-threads-short={short || undefined}
       data-threads-maximized={maximized || undefined}
       onKeyDown={(e) => {
         // last in line: picker, quote and menu take their Esc first
@@ -592,6 +669,15 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
         >
           {maximized ? <Shrink size={12} aria-hidden /> : <Expand size={12} aria-hidden />}
         </button>
+        <button
+          type="button"
+          onClick={onHide}
+          aria-label={t.hideThreadsPanel}
+          title={t.hideThreadsPanel}
+          className={`${smallBtn} px-1`}
+        >
+          <X size={12} aria-hidden />
+        </button>
       </div>
       {menu && (
         <NewThreadMenu
@@ -641,7 +727,7 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
         data-threads-layout={sidebar ? 'sidebar' : 'top'}
         className={`flex min-h-0 flex-1 ${sidebar ? 'flex-row' : 'flex-col'}`}
       >
-        {status === 'ready' && threads.length > 0 && (
+        {status === 'ready' && threads.length > 0 && !(short && (open || draft) && !sidebar) && (
           <div
             className={`shrink-0 overflow-y-auto border-gray-800 ${
               sidebar
@@ -720,11 +806,11 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
               <button
                 type="button"
                 onClick={() => onOpen(null)}
-                aria-label={t.hideThreads}
-                title={t.hideThreads}
+                aria-label={t.collapseThread}
+                title={t.collapseThread}
                 className={`${smallBtn} px-1`}
               >
-                <X size={12} aria-hidden />
+                <ChevronUp size={12} aria-hidden />
               </button>
             </div>
             {renderThread(open)}

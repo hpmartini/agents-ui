@@ -203,9 +203,46 @@ const NO_ITEMS: never[] = [];
 const THREADS_WIDTH_KEY = 'agents-ui:threads-width';
 const THREADS_OPEN_KEY = 'agents-ui:threads-open';
 const THREADS_WIDTH = 360;
-const THREADS_MIN = 260;
+const THREADS_MIN = 300;
 const THREADS_MAX = 640;
-/** Stored floor: a narrow split may go below THREADS_MIN (its own 40 % floor) */
+/** Main chat beside the panel: answer footers, model chip and the host's usage bars fit uncut */
+export const CHAT_MAIN_MIN = 460;
+/**
+ * Threads panel beside the main chat, which keeps CHAT_MAIN_MIN; a pane too narrow for both
+ * (splits) gets the panel as a drawer over the chat, up to the pane's width. 0: not measured yet.
+ */
+export function threadsLayout(row: number): { overlay: boolean; min: number; max: number } {
+  if (!row) return { overlay: false, min: THREADS_MIN, max: THREADS_MAX };
+  const room = row - CHAT_MAIN_MIN - HANDLE_NET;
+  if (room < THREADS_MIN) {
+    return { overlay: true, min: Math.min(THREADS_MIN, row - DRAWER_GAP), max: row - DRAWER_GAP };
+  }
+  return { overlay: false, min: THREADS_MIN, max: Math.min(THREADS_MAX, room) };
+}
+/** Stored ceiling: the widest drawer (a wide pane gets the panel beside, capped at THREADS_MAX) */
+const THREADS_DRAWER_MAX = 4096;
+/** The widest drawer leaves this much chat visible, so its handle never lands on the split divider */
+const DRAWER_GAP = 24;
+/** Main input at most 40 % of the pane, and the chat log keeps MAIN_LOG_ROOM (short stacked panes) */
+const MAIN_LOG_ROOM = 100;
+const mainInputMax = (el: HTMLTextAreaElement) => {
+  const pane = el.closest('[data-chat-pane]');
+  const byPane = (pane?.clientHeight ?? window.innerHeight) * 0.4;
+  const log = pane?.querySelector('[role="log"]');
+  if (!pane || !log) return byPane;
+  // field + log share the free height: what the field takes, the log loses; content
+  // already past the pane's bottom (pane just got shorter) comes off as well
+  const overflow = Math.max(0, pane.scrollHeight - pane.clientHeight);
+  return Math.min(byPane, el.offsetHeight + log.clientHeight - MAIN_LOG_ROOM - overflow);
+};
+/** Header shows model and path only where they stay readable beside the title */
+const SHOW_MODEL_PANE = 800;
+const SHOW_PATH_PANE = 1000;
+/** Below this pane width the header drops path, model and harness and puts its buttons on a second row, so the name stays readable */
+const NARROW_PANE = 640;
+/** ResizeHandle's net width in the row: 9 px with -4 px margins */
+const HANDLE_NET = 1;
+/** Stored floor: the overlay in a narrow pane may be narrower than THREADS_MIN */
 const THREADS_FLOOR = 120;
 const readFlag = (key: string, fallback: boolean) => {
   try {
@@ -588,10 +625,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     THREADS_WIDTH_KEY,
     THREADS_WIDTH,
     THREADS_FLOOR,
-    THREADS_MAX
+    // a drawer drags up to its pane, which may be wider than THREADS_MAX; the layout clamps
+    THREADS_DRAWER_MAX
   );
-  // The panel takes at most 60 % of the pane (splits are narrow): the handle starts from the width
-  // on screen, else a drag from a stored 420 behind a 281 cap shows no movement
+  // Beside the main chat the panel leaves it CHAT_MAIN_MIN; the handle starts from the width on
+  // screen, else a drag from a stored 420 behind a lower cap shows no movement
   const rowRef = useRef<HTMLDivElement>(null);
   const [rowWidth, setRowWidth] = useState(0);
   useEffect(() => {
@@ -602,9 +640,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     setRowWidth(row.clientWidth);
     return () => observer.disconnect();
   }, []);
-  const threadsMax = rowWidth ? Math.min(THREADS_MAX, Math.floor(rowWidth * 0.6)) : THREADS_MAX;
-  // Narrow panes (splits): 260-640 at most 60 % would leave no travel, so the floor drops to 40 %
-  const threadsMin = rowWidth ? Math.min(THREADS_MIN, Math.floor(rowWidth * 0.4)) : THREADS_MIN;
+  const { overlay: threadsOverlay, min: threadsMin, max: threadsMax } = threadsLayout(rowWidth);
+  const narrowPane = rowWidth > 0 && rowWidth < NARROW_PANE;
   const threadsShown = clampWidth(threadsWidth, threadsMin, threadsMax);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [threadQuote, setThreadQuote] = useState<ChatQuote | null>(null);
@@ -618,17 +655,22 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   // On the window: maximising hides the focused main input and focus falls to <body>, where a
   // handler on the pane never hears the key. Keys inside this pane, or on <body> for the active pane on screen.
   const paneRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
   const maxKeys = useRef({
     enabled: false,
     full: false,
+    drawer: false,
     active: false,
     toggle: (_on: boolean) => {},
+    hide: () => {},
   });
   maxKeys.current = {
     enabled: threads.enabled,
     full: threadsFull,
+    drawer: showThreads && threadsOverlay && !threadsFull,
     active,
     toggle: maximizeThreads,
+    hide: () => showThreadsPanel(false),
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -648,6 +690,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       } else if (e.key === 'Escape' && k.full) {
         e.preventDefault();
         k.toggle(false);
+      } else if (
+        e.key === 'Escape' &&
+        k.drawer &&
+        (loose || (!!target && !!asideRef.current?.contains(target)))
+      ) {
+        // the drawer covers the chat: Esc in it (or with focus on the page) puts it away
+        e.preventDefault();
+        k.hide();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -749,7 +799,23 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   useLayoutEffect(() => {
     const el = threadListRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [threadItems, openThreadId]);
+    // showThreads: a reopened panel mounts a new log, which starts at the top
+  }, [threadItems, openThreadId, showThreads]);
+  // a log at its newest message stays there when the pane or the thread input resizes it
+  useEffect(() => {
+    const el = threadListRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    // judged with the height before this resize: scroll events fired by the shrink itself
+    // would otherwise read as the user scrolling away from the end
+    let height = el.clientHeight;
+    const observer = new ResizeObserver(() => {
+      const atEnd = el.scrollHeight - el.scrollTop - height < 8;
+      height = el.clientHeight;
+      if (atEnd) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [openThreadId, showThreads, threadsFull]);
   useEffect(() => {
     if (quote) inputRef.current?.focus();
   }, [quote]);
@@ -789,22 +855,38 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     >
       <div
         {...headerProps}
-        className={`flex flex-nowrap items-center gap-x-1.5 h-8 px-2 border-b text-xs shrink-0 bg-gray-900 border-gray-800 ${
+        className={`flex items-center gap-x-1.5 px-2 border-b text-xs shrink-0 bg-gray-900 border-gray-800 ${
+          narrowPane ? 'flex-wrap min-h-8 py-0.5' : 'flex-nowrap h-8'
+        } ${
           headerProps?.draggable ? 'cursor-grab active:cursor-grabbing' : ''
         } ${headerProps?.className ?? ''}`}
       >
         <MessageSquare size={13} aria-hidden className="text-blue-300 shrink-0" />
-        <span className="font-medium text-gray-200 truncate min-w-0">{pane.name}</span>
-        {harness !== 'claude' && (
+        <span
+          className={`font-medium text-gray-200 truncate ${
+            narrowPane ? 'min-w-0 flex-1 basis-[calc(100%-6rem)] leading-7' : 'min-w-[9rem]'
+          }`}
+          title={pane.name}
+        >
+          {pane.name}
+        </span>
+        {harness !== 'claude' && !narrowPane && (
           <span className="shrink-0 px-1 rounded border border-gray-700 text-[10px] text-gray-400">
             {harnessName}
           </span>
         )}
-        <span className="text-gray-500 font-mono truncate min-w-0 hidden lg:inline">
-          {pane.cwd}
-        </span>
-        {state.model && (
-          <span className="text-gray-500 truncate min-w-0 hidden sm:inline">{state.model}</span>
+        {(!rowWidth || rowWidth >= SHOW_PATH_PANE) && (
+          <span
+            className="text-gray-500 font-mono truncate min-w-0 hidden lg:inline"
+            title={pane.cwd}
+          >
+            {pane.cwd}
+          </span>
+        )}
+        {state.model && (!rowWidth || rowWidth >= SHOW_MODEL_PANE) && (
+          <span className="text-gray-500 truncate min-w-0 hidden sm:inline" title={state.model}>
+            {state.model}
+          </span>
         )}
         <span
           className={`shrink-0 ${prompting || !connected ? 'text-amber-300' : busy ? 'text-blue-300' : 'text-gray-500'}`}
@@ -917,7 +999,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         </button>
       </div>
 
-      <div ref={rowRef} className="flex-1 min-h-0 flex">
+      <div ref={rowRef} className="relative flex-1 min-h-0 flex">
         {/* hidden, not unmounted: draft, scroll position and the live stream stay */}
         <div
           className={`relative flex-1 min-w-0 min-h-0 flex flex-col ${threadsFull ? 'hidden' : ''}`}
@@ -1142,6 +1224,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 suggestionCut={suggestion?.truncated}
                 takeSuggestion={() => takePaneSuggestion(pane.id)}
                 inputRef={inputRef}
+                pinMax={mainInputMax}
               />
               <button
                 type="button"
@@ -1212,8 +1295,26 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             )}
           </div>
         </div>
+        {showThreads && threadsOverlay && !threadsFull && (
+          // the drawer covers the chat: dimmed, not cut off; a click puts the drawer away
+          <div
+            aria-hidden
+            data-threads-scrim
+            className="absolute inset-0 z-30 bg-gray-950/70 backdrop-blur-[2px]"
+            onClick={() => showThreadsPanel(false)}
+          />
+        )}
         {showThreads && (
-          <>
+          <div
+            data-threads-mode={threadsFull ? 'full' : threadsOverlay ? 'overlay' : 'side'}
+            className={
+              threadsFull
+                ? 'flex min-h-0 min-w-0 flex-1'
+                : threadsOverlay
+                  ? 'absolute inset-y-0 right-0 z-30 flex max-w-full shadow-[-12px_0_32px_rgba(0,0,0,0.55)]'
+                  : 'flex min-h-0 shrink-0'
+            }
+          >
             {!threadsFull && (
               <ResizeHandle
                 width={threadsShown}
@@ -1226,12 +1327,13 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               />
             )}
             <aside
+              ref={asideRef}
               aria-label={t.threads}
               style={threadsFull ? undefined : { width: threadsShown }}
               className={
                 threadsFull
                   ? 'min-h-0 min-w-0 flex-1'
-                  : 'min-h-0 max-w-[60%] shrink-0 border-l border-gray-800'
+                  : 'min-h-0 max-w-full shrink-0 border-l border-gray-800 bg-gray-950'
               }
             >
               <ThreadsPanel
@@ -1254,13 +1356,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 }
                 maximized={threadsFull}
                 onMaximize={maximizeThreads}
+                onHide={() => showThreadsPanel(false)}
                 renderThread={(thread) => {
                   const parent = thread?.parentKey
                     ? items.find((i) => i.key === thread.parentKey)
                     : undefined;
                   return (
                     <>
-                      <div ref={threadListRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-1">
+                      <div
+                        ref={threadListRef}
+                        className="min-h-20 flex-1 overflow-y-auto px-3 py-1"
+                      >
                         {needsOlder && (
                           <div role="status" className="py-2 text-center text-xs text-gray-500">
                             {t.loadingThreadHistory}
@@ -1328,13 +1434,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                         onSend={sendInThread}
                         disabled={!connected}
                         focusKey={`${openThreadId}:${threadsFull}`}
+                        draftKey={openThreadId}
                       />
                     </>
                   );
                 }}
               />
             </aside>
-          </>
+          </div>
         )}
       </div>
     </div>

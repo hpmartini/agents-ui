@@ -69,6 +69,8 @@ export declare const ThreadComposer: React.FC<{
     disabled?: boolean;
     /** Focus the input when this changes (thread opened, quote added, panel maximised) */
     focusKey?: unknown;
+    /** The open thread (its unsent text survives hiding the panel) */
+    draftKey?: string | null;
 }>;
 export interface ThreadsPanelProps {
     status: ThreadsStatus;
@@ -90,6 +92,8 @@ export interface ThreadsPanelProps {
     /** Over the whole pane, the main chat hidden */
     maximized: boolean;
     onMaximize: (maximized: boolean) => void;
+    /** Hide the whole panel (the pane header's threads button shows it again) */
+    onHide: () => void;
 }
 export declare const THREADS_SIDEBAR_KEY = "agents-ui:threads-sidebar";
 /** Mod+Shift+M: maximise or restore the threads panel of the active pane */

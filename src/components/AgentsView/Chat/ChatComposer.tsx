@@ -50,6 +50,8 @@ interface ChatComposerProps {
   placeholders?: { enter: string; modEnter: string };
   /** Where the dragged height is remembered; default the main input's key */
   heightKey?: string;
+  /** Tallest dragged height, read at use (keep the function stable); default 70 % of the window */
+  pinMax?: (el: HTMLTextAreaElement) => number;
 }
 
 /** Chat input: grows with its content, TUI-like keys, `/` and `@` picker with details */
@@ -72,6 +74,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   label,
   placeholders,
   heightKey = CHAT_COMPOSER_HEIGHT_KEY,
+  pinMax,
 }) => {
   const t = useLabels().terminal;
   // The suggestion the user typed over or took; a new one shows again
@@ -101,6 +104,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     min: MIN_HEIGHT,
     max: MAX_HEIGHT,
     storageKey: heightKey,
+    pinMax,
   });
 
   useLayoutEffect(() => {
