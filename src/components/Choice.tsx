@@ -226,7 +226,7 @@ function Pills<V extends string>({
             onKeyDown={(e) => onKeyDown(e, i)}
             className={`${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${
               on
-                ? `bg-sel ${invalid ? 'border-red-400' : 'border-blue-300'} ${o.muted ? 'text-gray-100' : 'text-white'}`
+                ? `bg-sel ${invalid ? 'border-red-400' : 'border-blue-300'} ${o.muted ? 'text-gray-200' : 'text-white'}`
                 : `${invalid ? 'border-red-400' : 'border-gray-700'} ${o.muted ? 'text-gray-500 hover:text-gray-200' : 'text-gray-300 hover:text-white'} hover:bg-gray-800`
             }`}
           >
