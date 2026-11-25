@@ -91,7 +91,7 @@ export function useAutoGrowTextarea(
     let width = -1;
     const observer = new ResizeObserver((entries) => {
       // the field: only width changes matter, fit() itself changes its height
-      if (entries.every((e) => e.target === el) && el.clientWidth === width) return;
+      if (entries?.every((e) => e.target === el) && el.clientWidth === width) return;
       width = el.clientWidth;
       fit();
     });
