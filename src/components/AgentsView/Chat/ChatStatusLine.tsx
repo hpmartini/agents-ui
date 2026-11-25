@@ -12,6 +12,20 @@ import { pollWhileVisible } from '../../../utils/visiblePoll';
 const POLL_MS = 15_000;
 
 /**
+ * Columns of the status line by its width (0: not measured yet). Below 640 px the empty cells
+ * that align the wide grid go: branch/model and the usage then share one row, so the footer
+ * (pane-wide, under the threads panel too) leaves a short split pane room for the composers
+ */
+export function statusLayout(width: number): { cols: string; placeholders: boolean } {
+  if (width && width < 340) return { cols: 'grid-cols-1', placeholders: false };
+  if (width && width < 640) return { cols: 'grid-cols-[auto_minmax(0,1fr)]', placeholders: false };
+  return {
+    cols: 'grid-cols-2 sm:grid-cols-[auto_minmax(9rem,1fr)_minmax(6rem,0.6fr)_minmax(9rem,1fr)]',
+    placeholders: true,
+  };
+}
+
+/**
  * TUI-like status line: branch with untracked (?) / changed (±) counts, prompt cache and
  * context, 5h / 7d plan limits. Refreshes while visible and after each finished turn.
  */
@@ -64,18 +78,14 @@ export const ChatStatusLine: React.FC<{
   const { git, cache, context, limits } = status;
   const cold = cache && cacheCountdown(cache, Date.now()).expired;
   const fill = context ? Math.min(100, (context.tokens / context.window) * 100) : 0;
+  const layout = statusLayout(width);
+  const empty = layout.placeholders ? <span /> : null;
 
   return (
     <div
       ref={boxRef}
       data-chat-status
-      className={`mt-2 grid ${
-        width && width < 400
-          ? 'grid-cols-1'
-          : width && width < 640
-            ? 'grid-cols-[auto_minmax(0,1fr)]'
-            : 'grid-cols-2 sm:grid-cols-[auto_minmax(9rem,1fr)_minmax(6rem,0.6fr)_minmax(9rem,1fr)]'
-      } items-end gap-x-4 gap-y-2 text-xs text-gray-300`}
+      className={`mt-2 grid ${layout.cols} items-end gap-x-4 gap-y-2 text-xs text-gray-300`}
     >
       <div className="flex flex-col items-start gap-1.5 self-center min-w-0">
         {git?.branch && (
@@ -126,14 +136,14 @@ export const ChatStatusLine: React.FC<{
           )}
         </div>
       ) : (
-        <span />
+        empty
       )}
       {limits ? (
         <>
           {limits.fiveHour ? (
             <LimitBar label={t.limitFiveHours} window={limits.fiveHour} unknownText="–" />
           ) : (
-            <span />
+            empty
           )}
           <LimitBar
             label={t.limitWeek}
