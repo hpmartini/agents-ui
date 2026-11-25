@@ -115,13 +115,15 @@ export function threadCommand(body: string, commands: { name: string }[]): strin
 
 /** A leading thread tag: names never hold `[` or `]` (the server cleans them) */
 const LEADING_TAG_RE = /^\s*\[Thread: [^[\]\n]*\][ \t]*\n?/;
+/** A line that is only a tag: one answer to prompts of several threads opens each part with one */
+const TAG_LINE_RE = /^[ \t]*\[Thread: [^[\]\n]*\][ \t]*(?:\n|$)/gm;
 
 /**
- * Message text without its leading thread tag line, whichever thread's: after a merge or a move
- * a message keeps its source's tag, shown in another thread or the main chat
+ * Message text without its thread tag lines, whichever thread's: after a merge or a move a
+ * message keeps its source's tag, shown in another thread or the main chat
  */
 export function stripTag(text: string): string {
-  return text.replace(LEADING_TAG_RE, '');
+  return text.replace(LEADING_TAG_RE, '').replace(TAG_LINE_RE, '');
 }
 
 export const hhmm = (ms: number) => {

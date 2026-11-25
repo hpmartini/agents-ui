@@ -238,6 +238,27 @@ describe('queued prompts go where they belong (AC-14)', () => {
     expect(document.body.textContent).not.toContain(TAG_B);
   });
 
+  it('F5: one answer to two queued prompts: the tag line between its parts does not show', async () => {
+    const TAG_B = threadTag({ project: 'Demo', task: 'B' });
+    await mount(thread(), [
+      { type: 'devorbit_user', key: 'u-1', text: 'Main control', ts: at + 10 },
+      {
+        type: 'assistant',
+        message: {
+          id: 'a1',
+          content: [
+            {
+              type: 'text',
+              text: `Done.\n\nMain control: got it.\n\n${TAG_B}\nThread check: got it.`,
+            },
+          ],
+        },
+      },
+    ]);
+    await waitFor(() => expect(document.body.textContent).toContain('Thread check: got it.'));
+    expect(document.body.textContent).not.toContain(TAG_B);
+  });
+
   it('a main-chat message typed while busy stays in the main chat', async () => {
     const { aside } = await mount(thread(), [
       { type: 'devorbit_queue', op: 'enqueue', text: 'Main question' },
