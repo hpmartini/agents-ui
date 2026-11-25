@@ -91,7 +91,7 @@ export const panelsEn = {
         {
             title: 'Manage',
             rows: [
-                ['Ctrl+S', 'Toggle grouping: state ↔ directory'],
+                ['Ctrl+S', 'Cycle grouping: Project → Status → Directory → None'],
                 ['Ctrl+T (Alt+P)', 'Pin / unpin the selected session'],
                 ['Ctrl+R', 'Rename the selected session'],
                 ['Shift+↑ / Shift+↓', 'Reorder the selected session or group'],
@@ -360,7 +360,7 @@ export const panelsDe = {
         {
             title: 'Verwalten',
             rows: [
-                ['Ctrl+S', 'Gruppierung umschalten: Status ↔ Verzeichnis'],
+                ['Ctrl+S', 'Gruppierung durchschalten: Projekt → Status → Verzeichnis → Keine'],
                 ['Ctrl+T (Alt+P)', 'Gewählte Session anheften / lösen'],
                 ['Ctrl+R', 'Gewählte Session umbenennen'],
                 ['Shift+↑ / Shift+↓', 'Gewählte Session oder Gruppe verschieben'],
