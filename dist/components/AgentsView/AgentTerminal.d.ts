@@ -34,9 +34,15 @@ interface AgentTerminalProps {
 /** Whether pane `id`'s PTY is connected, so its UI view can type into it */
 export declare function usePaneConnected(id: string): boolean;
 /**
- * Types a message into pane `id`'s agent like a paste followed by Enter (the UI view's input).
- * xterm's paste wraps it in bracketed-paste markers when the TUI asked for them, so a multi-line
- * message stays one message. false when the PTY is not connected.
+ * `text` as a bracketed paste, always: a page that attached to a long-running agent never saw the
+ * TUI turn paste mode on (that output fell out of the replayed backlog), and xterm's own paste
+ * then sends the lines bare, so each line break submits a message of its own. Control characters
+ * other than tab / newline go: an ESC would end the paste (as the server's typeIntoPanePty)
+ */
+export declare function agentPaste(text: string): string;
+/**
+ * Types a message into pane `id`'s agent like a paste followed by Enter (the UI view's input);
+ * a multi-line message stays one message. false when the PTY is not connected.
  */
 export declare function typeIntoPane(id: string, text: string): boolean;
 /** Reattaches pane `id` (UI view's button); false when no mounted pane can */
