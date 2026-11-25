@@ -356,6 +356,49 @@ describe('thread log scroll (AC-11)', () => {
     expect(atBottom(list)).toBe(true);
   });
 
+  // live: the thread input refits (height auto, then measured) and the browser clamps the log's
+  // scrollTop for that moment; content arriving before the scroll event must not read as a scroll up
+  it('at the end: a layout clamp, then new content before the scroll event, keeps following', async () => {
+    const s = setup();
+    await s.ready();
+    const { list } = await openThreadLog(s);
+    list.scrollTop -= 24;
+    s.push(...turn(20, at + 20_000, T1.tag));
+    await settle();
+    fireEvent.scroll(list);
+    await settle();
+    expect(atBottom(list)).toBe(true);
+    const section = screen.getByRole('region', { name: /^Thread Shop · Checkout/ });
+    expect(within(section).queryByRole('button', { name: /New messages/ })).toBeNull();
+  });
+
+  it('at the end: a scroll event without the reader (clamp + growth in one frame) keeps following', async () => {
+    const s = setup();
+    await s.ready();
+    const { list } = await openThreadLog(s);
+    list.scrollTop -= 120;
+    fireEvent.scroll(list);
+    s.push(...turn(20, at + 20_000, T1.tag));
+    await settle();
+    expect(atBottom(list)).toBe(true);
+  });
+
+  it('scrolled up by a scrollbar drag (no wheel): new content keeps the place', async () => {
+    const s = setup();
+    await s.ready();
+    const { list } = await openThreadLog(s);
+    fireEvent.pointerDown(list);
+    list.scrollTop = 300;
+    fireEvent.scroll(list);
+    fireEvent.pointerUp(window);
+    const first = firstVisible(list);
+    const before = first.top();
+    s.push(...turn(20, at + 20_000, T1.tag));
+    await settle();
+    expect(atBottom(list)).toBe(false);
+    expect(Math.abs(first.top() - before)).toBeLessThanOrEqual(2);
+  });
+
   it('"New messages" shows after new content while scrolled up and goes back to following', async () => {
     const s = setup();
     await s.ready();
