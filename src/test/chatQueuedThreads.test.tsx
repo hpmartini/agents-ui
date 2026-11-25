@@ -133,14 +133,34 @@ describe('queued prompts go where they belong (AC-14)', () => {
   });
 
   it('a thread command typed while busy waits in its thread by its mark', async () => {
-    const { aside } = await mount(thread({ commands: [{ at, command: '/status-report' }] }), [
-      { type: 'devorbit_queue', op: 'enqueue', text: '/status-report' },
+    // Claude Code logs a queued command's enqueue without its text
+    const { aside, push } = await mount(thread({ commands: [{ at, command: '/status-report' }] }), [
+      { type: 'devorbit_queue', op: 'enqueue', text: '' },
     ]);
     const [bubble] = queued();
     expect(bubble).toBeTruthy();
     expect(aside.contains(bubble)).toBe(true);
     expect(bubble.textContent).toContain('/status-report');
+    expect(bubble.textContent).toContain('waits for the current turn');
     expect(inMain(aside, '/status-report')).toBe(false);
+
+    // taken (its remove carries the text), then logged: in the thread by the same mark
+    push({ type: 'devorbit_queue', op: 'remove', text: '/status-report' });
+    push({ type: 'devorbit_user', text: '/status-report', ts: at + 1000 });
+    expect(queued()).toHaveLength(0);
+    expect(aside.querySelector('[data-command]')?.textContent).toBe('/status-report');
+    expect(inMain(aside, '/status-report')).toBe(false);
+  });
+
+  it('a command placeholder without an open thread mark shows nowhere as a thread item', async () => {
+    const { aside } = await mount(
+      thread({ commands: [{ at: at - 120_000, command: '/status-report' }] }),
+      [
+        { type: 'devorbit_user', text: '/status-report', ts: at - 90_000 },
+        { type: 'devorbit_queue', op: 'enqueue', text: '' },
+      ]
+    );
+    expect(queued().filter((b) => aside.contains(b))).toHaveLength(0);
   });
 
   it('a main-chat message typed while busy stays in the main chat', async () => {

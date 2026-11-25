@@ -73,6 +73,7 @@ import {
   parseQuote,
   quoteHeader,
   stripTag,
+  queuedCommands,
   routeThreads,
   threadCommand,
   unreadCount,
@@ -475,7 +476,13 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     return null;
   }, [state.messages]);
   const threadList = threads.enabled ? threads.threads : NO_THREADS;
-  const pending = useMemo(() => pendingPrompts(state), [state]);
+  const pending = useMemo(
+    () => [
+      ...pendingPrompts(state),
+      ...queuedCommands(items, threadList, state.queued.filter((q) => !q.trim()).length),
+    ],
+    [state, items, threadList]
+  );
   const routed = useMemo(
     () =>
       // queued prompts route like logged ones: a thread's goes to its thread (tag or command mark)
