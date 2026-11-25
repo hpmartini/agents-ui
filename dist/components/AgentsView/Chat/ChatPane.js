@@ -641,8 +641,8 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
     const threadReplies = useMemo(() => ({ reply: setThreadQuote, tag: openThread?.tag ?? null }), [openThread?.tag]);
     const threadListRef = useRef(null);
     const threadContentRef = useRef(null);
-    // another thread or a reopened panel (a new log element) starts at its end
-    const threadLog = useFollowLog(threadListRef, threadContentRef, `${openId}:${showThreads}`);
+    // another thread, a reopened panel or back from the Status view (a new log element) starts at its end
+    const threadLog = useFollowLog(threadListRef, threadContentRef, `${openId}:${showThreads}:${!statusView}`);
     useLayoutEffect(threadLog.keep, [threadItems, showSteps, threadLog.keep]);
     useEffect(() => {
         if (quote)
