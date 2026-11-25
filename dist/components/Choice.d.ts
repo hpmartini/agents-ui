@@ -44,5 +44,9 @@ export interface ChoiceProps<V extends string = string> {
     /** Search field placeholder and empty-result text (English defaults) */
     searchPlaceholder?: string;
     noResults?: string;
+    /** aria-invalid plus the error border, on the pills or the trigger */
+    invalid?: boolean;
+    /** Id of a visible label; names the radio group, or the trigger and its listbox, instead of `label` */
+    labelledBy?: string;
 }
 export declare function Choice<V extends string = string>(props: ChoiceProps<V>): React.JSX.Element;

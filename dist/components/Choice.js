@@ -37,9 +37,26 @@ function highlight(text, query) {
 }
 export function Choice(props) {
     const mode = !props.mode || props.mode === 'auto' ? choiceMode(props.options.length) : props.mode;
-    return mode === 'pills' ? _jsx(Pills, { ...props }) : _jsx(Menu, { ...props, search: mode === 'search' });
+    const pills = mode === 'pills';
+    const root = useRef(null);
+    const was = useRef(pills);
+    const refocus = useRef(false);
+    // Pills <-> menu remounts the focused element; read focus while the old DOM is still there
+    if (was.current !== pills) {
+        refocus.current = !!root.current?.contains(document.activeElement);
+        was.current = pills;
+    }
+    useLayoutEffect(() => {
+        if (!refocus.current)
+            return;
+        refocus.current = false;
+        root.current
+            ?.querySelector('[role="radio"][tabindex="0"], [aria-haspopup="listbox"]')
+            ?.focus();
+    }, [pills]);
+    return pills ? (_jsx(Pills, { ...props, root: root })) : (_jsx(Menu, { ...props, root: root, search: mode === 'search' }));
 }
-function Pills({ value, onChange, options, label, disabled, className = '', size = 'sm', id, title, }) {
+function Pills({ value, onChange, options, label, disabled, className = '', size = 'sm', id, title, invalid, labelledBy, root, }) {
     const refs = useRef([]);
     const selected = options.findIndex((o) => o.value === value);
     // Roving tab stop: the checked pill if enabled, else the first enabled one
@@ -74,22 +91,23 @@ function Pills({ value, onChange, options, label, disabled, className = '', size
         pick(next);
     };
     const pad = size === 'md' ? 'px-3 py-1 text-sm' : 'px-2 py-0.5 text-xs';
-    return (_jsx("div", { role: "radiogroup", "aria-label": label, "aria-disabled": disabled || undefined, id: id, title: title, "data-choice": "pills", className: `flex flex-wrap gap-1 min-w-0 ${className}`, children: options.map((o, i) => {
+    return (_jsx("div", { ref: root, role: "radiogroup", "aria-label": labelledBy ? undefined : label, "aria-labelledby": labelledBy, "aria-disabled": disabled || undefined, "aria-invalid": invalid || undefined, title: title, "data-choice": "pills", className: `flex flex-wrap gap-1 min-w-0 ${className}`, children: options.map((o, i) => {
             const on = i === selected;
             return (_jsx("button", { ref: (el) => {
                     refs.current[i] = el;
-                }, type: "button", role: "radio", "aria-checked": on, tabIndex: i === stop ? 0 : -1, disabled: disabled || o.disabled, title: o.hint, onClick: () => pick(i), onKeyDown: (e) => onKeyDown(e, i), className: `${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${on
+                }, type: "button", role: "radio", 
+                // On the tab stop, so <label htmlFor={id}> reaches the checked pill
+                id: i === stop ? id : undefined, "aria-label": o.label, "aria-checked": on, tabIndex: i === stop ? 0 : -1, disabled: disabled || o.disabled, title: o.hint, onClick: () => pick(i), onKeyDown: (e) => onKeyDown(e, i), className: `${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${on
                     ? 'bg-sel border-blue-300 text-white'
-                    : 'border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800'}`, children: o.label }, o.value));
+                    : `${invalid ? 'border-red-400' : 'border-gray-700'} text-gray-300 hover:text-white hover:bg-gray-800`}`, children: o.label }, o.value));
         }) }));
 }
-function Menu({ value, onChange, options, label, disabled, placeholder = '', className = '', size = 'sm', id, title, icon, search, searchPlaceholder = 'Search…', noResults = 'No results', }) {
+function Menu({ value, onChange, options, label, disabled, placeholder = '', className = '', size = 'sm', id, title, icon, search, searchPlaceholder = 'Search…', noResults = 'No results', invalid, labelledBy, root: rootRef, }) {
     const uid = useId();
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [active, setActive] = useState(-1);
     const [place, setPlace] = useState(null);
-    const rootRef = useRef(null);
     const triggerRef = useRef(null);
     const popupRef = useRef(null);
     const listRef = useRef(null);
@@ -105,16 +123,20 @@ function Menu({ value, onChange, options, label, disabled, placeholder = '', cla
         if (refocus)
             triggerRef.current?.focus();
     };
+    /** The selected option if it's in `list` and enabled, else the first enabled one */
+    const startIn = (list) => {
+        const at = list.findIndex((o) => o.value === value && !o.disabled);
+        return at >= 0 ? at : list.findIndex((o) => !o.disabled);
+    };
     const openMenu = () => {
         if (disabled)
             return;
-        const at = options.findIndex((o) => o.value === value && !o.disabled);
-        setActive(at >= 0 ? at : options.findIndex((o) => !o.disabled));
+        setActive(startIn(options));
         setOpen(true);
     };
     const choose = (i) => {
         const o = shown[i];
-        if (!o || o.disabled)
+        if (disabled || !o || o.disabled)
             return;
         close(true);
         if (o.value !== value)
@@ -181,12 +203,20 @@ function Menu({ value, onChange, options, label, disabled, placeholder = '', cla
             window.removeEventListener('resize', onResize);
         };
     }, [open]);
-    // A new filter starts on its first match
+    // Disabled while open: nothing may pick any more
     useEffect(() => {
-        if (open && needle)
-            setActive(edge(false));
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the filter text changes
-    }, [needle]);
+        if (disabled && open)
+            close(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- close only reads refs and setters
+    }, [disabled]);
+    // A changed list (filter typed or cleared, options replaced) restarts the active option;
+    // keyed by content, so a parent re-render with an equal inline array keeps it
+    const listKey = shown.map((o) => `${o.value}${o.disabled ? '!' : ''}`).join('\n');
+    useEffect(() => {
+        if (open)
+            setActive(startIn(shown));
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the shown list changes
+    }, [listKey]);
     // Only once placed: scrolling a still unplaced popup into view could scroll the page
     useEffect(() => {
         if (place && active >= 0)
@@ -247,18 +277,18 @@ function Menu({ value, onChange, options, label, disabled, placeholder = '', cla
         body.push(group ? (_jsxs("div", { role: "group", "aria-label": group, children: [_jsx("div", { "aria-hidden": true, className: "px-3 pt-2 pb-0.5 text-[10px] uppercase tracking-wide text-gray-500", children: group }), items] }, `g${i}`)) : (items));
         i = end;
     }
-    return (_jsxs("div", { ref: rootRef, className: "relative flex min-w-0 max-w-full", "data-choice": search ? 'search' : 'menu', children: [_jsx("span", { id: `${uid}-label`, hidden: true, children: label }), _jsxs("button", { ref: triggerRef, type: "button", id: id, title: title ?? label, disabled: disabled, "aria-haspopup": "listbox", "aria-expanded": open, "aria-controls": open ? listId : undefined, "aria-labelledby": `${uid}-label ${uid}-value`, onClick: () => (open ? close(false) : openMenu()), onKeyDown: (e) => {
+    return (_jsxs("div", { ref: rootRef, className: "relative flex min-w-0 max-w-full", "data-choice": search ? 'search' : 'menu', children: [_jsx("span", { id: `${uid}-label`, hidden: true, children: label }), _jsxs("button", { ref: triggerRef, type: "button", id: id, title: title ?? label, disabled: disabled, "aria-haspopup": "listbox", "aria-expanded": open, "aria-controls": open ? listId : undefined, "aria-labelledby": `${labelledBy ?? `${uid}-label`} ${uid}-value`, "aria-invalid": invalid || undefined, onClick: () => (open ? close(false) : openMenu()), onKeyDown: (e) => {
                     if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
                         e.preventDefault();
                         e.stopPropagation();
                         openMenu();
                     }
-                }, className: `flex items-center gap-1.5 min-w-0 max-w-full bg-gray-850 border border-gray-700 rounded text-gray-200 text-left hover:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed ${triggerSize} ${FOCUS} ${className}`, children: [icon, _jsx("span", { id: `${uid}-value`, className: `flex-1 min-w-0 truncate ${current ? '' : 'text-gray-400'}`, children: current?.label ?? placeholder }), _jsx(Chevron, {})] }), open && (_jsxs("div", { ref: popupRef, style: {
+                }, className: `flex items-center gap-1.5 min-w-0 max-w-full bg-gray-850 border ${invalid ? 'border-red-400' : 'border-gray-700'} rounded text-gray-200 text-left hover:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed ${triggerSize} ${FOCUS} ${className}`, children: [icon, _jsx("span", { id: `${uid}-value`, className: `flex-1 min-w-0 truncate ${current ? '' : 'text-gray-400'}`, children: current?.label ?? placeholder }), _jsx(Chevron, {})] }), open && !disabled && (_jsxs("div", { ref: popupRef, style: {
                     position: 'fixed',
                     left: place?.left ?? 0,
                     top: place?.top ?? 0,
                     maxHeight: place?.maxHeight,
                     visibility: place ? undefined : 'hidden',
                     minWidth: triggerRef.current?.offsetWidth,
-                }, className: `z-50 flex flex-col w-max max-w-[min(24rem,calc(100vw-16px))] bg-gray-800 border border-gray-700 rounded-lg shadow-xl ${size === 'md' ? 'text-sm' : 'text-xs'}`, children: [search && (_jsx("div", { className: "p-1.5 border-b border-gray-700 shrink-0", children: _jsx("input", { type: "search", role: "combobox", "aria-expanded": true, "aria-autocomplete": "list", "aria-controls": listId, "aria-activedescendant": activeId, "aria-label": `Search ${label}`, value: query, onChange: (e) => setQuery(e.target.value), onKeyDown: onKeyDown, placeholder: searchPlaceholder, autoComplete: "off", spellCheck: false, className: "w-full bg-gray-950 border border-gray-600 rounded-md px-2 py-1 text-gray-50 placeholder-gray-500 outline-none focus:border-blue-400" }) })), _jsxs("div", { ref: listRef, id: listId, role: "listbox", "aria-label": label, tabIndex: -1, "aria-activedescendant": search ? undefined : activeId, onKeyDown: search ? undefined : onKeyDown, className: "py-1 overflow-y-auto min-h-0 outline-none", children: [body, shown.length === 0 && _jsx("div", { className: "px-3 py-1.5 text-gray-400", children: noResults })] })] }))] }));
+                }, className: `z-50 flex flex-col w-max max-w-[min(24rem,calc(100vw-16px))] bg-gray-800 border border-gray-700 rounded-lg shadow-xl ${size === 'md' ? 'text-sm' : 'text-xs'}`, children: [search && (_jsx("div", { className: "p-1.5 border-b border-gray-700 shrink-0", children: _jsx("input", { type: "search", role: "combobox", "aria-expanded": true, "aria-autocomplete": "list", "aria-controls": listId, "aria-activedescendant": activeId, "aria-label": `Search ${label}`, value: query, onChange: (e) => setQuery(e.target.value), onKeyDown: onKeyDown, placeholder: searchPlaceholder, autoComplete: "off", spellCheck: false, className: "w-full bg-gray-950 border border-gray-600 rounded-md px-2 py-1 text-gray-50 placeholder-gray-500 outline-none focus:border-blue-400" }) })), _jsxs("div", { ref: listRef, id: listId, role: "listbox", "aria-label": labelledBy ? undefined : label, "aria-labelledby": labelledBy, tabIndex: -1, "aria-activedescendant": search ? undefined : activeId, onKeyDown: search ? undefined : onKeyDown, className: "py-1 overflow-y-auto min-h-0 outline-none", children: [body, shown.length === 0 && _jsx("div", { className: "px-3 py-1.5 text-gray-400", children: noResults })] })] }))] }));
 }
