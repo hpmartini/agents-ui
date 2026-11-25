@@ -3,20 +3,32 @@
 // or its toggle away from the panes of the other instance.
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { AgentsView } from '../components/AgentsView/AgentsView';
 import { STORAGE_KEY as WORKSPACE_KEY, VIEWS_STORAGE_KEY } from '../hooks/useAgentWorkspace';
 import { summarizeSessions } from '../utils/agentSessions';
 import { DEFAULT_AGENT_VIEW_SETTINGS, type AgentSession } from '../types';
 import type { AgentsTransport, PtySocket } from '../transport';
-import { renderWithAgents } from './agents';
+
 import { nav, orkumoHost, orkumoTransport } from './agentsView';
+import { renderWithAgents as renderPart, testTransport } from './agents';
+import { ChatIdContext, UserMessage } from '../components/AgentsView/Chat/ChatMessages';
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
     cols = 80;
     rows = 24;
     options = {};
+    buffer = {
+      active: {
+        viewportY: 0,
+        baseY: 0,
+        cursorY: 0,
+        cursorX: 0,
+        length: 0,
+        getLine: () => undefined,
+      },
+    };
     loadAddon() {}
     registerLinkProvider() {}
     open() {}
@@ -91,17 +103,24 @@ const tab = (id: string, pane: string) => ({
   activeSessionId: pane,
 });
 
-const socket = () => ({ readyState: 0, send() {}, close() {} }) as unknown as PtySocket;
+const sockets: PtySocket[] = [];
+const socket = () => {
+  const ws = { readyState: 1, send() {}, close() {} } as unknown as PtySocket;
+  sockets.push(ws);
+  return ws;
+};
 
 const render = (
   openTranscriptView: NonNullable<AgentsTransport['chat']>['openTranscriptView'],
-  selectedId?: string
+  selectedId?: string,
+  uploads?: Partial<NonNullable<AgentsTransport['uploads']>>
 ) => {
   const base = orkumoTransport();
   const transport: AgentsTransport = {
     ...base,
     pty: { ...base.pty, attach: socket },
     chat: { ...base.chat!, openTranscriptView },
+    uploads: { ...base.uploads!, ...uploads },
     targets: {
       useAgentTarget: () => PEER,
       getAgentTarget: () => PEER,
@@ -117,7 +136,7 @@ const render = (
     })
   );
   localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify({ s1: 'chat', s2: 'chat' }));
-  renderWithAgents(
+  renderPart(
     <AgentsView
       active
       apps={[]}
@@ -179,5 +198,52 @@ describe('UI view of panes on another instance than the picker (#220, cluster mo
     await waitFor(() =>
       expect(open).toHaveBeenCalledWith('s4', expect.objectContaining({ sessionId: 'uuid-4' }))
     );
+  });
+
+  // cluster mode: an attachment is stored where the pane's agent runs, not where the picker points
+  it("an attachment is stored on the pane's instance, not the picker's", async () => {
+    const summary = (id: string) => ({
+      id: `chat-${id}`,
+      harness: 'claude' as const,
+      cwd: '/w/app',
+      name: `agent-${id}`,
+      sessionId: `uuid-${id}`,
+      model: null,
+      running: true,
+      startedAt: 1,
+    });
+    const uploadAttachment = vi.fn(async () => ({
+      path: '/d/agent-images/x.png',
+      kind: 'image' as const,
+    }));
+    render(async (id) => summary(id), undefined, { uploadAttachment });
+    const local = chatPane('s1');
+    const input = await waitFor(() => {
+      const el = local.querySelector<HTMLInputElement>('input[type="file"]');
+      if (!el) throw new Error('no attach input yet');
+      return el;
+    });
+    act(() => sockets.forEach((ws) => ws.onopen?.(new Event('open'))));
+    const file = new File(['png'], 'shot.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [file] } });
+    const box = within(local).getByRole('textbox', { hidden: true });
+    fireEvent.change(box, { target: { value: 'look' } });
+    fireEvent.keyDown(box, { key: 'Enter', metaKey: true, ctrlKey: true });
+    await waitFor(() => expect(uploadAttachment).toHaveBeenCalledWith(file, 's1'));
+  });
+
+  it("a sent image previews from the chat's instance", () => {
+    const agentImageUrl = vi.fn(() => '/img');
+    renderPart(
+      <ChatIdContext.Provider value="chat-s2">
+        <UserMessage text={'look\n[Image: /d/agent-images/x.png]'} />
+      </ChatIdContext.Provider>,
+      {
+        transport: testTransport({
+          uploads: { uploadAttachment: vi.fn(), agentImageUrl, attachmentExtensions: [] },
+        }),
+      }
+    );
+    expect(agentImageUrl).toHaveBeenCalledWith('/d/agent-images/x.png', 'chat-s2');
   });
 });

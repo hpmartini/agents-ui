@@ -1050,7 +1050,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             return [];
         setDispatching(true);
         try {
-            return await Promise.all(composerImages.map(uploads.uploadAttachment));
+            return await Promise.all(composerImages.map((file) => uploads.uploadAttachment(file)));
         }
         catch (err) {
             showHint(err instanceof Error ? err.message : t.uploadFailed, 'error', 6000);

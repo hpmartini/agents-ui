@@ -256,8 +256,10 @@ const OwnMessage: React.FC<{ text: string; queued?: boolean }> = ({ text, queued
   // `/skill args`: the command as a chip, its text after it
   const command = leadingCommand(body);
   const uploads = useTransport().uploads;
+  const chatId = React.useContext(ChatIdContext) ?? undefined;
   const t = useLabels().terminal;
-  const previews = images.map((p) => ({ path: p, url: uploads?.agentImageUrl(p) ?? null }));
+  // from the chat's instance: in cluster mode the image is stored where the agent runs
+  const previews = images.map((p) => ({ path: p, url: uploads?.agentImageUrl(p, chatId) ?? null }));
   return (
     <div className="flex flex-col items-end my-3" data-queued={queued || undefined}>
       <div
