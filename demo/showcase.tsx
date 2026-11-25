@@ -82,12 +82,12 @@ export const ChoiceShowcase: React.FC = () => {
             />
           </div>
         </Row>
-        <Row title="Crowded nowrap toolbar: Choices keep their size, the search field gives way, the row scrolls">
-          <div className="flex items-center gap-2 overflow-x-auto border border-dashed border-gray-700 p-2">
+        <Row title="Crowded toolbar: menus keep their size, pills wrap, nothing clips">
+          <div className="flex flex-wrap items-center gap-2 border border-dashed border-gray-700 p-2">
             <input
               aria-label="Search"
               placeholder="Title, #number, branch"
-              className="flex-1 min-w-0 bg-gray-850 border border-gray-700 rounded px-2 py-1 text-xs"
+              className="flex-1 min-w-[6rem] bg-gray-850 border border-gray-700 rounded px-2 py-1 text-xs"
             />
             <Choice label="Greek letter" value={letter} onChange={setLetter} options={greek} />
             <Choice label="Harness" value={harness} onChange={setHarness} options={harnesses} />

@@ -349,7 +349,7 @@ describe('Choice hardening', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'before' }));
   });
 
-  it('the root never shrinks in a crowded flex row; pills may wrap, capped at the row width', () => {
+  it('a menu root never shrinks in a crowded flex row; pills wrap instead', () => {
     const { container } = render(
       <div className="flex">
         <Choice label="Few" value="a" onChange={() => {}} options={opts('A', 'B')} />
@@ -364,8 +364,10 @@ describe('Choice hardening', () => {
     );
     const roots = [...container.querySelectorAll('[data-choice]')];
     expect(roots.map((r) => r.getAttribute('data-choice'))).toEqual(['pills', 'menu', 'search']);
-    for (const r of roots) expect(r).toHaveClass('shrink-0', 'max-w-full');
-    expect(roots[0]).toHaveClass('flex-wrap');
+    // Menu triggers keep their size; the pill group wraps instead (shrink-0 would push it out)
+    for (const r of roots.slice(1)) expect(r).toHaveClass('shrink-0', 'max-w-full');
+    expect(roots[0]).toHaveClass('flex-wrap', 'min-w-0');
+    expect(roots[0]).not.toHaveClass('shrink-0');
   });
 
   it('invalid sets aria-invalid and the error border on the pill group and the trigger', () => {

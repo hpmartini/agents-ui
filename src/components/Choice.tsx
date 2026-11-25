@@ -197,7 +197,7 @@ function Pills<V extends string>({
       aria-invalid={invalid || undefined}
       title={title}
       data-choice="pills"
-      className={`flex flex-wrap gap-1 shrink-0 min-w-0 max-w-full ${className}`}
+      className={`flex flex-wrap gap-1 min-w-0 ${className}`}
     >
       {options.map((o, i) => {
         const on = i === selected;
