@@ -143,16 +143,16 @@ function matchesText(pr: AgentPullRequest, text: string): boolean {
   );
 }
 
-/** All filters combine with AND; `folders` (lower-case slug → folder key) serves `q.folder` */
+/** All filters combine with AND; `folders` (lower-case slug → keys of the folders holding it) serves `q.folder` */
 export function filterPulls(
   rows: PullRequestRow[],
   q: PullQuery,
-  folders?: Map<string, string>
+  folders?: Map<string, string[]>
 ): PullRequestRow[] {
   return rows.filter(({ pr, agents }) => {
     if (!matchesText(pr, q.q)) return false;
     if (q.repo && pr.repoSlug.toLowerCase() !== q.repo.toLowerCase()) return false;
-    if (q.folder && folders?.get(pr.repoSlug.toLowerCase()) !== q.folder) return false;
+    if (q.folder && !folders?.get(pr.repoSlug.toLowerCase())?.includes(q.folder)) return false;
     if (q.ci && pr.ci !== q.ci) return false;
     if (q.merge && mergeKey(pr) !== q.merge) return false;
     if (q.review && reviewKey(pr) !== q.review) return false;
@@ -246,7 +246,7 @@ export function queryPulls(
   rows: PullRequestRow[],
   q: PullQuery,
   labels?: PullLabels,
-  folders?: Map<string, string>
+  folders?: Map<string, string[]>
 ) {
   const shown = sortPulls(filterPulls(rows, q, folders), q.sort, q.dir);
   return { shown, groups: groupPulls(shown, q.group, labels) };

@@ -82,6 +82,26 @@ export const ChoiceShowcase: React.FC = () => {
             />
           </div>
         </Row>
+        <Row title="Crowded toolbar: Choices keep their size, the search field gives way">
+          <div className="flex items-center gap-2 overflow-x-auto border border-dashed border-gray-700 p-2">
+            <input
+              aria-label="Search"
+              placeholder="Title, #number, branch"
+              className="flex-1 min-w-0 bg-gray-850 border border-gray-700 rounded px-2 py-1 text-xs"
+            />
+            <Choice label="Greek letter" value={letter} onChange={setLetter} options={greek} />
+            <Choice label="Harness" value={harness} onChange={setHarness} options={harnesses} />
+            <Choice
+              label="Card density"
+              value={density}
+              onChange={setDensity}
+              options={[
+                { value: 'comfortable', label: 'Comfortable' },
+                { value: 'compact', label: 'Compact' },
+              ]}
+            />
+          </div>
+        </Row>
         <Row title="Menu (5 options)">
           <Choice label="Greek letter" value={letter} onChange={setLetter} options={greek} />
         </Row>
@@ -213,16 +233,30 @@ const fakeRows: PullRequestRow[] = [
     agents: [],
   },
   { pr: pr(2, 'initech/tps-reports', { title: 'New cover sheet' }), agents: [] },
+  {
+    pr: pr(5, 'acme/design-system-component-library-playground', { title: 'Token audit' }),
+    agents: [],
+  },
+  {
+    pr: pr(6, 'acme/landing', { title: 'Hero copy', ci: 'failure', mergeReady: false }),
+    agents: [],
+  },
 ];
 const ctx = (slug: string, root: string) =>
   ({ repo: { slug, root }, pulls: { open: 0, url: null, items: [] } }) as unknown as AgentContext;
-// initech/tps-reports has no local checkout: it lands under its owner
+// Nested checkouts below a fake home: REPOS/{apps,services/backend}, a single-child chain
+// (PROJECTS/clients/globex), one checkout directly in home; initech/tps-reports has none: owner
 const fakeContexts: Record<string, AgentContext> = {
-  a: ctx('acme/web', '/home/dev/code/apps/web'),
-  b: ctx('acme/api', '/home/dev/code/services/api'),
-  c: ctx('acme/docs', '/home/dev/code/apps/docs'),
-  d: ctx('globex/tools', '/home/dev/code/tools/globex-tools'),
-  e: ctx('globex/billing', '/home/dev/code/services/billing'),
+  a: ctx('acme/web', '/Users/dev/REPOS/apps/web'),
+  b: ctx('acme/api', '/Users/dev/REPOS/services/backend/api'),
+  c: ctx('acme/docs', '/Users/dev/REPOS/apps/docs'),
+  d: ctx('globex/tools', '/Users/dev/PROJECTS/clients/globex/globex-tools'),
+  e: ctx('globex/billing', '/Users/dev/billing'),
+  f: ctx(
+    'acme/design-system-component-library-playground',
+    '/Users/dev/REPOS/websites/design-system-component-library-playground'
+  ),
+  g: ctx('acme/landing', '/Users/dev/REPOS/websites/landing'),
 };
 
 export const PullsShowcase: React.FC<{ state: string | null }> = ({ state }) => {

@@ -1,7 +1,12 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Folder, User } from 'lucide-react';
 import { useLabels } from '../../labels';
-import type { RepoSelection, RepoTreeData } from '../../utils/repoTree';
+import type {
+  RepoSelection,
+  RepoTreeData,
+  RepoTreeFolder,
+  RepoTreeRepo,
+} from '../../utils/repoTree';
 
 /** Collapsed folder keys (and ROOT when the root is collapsed); every other node is open */
 export const REPO_TREE_COLLAPSED_KEY = 'agentsUi.pullsTreeCollapsed';
@@ -15,7 +20,7 @@ interface Node {
   /** Folder key (or ROOT) when the node has children */
   fold: string | null;
   parent: string | null;
-  owner?: boolean;
+  icon?: 'folder' | 'owner';
   select: RepoSelection;
   title?: string;
 }
@@ -33,7 +38,7 @@ function readCollapsed(): Set<string> {
 }
 
 /**
- * WAI-ARIA tree of the repos with open PRs (All repositories → folder → repo), each with its
+ * WAI-ARIA tree of the repos with open PRs (All repositories → nested folders → repo), each with its
  * count. One tab stop; ↑/↓ move, → opens or goes to the first child, ← closes or goes to the
  * parent, Home/End, Enter/Space select, a letter jumps to the next node starting with it.
  */
@@ -45,6 +50,7 @@ export const RepoTree: React.FC<{
   className?: string;
 }> = ({ tree, selection, onSelect, loading, className = '' }) => {
   const t = useLabels().shell;
+  const empty = tree.folders.length === 0 && tree.repos.length === 0;
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [focusId, setFocusId] = useState<string | null>(null);
   const refs = useRef(new Map<string, HTMLDivElement>());
@@ -61,32 +67,41 @@ export const RepoTree: React.FC<{
         select: { kind: 'all' },
       },
     ];
-    if (collapsed.has(ROOT)) return list;
-    for (const f of tree.folders) {
-      const id = `f:${f.key}`;
-      list.push({
-        id,
-        level: 2,
-        label: f.label,
-        count: f.count,
-        fold: f.key,
-        parent: ROOT,
-        owner: f.key.startsWith('@'),
-        select: { kind: 'folder', key: f.key },
-      });
-      if (collapsed.has(f.key)) continue;
-      for (const r of f.repos)
+    const repos = (rs: RepoTreeRepo[], level: number, parent: string) => {
+      for (const r of rs)
         list.push({
           id: `r:${r.slug.toLowerCase()}`,
-          level: 3,
+          level,
           label: r.name,
           count: r.count,
           fold: null,
-          parent: id,
+          parent,
           select: { kind: 'repo', slug: r.slug },
           title: r.slug,
         });
-    }
+    };
+    const folders = (fs: RepoTreeFolder[], level: number, parent: string) => {
+      for (const f of fs) {
+        const id = `f:${f.key}`;
+        list.push({
+          id,
+          level,
+          label: f.label,
+          count: f.count,
+          fold: f.key,
+          parent,
+          icon: f.key.startsWith('@') ? 'owner' : 'folder',
+          select: { kind: 'folder', key: f.key },
+          title: f.title,
+        });
+        if (collapsed.has(f.key)) continue;
+        folders(f.folders, level + 1, id);
+        repos(f.repos, level + 1, id);
+      }
+    };
+    if (collapsed.has(ROOT)) return list;
+    folders(tree.folders, 2, ROOT);
+    repos(tree.repos, 2, ROOT);
     return list;
   }, [tree, collapsed, t.allRepositories]);
 
@@ -161,7 +176,7 @@ export const RepoTree: React.FC<{
               }}
               onFocus={() => setFocusId(node.id)}
               onKeyDown={(e) => onKeyDown(e, node, i)}
-              style={{ paddingLeft: 4 + (node.level - 1) * 14 }}
+              style={{ paddingLeft: 4 + (node.level - 1) * 12 }}
               className={`flex items-center gap-1 pr-2 py-1 cursor-pointer rounded outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cursor ${
                 selected
                   ? 'bg-blue-500/20 text-white'
@@ -188,8 +203,8 @@ export const RepoTree: React.FC<{
               ) : (
                 <span className="w-4 shrink-0" aria-hidden />
               )}
-              {node.level === 2 &&
-                (node.owner ? (
+              {node.icon &&
+                (node.icon === 'owner' ? (
                   <User size={12} aria-hidden className="shrink-0 text-gray-400" />
                 ) : (
                   <Folder size={12} aria-hidden className="shrink-0 text-gray-400" />
@@ -198,7 +213,7 @@ export const RepoTree: React.FC<{
                 {node.label}
               </span>
               {/* No count before the first load: 0 would claim there is nothing */}
-              {!(loading && tree.folders.length === 0) && (
+              {!(loading && empty) && (
                 <span
                   className={`ml-auto pl-2 shrink-0 tabular-nums ${node.count ? 'text-gray-400' : 'text-gray-600'}`}
                 >
@@ -209,7 +224,7 @@ export const RepoTree: React.FC<{
           );
         })}
       </div>
-      {tree.folders.length === 0 && (
+      {empty && (
         <p className="px-3 py-1.5 text-gray-400">{loading ? t.repoTreeLoading : t.repoTreeEmpty}</p>
       )}
     </div>

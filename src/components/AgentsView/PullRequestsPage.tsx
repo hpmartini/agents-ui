@@ -28,7 +28,7 @@ import {
 import { useLabels } from '../../labels';
 import { Choice, choiceMode } from '../Choice';
 import { RepoTree } from './RepoTree';
-import { buildRepoTree, folderKeys, type RepoSelection } from '../../utils/repoTree';
+import { buildRepoTree, findFolder, folderKeys, type RepoSelection } from '../../utils/repoTree';
 
 /** Filters, grouping and sorting live in the URL of /pulls (#191), not in these props */
 export type PullRequestsPageProps = Omit<
@@ -192,8 +192,9 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
       ),
     [props.rows, query, roots]
   );
-  // A folder key the tree does not know (older key format, folder gone) means all repositories
-  const known = !query.folder || tree.folders.some((f) => f.key === query.folder);
+  // A folder key the tree does not know (older key format, folder gone or merged into a compact
+  // folder) means all repositories
+  const known = !query.folder || !!findFolder(tree, query.folder);
   const view = useMemo(() => (known ? query : { ...query, folder: null }), [query, known]);
   const { shown, groups } = useMemo(
     () => queryPulls(props.rows, view, t.pulls, folders),
@@ -243,7 +244,7 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
     selection.kind === 'repo'
       ? selection.slug
       : selection.kind === 'folder'
-        ? (tree.folders.find((f) => f.key === selection.key)?.label ?? selection.key)
+        ? (findFolder(tree, selection.key)?.label ?? selection.key)
         : t.allRepositories;
   const repoTree = (
     <RepoTree
