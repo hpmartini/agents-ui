@@ -60,6 +60,9 @@ export function useAutoGrowTextarea(ref, value, { min, max, storageKey, pinMax, 
         });
         el.style.height = `${height}px`;
         el.style.overflowY = scroll ? 'auto' : 'hidden';
+        // a refit field that scrolls keeps the caret in view when it sits at the end
+        if (scroll && document.activeElement === el && el.selectionEnd === el.value.length)
+            el.scrollTop = el.scrollHeight;
     }, [ref, min, max, pinned, capOf]);
     useLayoutEffect(fit, [fit, value]);
     useLayoutEffect(() => {
@@ -67,19 +70,27 @@ export function useAutoGrowTextarea(ref, value, { min, max, storageKey, pinMax, 
         if (!el || typeof ResizeObserver === 'undefined')
             return;
         let width = -1;
+        let frame = 0;
         const observer = new ResizeObserver((entries) => {
             // the field: only width changes matter, fit() itself changes its height
             if (entries?.every((e) => e.target === el) && el.clientWidth === width)
                 return;
             width = el.clientWidth;
-            fit();
+            // next frame: the containers settle first (a panel leaving its short layout
+            // resizes the section after the pane) and no observer loop
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(fit);
         });
         observer.observe(el);
-        // the pane: a shorter pane (divider, window) lowers the cap, so refit on any change
-        const pane = el.closest('[data-chat-pane]');
-        if (pane)
-            observer.observe(pane);
-        return () => observer.disconnect();
+        // pane and section: when either gets shorter (divider, window, panel layout) the cap
+        // drops, so refit on any change of theirs
+        for (const box of [el.closest('[data-chat-pane]'), el.closest('section')])
+            if (box)
+                observer.observe(box);
+        return () => {
+            cancelAnimationFrame(frame);
+            observer.disconnect();
+        };
     }, [ref, fit]);
     const pin = useCallback((next) => {
         const clamped = next === null ? null : Math.min(Math.max(next, min), capOf(ref.current));
