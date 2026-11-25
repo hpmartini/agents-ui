@@ -289,3 +289,122 @@ describe('Choice search', () => {
     expect(screen.getByRole('button', { name: /^X/ })).toHaveAttribute('aria-haspopup', 'listbox');
   });
 });
+
+describe('Choice hardening', () => {
+  const five = opts('Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon');
+  const many = opts('Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta');
+  const activeOf = (el: HTMLElement) => el.getAttribute('aria-activedescendant');
+
+  it('closes an open menu when disabled turns true; keys no longer pick', async () => {
+    const user = userEvent.setup();
+    const spy = vi.fn();
+    const { rerender } = render(<Host label="Greek" initial="alpha" options={five} spy={spy} />);
+    await user.click(screen.getByRole('button', { name: /^Greek/ }));
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    rerender(<Host label="Greek" initial="alpha" options={five} spy={spy} disabled />);
+    expect(screen.queryByRole('listbox')).toBeNull();
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('clearing a query with no results puts the active option back on the selected one', async () => {
+    const user = userEvent.setup();
+    const spy = vi.fn();
+    render(<Host label="Greek" initial="alpha" options={many} spy={spy} />);
+    await user.click(screen.getByRole('button', { name: /^Greek/ }));
+    const input = screen.getByRole('combobox', { name: /Search/ });
+    await user.keyboard('xyz');
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    await user.keyboard('{Backspace}{Backspace}{Backspace}');
+    expect(activeOf(input)).toBe(screen.getByRole('option', { name: 'Alpha' }).id);
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(spy).toHaveBeenLastCalledWith('beta');
+  });
+
+  it('options changing under an open menu keep a valid active option', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<Host label="Greek" initial="alpha" options={five} />);
+    await user.click(screen.getByRole('button', { name: /^Greek/ }));
+    await user.keyboard('{End}');
+    rerender(<Host label="Greek" initial="alpha" options={five.slice(0, 4)} />);
+    expect(activeOf(screen.getByRole('listbox'))).toBe(
+      screen.getByRole('option', { name: 'Alpha' }).id
+    );
+  });
+
+  it('keeps focus in the Choice when the option count switches pills <-> menu', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<Host label="P" initial="b" options={opts('A', 'B', 'C')} />);
+    await user.click(screen.getByRole('radio', { name: 'B' }));
+    rerender(<Host label="P" initial="b" options={opts('A', 'B', 'C', 'D')} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /^P/ }));
+    rerender(<Host label="P" initial="b" options={opts('A', 'B', 'C')} />);
+    expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'B' }));
+  });
+
+  it('does not take focus on a mode switch when focus was elsewhere', () => {
+    const { rerender } = render(<Host label="P" initial="b" options={opts('A', 'B', 'C')} />);
+    screen.getByRole('button', { name: 'before' }).focus();
+    rerender(<Host label="P" initial="b" options={opts('A', 'B', 'C', 'D')} />);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'before' }));
+  });
+
+  it('invalid sets aria-invalid and the error border on the pill group and the trigger', () => {
+    const { rerender } = render(
+      <Choice label="P" value="x" onChange={() => {}} options={opts('A', 'B')} invalid />
+    );
+    expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-invalid', 'true');
+    for (const r of screen.getAllByRole('radio')) expect(r.className).toContain('border-red-400');
+    rerender(<Choice label="P" value="x" onChange={() => {}} options={five} invalid />);
+    const trigger = screen.getByRole('button', { name: /^P/ });
+    expect(trigger).toHaveAttribute('aria-invalid', 'true');
+    expect(trigger.className).toContain('border-red-400');
+    rerender(<Choice label="P" value="x" onChange={() => {}} options={five} />);
+    expect(screen.getByRole('button', { name: /^P/ })).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('labelledBy names the radiogroup, the trigger and the listbox', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <>
+        <span id="row">Row label</span>
+        <Choice label="P" labelledBy="row" value="a" onChange={() => {}} options={opts('A', 'B')} />
+      </>
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Row label' })).toBeInTheDocument();
+    rerender(
+      <>
+        <span id="row">Row label</span>
+        <Choice label="P" labelledBy="row" value="alpha" onChange={() => {}} options={five} />
+      </>
+    );
+    await user.click(screen.getByRole('button', { name: /^Row label/ }));
+    expect(screen.getByRole('listbox', { name: 'Row label' })).toBeInTheDocument();
+  });
+
+  it('a <label htmlFor={id}> reaches the checked pill and the menu trigger', async () => {
+    const user = userEvent.setup();
+    const spy = vi.fn();
+    const { rerender } = render(
+      <>
+        <label htmlFor="c1">Row</label>
+        <Host label="P" id="c1" initial="b" options={opts('A', 'B', 'C')} spy={spy} />
+      </>
+    );
+    const pill = document.getElementById('c1');
+    expect(pill).toBe(screen.getByRole('radio', { name: 'B' }));
+    await user.click(screen.getByText('Row'));
+    expect(document.activeElement).toBe(pill);
+    expect(spy).not.toHaveBeenCalled();
+    rerender(
+      <>
+        <label htmlFor="c1">Row</label>
+        <Host label="P" id="c1" initial="b" options={five} spy={spy} />
+      </>
+    );
+    const trigger = screen.getByRole('button', { name: /^P/ });
+    expect(document.getElementById('c1')).toBe(trigger);
+    await user.click(screen.getByText('Row'));
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  });
+});

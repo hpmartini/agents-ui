@@ -49,6 +49,11 @@ export const ChoiceShowcase: React.FC = () => {
   const [harness, setHarness] = useState('claude');
   const [repo, setRepo] = useState('acme/web');
   const [bottom, setBottom] = useState('globex/tools');
+  const [theme, setTheme] = useState('');
+  const [invalidLetter, setInvalidLetter] = useState('');
+  const [live, setLive] = useState('beta');
+  const [liveMany, setLiveMany] = useState(true);
+  const [liveOff, setLiveOff] = useState(false);
   return (
     <div className="h-full overflow-y-auto p-6 bg-gray-900 text-gray-200 text-sm">
       <div className="max-w-xl space-y-6">
@@ -88,6 +93,63 @@ export const ChoiceShowcase: React.FC = () => {
         </Row>
         <Row title="Disabled">
           <Choice label="Locked" value="beta" onChange={() => {}} options={greek} disabled />
+        </Row>
+        <Row title="Settings rows: visible label (htmlFor + labelledBy), invalid">
+          <div className="grid grid-cols-[8rem_1fr] items-center gap-2">
+            <label id="demo-l-theme" htmlFor="demo-theme" className="text-gray-300">
+              Theme
+            </label>
+            <Choice
+              id="demo-theme"
+              labelledBy="demo-l-theme"
+              label="Theme"
+              value={theme}
+              onChange={setTheme}
+              invalid={!theme}
+              options={[
+                { value: 'dark', label: 'Dark' },
+                { value: 'light', label: 'Light' },
+              ]}
+            />
+            <label id="demo-l-letter" htmlFor="demo-letter" className="text-gray-300">
+              Letter
+            </label>
+            <Choice
+              id="demo-letter"
+              labelledBy="demo-l-letter"
+              label="Letter"
+              value={invalidLetter}
+              onChange={setInvalidLetter}
+              invalid={!invalidLetter}
+              placeholder="Pick one"
+              options={greek}
+            />
+          </div>
+        </Row>
+        <Row title="Runtime changes (after 2 s)">
+          <div className="flex flex-wrap items-center gap-2">
+            <Choice
+              label="Live"
+              value={live}
+              onChange={setLive}
+              disabled={liveOff}
+              options={liveMany ? greek.slice(0, 4) : greek.slice(0, 3)}
+            />
+            <button
+              type="button"
+              className="text-xs text-gray-400 underline"
+              onClick={() => setTimeout(() => setLiveMany((m) => !m), 2000)}
+            >
+              toggle 4th option
+            </button>
+            <button
+              type="button"
+              className="text-xs text-gray-400 underline"
+              onClick={() => setTimeout(() => setLiveOff((d) => !d), 2000)}
+            >
+              toggle disabled
+            </button>
+          </div>
         </Row>
         <div className="h-[60vh]" />
         <Row title="Near the bottom: opens upwards">

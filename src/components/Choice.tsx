@@ -51,7 +51,13 @@ export interface ChoiceProps<V extends string = string> {
   /** Search field placeholder and empty-result text (English defaults) */
   searchPlaceholder?: string;
   noResults?: string;
+  /** aria-invalid plus the error border, on the pills or the trigger */
+  invalid?: boolean;
+  /** Id of a visible label; names the radio group, or the trigger and its listbox, instead of `label` */
+  labelledBy?: string;
 }
+
+type Inner<V extends string> = ChoiceProps<V> & { root: React.RefObject<HTMLDivElement | null> };
 
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor';
 const GAP = 4;
@@ -113,7 +119,27 @@ function highlight(text: string, query: string): React.ReactNode {
 
 export function Choice<V extends string = string>(props: ChoiceProps<V>) {
   const mode = !props.mode || props.mode === 'auto' ? choiceMode(props.options.length) : props.mode;
-  return mode === 'pills' ? <Pills {...props} /> : <Menu {...props} search={mode === 'search'} />;
+  const pills = mode === 'pills';
+  const root = useRef<HTMLDivElement>(null);
+  const was = useRef(pills);
+  const refocus = useRef(false);
+  // Pills <-> menu remounts the focused element; read focus while the old DOM is still there
+  if (was.current !== pills) {
+    refocus.current = !!root.current?.contains(document.activeElement);
+    was.current = pills;
+  }
+  useLayoutEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    root.current
+      ?.querySelector<HTMLElement>('[role="radio"][tabindex="0"], [aria-haspopup="listbox"]')
+      ?.focus();
+  }, [pills]);
+  return pills ? (
+    <Pills {...props} root={root} />
+  ) : (
+    <Menu {...props} root={root} search={mode === 'search'} />
+  );
 }
 
 function Pills<V extends string>({
@@ -126,7 +152,10 @@ function Pills<V extends string>({
   size = 'sm',
   id,
   title,
-}: ChoiceProps<V>) {
+  invalid,
+  labelledBy,
+  root,
+}: Inner<V>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const selected = options.findIndex((o) => o.value === value);
   // Roving tab stop: the checked pill if enabled, else the first enabled one
@@ -160,10 +189,12 @@ function Pills<V extends string>({
   const pad = size === 'md' ? 'px-3 py-1 text-sm' : 'px-2 py-0.5 text-xs';
   return (
     <div
+      ref={root}
       role="radiogroup"
-      aria-label={label}
+      aria-label={labelledBy ? undefined : label}
+      aria-labelledby={labelledBy}
       aria-disabled={disabled || undefined}
-      id={id}
+      aria-invalid={invalid || undefined}
       title={title}
       data-choice="pills"
       className={`flex flex-wrap gap-1 min-w-0 ${className}`}
@@ -178,6 +209,10 @@ function Pills<V extends string>({
             }}
             type="button"
             role="radio"
+            // On the tab stop, so <label htmlFor={id}> reaches the checked pill
+            id={i === stop ? id : undefined}
+            // A <label htmlFor> would otherwise replace the pill's own name
+            aria-label={o.label}
             aria-checked={on}
             tabIndex={i === stop ? 0 : -1}
             disabled={disabled || o.disabled}
@@ -187,7 +222,7 @@ function Pills<V extends string>({
             className={`${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${
               on
                 ? 'bg-sel border-blue-300 text-white'
-                : 'border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800'
+                : `${invalid ? 'border-red-400' : 'border-gray-700'} text-gray-300 hover:text-white hover:bg-gray-800`
             }`}
           >
             {o.label}
@@ -213,13 +248,15 @@ function Menu<V extends string>({
   search,
   searchPlaceholder = 'Search…',
   noResults = 'No results',
-}: ChoiceProps<V> & { search: boolean }) {
+  invalid,
+  labelledBy,
+  root: rootRef,
+}: Inner<V> & { search: boolean }) {
   const uid = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(-1);
   const [place, setPlace] = useState<{ left: number; top: number; maxHeight: number } | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -239,15 +276,19 @@ function Menu<V extends string>({
     setPlace(null);
     if (refocus) triggerRef.current?.focus();
   };
+  /** The selected option if it's in `list` and enabled, else the first enabled one */
+  const startIn = (list: ChoiceOption<V>[]) => {
+    const at = list.findIndex((o) => o.value === value && !o.disabled);
+    return at >= 0 ? at : list.findIndex((o) => !o.disabled);
+  };
   const openMenu = () => {
     if (disabled) return;
-    const at = options.findIndex((o) => o.value === value && !o.disabled);
-    setActive(at >= 0 ? at : options.findIndex((o) => !o.disabled));
+    setActive(startIn(options));
     setOpen(true);
   };
   const choose = (i: number) => {
     const o = shown[i];
-    if (!o || o.disabled) return;
+    if (disabled || !o || o.disabled) return;
     close(true);
     if (o.value !== value) onChange(o.value);
   };
@@ -317,11 +358,19 @@ function Menu<V extends string>({
     };
   }, [open]);
 
-  // A new filter starts on its first match
+  // Disabled while open: nothing may pick any more
   useEffect(() => {
-    if (open && needle) setActive(edge(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the filter text changes
-  }, [needle]);
+    if (disabled && open) close(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- close only reads refs and setters
+  }, [disabled]);
+
+  // A changed list (filter typed or cleared, options replaced) restarts the active option;
+  // keyed by content, so a parent re-render with an equal inline array keeps it
+  const listKey = shown.map((o) => `${o.value}${o.disabled ? '!' : ''}`).join('\n');
+  useEffect(() => {
+    if (open) setActive(startIn(shown));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the shown list changes
+  }, [listKey]);
 
   // Only once placed: scrolling a still unplaced popup into view could scroll the page
   useEffect(() => {
@@ -426,7 +475,8 @@ function Menu<V extends string>({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
-        aria-labelledby={`${uid}-label ${uid}-value`}
+        aria-labelledby={`${labelledBy ?? `${uid}-label`} ${uid}-value`}
+        aria-invalid={invalid || undefined}
         onClick={() => (open ? close(false) : openMenu())}
         onKeyDown={(e) => {
           if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
@@ -435,7 +485,7 @@ function Menu<V extends string>({
             openMenu();
           }
         }}
-        className={`flex items-center gap-1.5 min-w-0 max-w-full bg-gray-850 border border-gray-700 rounded text-gray-200 text-left hover:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed ${triggerSize} ${FOCUS} ${className}`}
+        className={`flex items-center gap-1.5 min-w-0 max-w-full bg-gray-850 border ${invalid ? 'border-red-400' : 'border-gray-700'} rounded text-gray-200 text-left hover:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed ${triggerSize} ${FOCUS} ${className}`}
       >
         {icon}
         <span
@@ -446,7 +496,7 @@ function Menu<V extends string>({
         </span>
         <Chevron />
       </button>
-      {open && (
+      {open && !disabled && (
         <div
           ref={popupRef}
           style={{
@@ -483,7 +533,8 @@ function Menu<V extends string>({
             ref={listRef}
             id={listId}
             role="listbox"
-            aria-label={label}
+            aria-label={labelledBy ? undefined : label}
+            aria-labelledby={labelledBy}
             tabIndex={-1}
             aria-activedescendant={search ? undefined : activeId}
             onKeyDown={search ? undefined : onKeyDown}
