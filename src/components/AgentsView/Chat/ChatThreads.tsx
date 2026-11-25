@@ -638,8 +638,7 @@ const ThreadListRow: React.FC<{
     <li className="group relative">
       <button
         type="button"
-        // the second click of a double-click (rename) must not close the thread again
-        onClick={(e) => e.detail < 2 && onOpen()}
+        onClick={onOpen}
         aria-current={open || undefined}
         data-thread-row={thread.id}
         className={`block w-full border-l-2 px-3 py-2 text-left ${focusRing} ${
@@ -749,11 +748,7 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
   // `list:<id>` or `header:<id>`: where the name field is open
   const [renaming, setRenaming] = useState<string | null>(null);
   const rename = (where: string, id: string) => (name: ThreadNameParts | null | 'start') => {
-    if (name === 'start') {
-      // the first click of a double-click on the open thread's row closed it
-      if (where === 'list') onOpen(id);
-      return setRenaming(`${where}:${id}`);
-    }
+    if (name === 'start') return setRenaming(`${where}:${id}`);
     setRenaming(null);
     if (name) onRename(id, name);
   };
@@ -947,7 +942,8 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
                   thread={x}
                   items={byThread.get(x.id) ?? []}
                   open={x.id === openId}
-                  onOpen={() => onOpen(x.id === openId ? null : x.id)}
+                  // the open one stays open: closing it moved the rows under a double-click
+                  onOpen={() => onOpen(x.id)}
                   renaming={renaming === `list:${x.id}`}
                   onRename={rename('list', x.id)}
                 />
