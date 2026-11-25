@@ -38,7 +38,16 @@ export type ChatMessage =
   | { kind: 'result'; key: string; ok: boolean; subtype: string; durationMs: number | null }
   | { kind: 'notice'; key: string; text: string; tone: 'info' | 'error' }
   /** The CLI's "※ recap" summary (system/away_summary) */
-  | { kind: 'recap'; key: string; text: string };
+  | { kind: 'recap'; key: string; text: string }
+  /** Where a context ends: `/clear`, a compaction, or the pane's agent on its next session */
+  | { kind: 'divider'; key: string; reason: DividerReason; ts?: number };
+
+export type DividerReason = 'clear' | 'compact' | 'switch';
+const DIVIDERS: Record<string, DividerReason> = {
+  clear: 'clear',
+  compact_boundary: 'compact',
+  session_switch: 'switch',
+};
 
 export type AssistantMessage = Extract<ChatMessage, { kind: 'assistant' }>;
 export type ResultMessage = Extract<ChatMessage, { kind: 'result' }>;
@@ -279,8 +288,19 @@ export function reduceChat(state: ChatState, event: unknown): ChatState {
   switch (event.type) {
     case 'system':
       if (event.subtype === 'init') return { ...state, model: str(event.model) || state.model };
-      if (event.subtype === 'compact_boundary' || event.subtype === 'clear')
-        return { ...state, boundary: true };
+      if (Object.hasOwn(DIVIDERS, str(event.subtype))) {
+        // none above the first turn; a switch mark right before the /clear record is that clear
+        const last = state.messages.at(-1);
+        if (!last) return { ...state, boundary: true };
+        const kept = last.kind === 'divider' ? state.messages.slice(0, -1) : state.messages;
+        const divider: ChatMessage = {
+          kind: 'divider',
+          key: `d${kept.length}`,
+          reason: DIVIDERS[str(event.subtype)],
+          ...(typeof event.ts === 'number' ? { ts: event.ts } : {}),
+        };
+        return { ...state, boundary: true, messages: [...kept, divider] };
+      }
       if (event.subtype === 'away_summary' && str(event.content))
         return {
           ...state,

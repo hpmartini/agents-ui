@@ -1,10 +1,17 @@
-// Demo surfaces for the shared Choice and the /pulls repo tree: ?view=choice, ?view=pulls
-// (&state=loading|empty). Fake owners, repos and paths only (public repo).
+// Demo surfaces for the shared Choice, the /pulls repo tree and the chat's context dividers:
+// ?view=choice, ?view=pulls (&state=loading|empty), ?view=divider. Fake owners, repos and paths only (public repo).
 import React, { useCallback, useMemo, useState } from 'react';
 import { Choice, type ChoiceOption } from '../src/components/Choice';
 import { PullRequestsPage } from '../src/components/AgentsView/PullRequestsPage';
 import type { AgentContext, AgentPullRequest, AgentSession } from '../src/types';
 import type { PullRequestRow } from '../src/utils/agentSessions';
+import {
+  groupAnswers,
+  initialChatState,
+  reduceChat,
+  type ChatState,
+} from '../src/utils/chatEvents';
+import { ChatItemView } from '../src/components/AgentsView/Chat/ChatMessages';
 
 const greek = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'].map((l) => ({
   value: l.toLowerCase(),
@@ -306,6 +313,47 @@ export const PullsShowcase: React.FC<{ state: string | null }> = ({ state }) => 
         searchParams={search}
         setSearchParams={setSearchParams}
       />
+    </div>
+  );
+};
+
+/** ?view=divider: a chat with the dividers of /clear, a compaction and a switch to another session */
+export const DividerShowcase: React.FC = () => {
+  const at = (h: number, m: number) => new Date(2026, 10, 25, h, m).getTime();
+  const answer = (text: string, ts: number) => [
+    { type: 'assistant', message: { id: `m${ts}`, content: [{ type: 'text', text }] }, ts },
+    { type: 'result', subtype: 'success', is_error: false, duration_ms: 4000 },
+  ];
+  const items = useMemo(
+    () =>
+      groupAnswers(
+        [
+          { type: 'devorbit_user', text: 'Summarise the open review comments', ts: at(9, 30) },
+          ...answer('Three comments are open; two are nits.', at(9, 31)),
+          { type: 'system', subtype: 'clear', ts: at(9, 42) },
+          { type: 'devorbit_user', text: 'Start on the login form', ts: at(9, 43) },
+          ...answer('Reading `LoginForm.tsx` first.', at(9, 43)),
+          { type: 'system', subtype: 'compact_boundary', ts: at(10, 5) },
+          { type: 'devorbit_user', text: 'Continue with the tests', ts: at(10, 6) },
+          { type: 'system', subtype: 'session_switch', ts: at(10, 20) },
+          { type: 'devorbit_user', text: 'Resumed: check the CI run', ts: at(10, 21) },
+        ].reduce<ChatState>(reduceChat, initialChatState).messages
+      ),
+    []
+  );
+  return (
+    <div className="h-full overflow-y-auto p-6 bg-gray-900 text-gray-200 text-sm">
+      <div className="max-w-2xl">
+        {items.map((item) => (
+          <ChatItemView
+            key={item.key}
+            item={item}
+            showSteps={false}
+            harness="Claude"
+            model={null}
+          />
+        ))}
+      </div>
     </div>
   );
 };
