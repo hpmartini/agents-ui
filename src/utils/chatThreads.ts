@@ -5,6 +5,7 @@
  * unclear stays in the main chat; nothing is guessed. Pure: the chat pane routes on every render.
  */
 import { agentMessage, type ChatAnswer, type ChatItem } from './chatEvents';
+import { leadingCommand } from './chatComposer';
 
 /** Thread as the host stores it (Orkumo: `/api/orchestrator/threads`) */
 export interface ChatThread {
@@ -27,6 +28,11 @@ export interface ChatThread {
   summary?: string | null;
   /** Bound status task, null for a thread opened on an answer */
   binding?: { project: string; task: string } | null;
+  /**
+   * Command marks (`at`: ms, host clock): a command goes out without the tag, so each mark gives
+   * the thread the first prompt at or after it that is the command
+   */
+  commands?: { at: number; command: string }[];
 }
 
 /** Where a thread starts in the main chat: "N replies in thread …" */
@@ -41,6 +47,25 @@ const TAG_START = '[Thread: ';
 
 export const threadTag = (name: { project: string; task: string }) =>
   `${TAG_START}${name.project} · ${name.task}]`;
+
+/** The marked command, also as the CLI logs it with its plugin prefix (`/retro` → `/x:retro`) */
+const sameCommand = (logged: string, marked: string) =>
+  logged === marked || logged.endsWith(`:${marked.slice(1)}`);
+
+/**
+ * The command a thread message starts with (`/status-report`), else null; only a command of the
+ * chat's list (`/tmp ist voll` is text). The CLI runs a command only as the first word: it goes
+ * out without the tag line and its turn finds the thread by a mark
+ */
+export function threadCommand(body: string, commands: { name: string }[]): string | null {
+  const command = leadingCommand(body.trim())?.command;
+  if (!command) return null;
+  return commands.some(
+    (c) => sameCommand(command, `/${c.name}`) || sameCommand(`/${c.name}`, command)
+  )
+    ? command
+    : null;
+}
 
 /** Message text without its thread tag line */
 export function stripTag(text: string, tag: string): string {
@@ -123,13 +148,56 @@ export function threadOf(item: ChatItem, threads: ChatThread[]): string | null {
 }
 
 /**
+ * Command prompts the threads' marks claim: a mark is one turn, so it takes the first prompt at or
+ * after it that is its command, one each. Prompts in between are skipped: Claude Code logs a
+ * command typed while the agent works only when the turn ends, after prompts typed later. Only
+ * while the loaded items reach back to the mark (an item before it, the host's `olderTs`: the
+ * prompt before the window, or the whole history): with its turn paged out, a later identical
+ * command would look first; the mark claims again once the older pages are in.
+ * shortcut: a mark whose command never got logged (interrupted, queue taken back) claims the next
+ * identical command from the main chat; upgrade when the host drops such marks
+ */
+function commandTurns(
+  items: ChatItem[],
+  threads: ChatThread[],
+  complete: boolean,
+  olderTs: number | undefined
+): Map<ChatItem, string> {
+  const claimed = new Map<ChatItem, string>();
+  const marks = threads
+    .flatMap((t) => (t.commands ?? []).map((m) => ({ ...m, id: t.id })))
+    .sort((a, b) => a.at - b.at);
+  const oldest = Math.min(...items.map((i) => itemTime(i) ?? Infinity));
+  for (const mark of marks) {
+    // strictly before: an item at the mark's time may be its own command, no proof of reach
+    if (!complete && !(oldest < mark.at) && !(olderTs !== undefined && olderTs < mark.at)) continue;
+    const own = items.find(
+      (i) =>
+        i.kind === 'user' &&
+        i.ts !== undefined &&
+        i.ts >= mark.at &&
+        !claimed.has(i) &&
+        !agentMessage(i.text) &&
+        sameCommand(leadingCommand(i.text.trim())?.command ?? '', mark.command) &&
+        !threadOf(i, threads)
+    );
+    if (own) claimed.set(own, mark.id);
+  }
+  return claimed;
+}
+
+/**
  * Splits the chat: thread items go to their thread, the main chat keeps the rest plus one marker
  * per thread (after the answer it was opened on, else where its first message was). An answer of
- * tool steps only follows the item before it
+ * tool steps only follows the item before it; a command sent from a thread goes there by its mark
  */
 export function routeThreads(
   items: ChatItem[],
-  threads: ChatThread[]
+  threads: ChatThread[],
+  /** The items are the whole history (no older page left to load) */
+  complete = false,
+  /** ms of the newest prompt before the loaded items (host's `devorbit_page`), if known */
+  olderTs?: number
 ): { main: (ChatItem | ChatThreadMarker)[]; byThread: Map<string, ChatItem[]> } {
   const byThread = new Map<string, ChatItem[]>();
   const main: (ChatItem | ChatThreadMarker)[] = [];
@@ -143,6 +211,7 @@ export function routeThreads(
     return m;
   };
   const parents = new Map(threads.filter((t) => t.parentKey).map((t) => [t.parentKey, t.id]));
+  const commands = commandTurns(items, threads, complete, olderTs);
   let prev: string | null = null;
   for (const item of items) {
     // An answer without a tag (orchestrators started before the tag rule, tool steps only) is the
@@ -152,9 +221,11 @@ export function routeThreads(
     const turn: string | null = prev;
     const id: string | null = !threads.length
       ? null
-      : untagged
-        ? (threadOf(item, threads) ?? turn)
-        : threadOf(item, threads);
+      : commands.has(item)
+        ? commands.get(item)!
+        : untagged
+          ? (threadOf(item, threads) ?? turn)
+          : threadOf(item, threads);
     prev = id;
     if (id) {
       byThread.set(id, [...(byThread.get(id) ?? []), item]);

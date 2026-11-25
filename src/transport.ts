@@ -129,6 +129,8 @@ export interface ChatHistoryPage {
   events: unknown[];
   before: number;
   more: boolean;
+  /** ms of the newest prompt before this page (older hosts: absent) */
+  olderTs?: number;
 }
 
 /** A file the chat's agent created or edited, or one of omp's session documents (`local://`) */
@@ -354,7 +356,11 @@ export interface AgentsTransport {
     updateThread: (
       session: string,
       id: string,
-      patch: { closed?: boolean; readAt?: number }
+      /**
+       * `command` (`/name`): marks that command sent from the thread (host time);
+       * `cancelCommand` drops the latest mark
+       */
+      patch: { closed?: boolean; readAt?: number; command?: string; cancelCommand?: boolean }
     ) => Promise<ChatThread>;
   };
   /** Opening a clicked file path on the agents' machine; resolves with what the server did */

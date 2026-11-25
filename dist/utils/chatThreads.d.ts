@@ -32,6 +32,14 @@ export interface ChatThread {
         project: string;
         task: string;
     } | null;
+    /**
+     * Command marks (`at`: ms, host clock): a command goes out without the tag, so each mark gives
+     * the thread the first prompt at or after it that is the command
+     */
+    commands?: {
+        at: number;
+        command: string;
+    }[];
 }
 /** Where a thread starts in the main chat: "N replies in thread …" */
 export interface ChatThreadMarker {
@@ -44,6 +52,14 @@ export declare const threadTag: (name: {
     project: string;
     task: string;
 }) => string;
+/**
+ * The command a thread message starts with (`/status-report`), else null; only a command of the
+ * chat's list (`/tmp ist voll` is text). The CLI runs a command only as the first word: it goes
+ * out without the tag line and its turn finds the thread by a mark
+ */
+export declare function threadCommand(body: string, commands: {
+    name: string;
+}[]): string | null;
 /** Message text without its thread tag line */
 export declare function stripTag(text: string, tag: string): string;
 export declare const hhmm: (ms: number) => string;
@@ -65,9 +81,13 @@ export declare function threadOf(item: ChatItem, threads: ChatThread[]): string 
 /**
  * Splits the chat: thread items go to their thread, the main chat keeps the rest plus one marker
  * per thread (after the answer it was opened on, else where its first message was). An answer of
- * tool steps only follows the item before it
+ * tool steps only follows the item before it; a command sent from a thread goes there by its mark
  */
-export declare function routeThreads(items: ChatItem[], threads: ChatThread[]): {
+export declare function routeThreads(items: ChatItem[], threads: ChatThread[], 
+/** The items are the whole history (no older page left to load) */
+complete?: boolean, 
+/** ms of the newest prompt before the loaded items (host's `devorbit_page`), if known */
+olderTs?: number): {
     main: (ChatItem | ChatThreadMarker)[];
     byThread: Map<string, ChatItem[]>;
 };

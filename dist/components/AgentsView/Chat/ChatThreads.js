@@ -21,6 +21,9 @@ export function useChatThreads(session) {
     const [status, setStatus] = useState('loading');
     // no orchestrator: nothing to poll for
     const noThreads = useRef(false);
+    // the session shown now: an answer for the one before (tab switch) is dropped
+    const current = useRef(session);
+    current.current = session;
     const load = useCallback((quiet = false) => {
         if (!api || !session || noThreads.current)
             return;
@@ -29,12 +32,14 @@ export function useChatThreads(session) {
         api
             .fetchThreads(session)
             .then((l) => {
+            if (current.current !== session)
+                return;
             noThreads.current = !l.orchestrator;
             setList(l);
             setStatus('ready');
         })
             // the last list stays known: the panel shows the error and recovers on the next poll
-            .catch(() => setStatus('error'));
+            .catch(() => current.current === session && setStatus('error'));
     }, [api, session]);
     useEffect(() => {
         noThreads.current = false;
@@ -57,13 +62,16 @@ export function useChatThreads(session) {
         if (!api || !session)
             throw new Error('no threads');
         const thread = await api.createThread(session, body);
-        put(thread);
+        if (current.current === session)
+            put(thread);
         return thread;
     }, [api, session, put]);
     const update = useCallback(async (id, patch) => {
         if (!api || !session)
             return;
-        put(await api.updateThread(session, id, patch));
+        const thread = await api.updateThread(session, id, patch);
+        if (current.current === session)
+            put(thread);
     }, [api, session, put]);
     // only a known orchestrator chat gets the panel: other panes never flash it while loading
     const enabled = !!list?.orchestrator;
@@ -130,10 +138,10 @@ const threadFiles = new Map();
 export const THREAD_COMPOSER_HEIGHT_KEY = 'devOrbitChatThreadComposerHeight';
 /**
  * Composer of the open thread: the main chat's composer (send key from the settings, height grip,
- * `@` files) plus quote, images and files. `/` commands are left out: the tag line in front
- * would turn them into plain text.
+ * `/` commands and skills, `@` files) plus quote, images and files. A command goes out without
+ * the tag line (ChatPane `sendInThread`).
  */
-export const ThreadComposer = ({ chatId, submitKey, history, agents, quote, onClearQuote, onSend, disabled, focusKey, draftKey, }) => {
+export const ThreadComposer = ({ chatId, submitKey, history, agents, commands, quote, onClearQuote, onSend, disabled, focusKey, draftKey, }) => {
     const t = useLabels().terminal;
     const uploads = useTransport().uploads;
     const storeKey = `${chatId}:${draftKey ?? ''}`;
@@ -194,10 +202,9 @@ export const ThreadComposer = ({ chatId, submitKey, history, agents, quote, onCl
                 onClearQuote();
             }
         }, ...(uploads &&
-            imageDropHandlers((picked) => setFiles((prev) => [...prev, ...picked]), (list) => attachableFiles(list, uploads.attachmentExtensions))), children: [quote && _jsx(QuoteChip, { quote: quote, onRemove: onClearQuote }), _jsxs("div", { className: "flex items-end gap-1.5", children: [_jsx(ChatComposer, { chatId: chatId, value: text, onChange: setText, onSubmit: () => void send(), onStop: noop, busy: false, disabled: !!disabled, submitKey: submitKey, history: history, commands: NO_COMMANDS, agents: agents, inputRef: input, label: t.replyInThread, placeholders: { enter: t.threadPlaceholderEnter, modEnter: t.threadPlaceholderModEnter }, heightKey: THREAD_COMPOSER_HEIGHT_KEY, pinMax: threadInputMax }), _jsx("button", { type: "button", "aria-label": t.sendMessage, title: t.sendMessage, onClick: () => void send(), disabled: empty || sending || disabled, className: `mb-0.5 rounded-md bg-blue-600 p-1.5 text-white hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 ${focusRing}`, children: sending ? (_jsx(Loader2, { size: 15, "aria-hidden": true, className: "animate-spin motion-reduce:animate-none" })) : (_jsx(ArrowUp, { size: 15, "aria-hidden": true })) })] }), uploads && (_jsx(ImageAttachments, { images: files, onChange: setFiles, disabled: sending || disabled, files: uploads.attachmentExtensions }))] }));
+            imageDropHandlers((picked) => setFiles((prev) => [...prev, ...picked]), (list) => attachableFiles(list, uploads.attachmentExtensions))), children: [quote && _jsx(QuoteChip, { quote: quote, onRemove: onClearQuote }), _jsxs("div", { className: "flex items-end gap-1.5", children: [_jsx(ChatComposer, { chatId: chatId, value: text, onChange: setText, onSubmit: () => void send(), onStop: noop, busy: false, disabled: !!disabled, submitKey: submitKey, history: history, commands: commands, agents: agents, inputRef: input, label: t.replyInThread, placeholders: { enter: t.threadPlaceholderEnter, modEnter: t.threadPlaceholderModEnter }, heightKey: THREAD_COMPOSER_HEIGHT_KEY, pinMax: threadInputMax }), _jsx("button", { type: "button", "aria-label": t.sendMessage, title: t.sendMessage, onClick: () => void send(), disabled: empty || sending || disabled, className: `mb-0.5 rounded-md bg-blue-600 p-1.5 text-white hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 ${focusRing}`, children: sending ? (_jsx(Loader2, { size: 15, "aria-hidden": true, className: "animate-spin motion-reduce:animate-none" })) : (_jsx(ArrowUp, { size: 15, "aria-hidden": true })) })] }), uploads && (_jsx(ImageAttachments, { images: files, onChange: setFiles, disabled: sending || disabled, files: uploads.attachmentExtensions }))] }));
 };
 const noop = () => { };
-const NO_COMMANDS = [];
 const NewThreadMenu = ({ tasks, onTask, onFree, onDismiss }) => {
     const t = useLabels().terminal;
     const menu = useRef(null);

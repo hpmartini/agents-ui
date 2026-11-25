@@ -52,6 +52,9 @@ export function useChatThreads(session: string | null | undefined) {
   const [status, setStatus] = useState<ThreadsStatus>('loading');
   // no orchestrator: nothing to poll for
   const noThreads = useRef(false);
+  // the session shown now: an answer for the one before (tab switch) is dropped
+  const current = useRef(session);
+  current.current = session;
   const load = useCallback(
     (quiet = false) => {
       if (!api || !session || noThreads.current) return;
@@ -59,12 +62,13 @@ export function useChatThreads(session: string | null | undefined) {
       api
         .fetchThreads(session)
         .then((l) => {
+          if (current.current !== session) return;
           noThreads.current = !l.orchestrator;
           setList(l);
           setStatus('ready');
         })
         // the last list stays known: the panel shows the error and recovers on the next poll
-        .catch(() => setStatus('error'));
+        .catch(() => current.current === session && setStatus('error'));
     },
     [api, session]
   );
@@ -94,15 +98,19 @@ export function useChatThreads(session: string | null | undefined) {
     async (body: Parameters<NonNullable<typeof api>['createThread']>[1]) => {
       if (!api || !session) throw new Error('no threads');
       const thread = await api.createThread(session, body);
-      put(thread);
+      if (current.current === session) put(thread);
       return thread;
     },
     [api, session, put]
   );
   const update = useCallback(
-    async (id: string, patch: { closed?: boolean; readAt?: number }) => {
+    async (
+      id: string,
+      patch: { closed?: boolean; readAt?: number; command?: string; cancelCommand?: boolean }
+    ) => {
       if (!api || !session) return;
-      put(await api.updateThread(session, id, patch));
+      const thread = await api.updateThread(session, id, patch);
+      if (current.current === session) put(thread);
     },
     [api, session, put]
   );
@@ -232,8 +240,8 @@ export const THREAD_COMPOSER_HEIGHT_KEY = 'devOrbitChatThreadComposerHeight';
 
 /**
  * Composer of the open thread: the main chat's composer (send key from the settings, height grip,
- * `@` files) plus quote, images and files. `/` commands are left out: the tag line in front
- * would turn them into plain text.
+ * `/` commands and skills, `@` files) plus quote, images and files. A command goes out without
+ * the tag line (ChatPane `sendInThread`).
  */
 export const ThreadComposer: React.FC<{
   chatId: string | null;
@@ -241,6 +249,8 @@ export const ThreadComposer: React.FC<{
   /** The thread's sent messages, oldest first (Arrow up walks them) */
   history: string[];
   agents: { name: string; description: string }[];
+  /** The chat's commands and skills, as the main composer lists them */
+  commands: ChatCommand[];
   quote: ChatQuote | null;
   onClearQuote: () => void;
   onSend: (text: string, files: File[]) => Promise<boolean>;
@@ -254,6 +264,7 @@ export const ThreadComposer: React.FC<{
   submitKey,
   history,
   agents,
+  commands,
   quote,
   onClearQuote,
   onSend,
@@ -342,7 +353,7 @@ export const ThreadComposer: React.FC<{
           disabled={!!disabled}
           submitKey={submitKey}
           history={history}
-          commands={NO_COMMANDS}
+          commands={commands}
           agents={agents}
           inputRef={input}
           label={t.replyInThread}
@@ -378,7 +389,6 @@ export const ThreadComposer: React.FC<{
 };
 
 const noop = () => {};
-const NO_COMMANDS: ChatCommand[] = [];
 
 const NewThreadMenu: React.FC<{
   tasks: ChatThreadTask[];

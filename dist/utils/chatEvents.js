@@ -55,7 +55,7 @@ export function prependHistory(state, page) {
         ],
         sub: { ...older.sub, ...state.sub },
         endedTasks: [...new Set([...older.endedTasks, ...state.endedTasks])],
-        older: { before: page.before, more: page.more },
+        older: { before: page.before, more: page.more, olderTs: page.olderTs },
     };
 }
 /** Queued prompts the user typed (task notifications and other `<…>` wrappers left out) */
@@ -271,7 +271,8 @@ export function reduceChat(state, event) {
             if (!Number.isSafeInteger(before))
                 return state;
             const more = event.more === true;
-            return { ...state, older: { before, more }, ...(more ? { boundary: false } : {}) };
+            const olderTs = typeof event.olderTs === 'number' ? event.olderTs : undefined;
+            return { ...state, older: { before, more, olderTs }, ...(more ? { boundary: false } : {}) };
         }
         case 'devorbit_queue': {
             const text = str(event.text);

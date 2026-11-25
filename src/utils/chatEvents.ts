@@ -111,7 +111,7 @@ export interface ChatState {
   /** Background tasks (shells) whose `<task-notification>` reported an end */
   endedTasks: string[];
   /** Cursor of the next older page (`fetchChatHistory`); null before the replay said */
-  older: { before: number; more: boolean } | null;
+  older: { before: number; more: boolean; olderTs?: number } | null;
 }
 
 export const initialChatState: ChatState = {
@@ -146,7 +146,7 @@ export function prependHistory(state: ChatState, page: ChatHistoryPage): ChatSta
     ],
     sub: { ...older.sub, ...state.sub },
     endedTasks: [...new Set([...older.endedTasks, ...state.endedTasks])],
-    older: { before: page.before, more: page.more },
+    older: { before: page.before, more: page.more, olderTs: page.olderTs },
   };
 }
 
@@ -386,7 +386,8 @@ export function reduceChat(state: ChatState, event: unknown): ChatState {
       const before = Number(event.before);
       if (!Number.isSafeInteger(before)) return state;
       const more = event.more === true;
-      return { ...state, older: { before, more }, ...(more ? { boundary: false } : {}) };
+      const olderTs = typeof event.olderTs === 'number' ? event.olderTs : undefined;
+      return { ...state, older: { before, more, olderTs }, ...(more ? { boundary: false } : {}) };
     }
 
     case 'devorbit_queue': {

@@ -30,6 +30,10 @@ const composer = (
       quote={null}
       onClearQuote={vi.fn()}
       onSend={onSend}
+      commands={[
+        { name: 'status-report', description: 'Send the full status', argumentHint: '[note]' },
+        { name: 'compact', description: 'Compact the context', builtin: true },
+      ]}
     />,
     { transport }
   );
@@ -65,6 +69,15 @@ describe('thread composer is the main composer', () => {
     fireEvent.keyDown(grip, { key: 'ArrowUp' });
     expect(Number(localStorage.getItem(THREAD_COMPOSER_HEIGHT_KEY))).toBeGreaterThan(0);
     expect(localStorage.getItem(CHAT_COMPOSER_HEIGHT_KEY)).toBeNull();
+  });
+
+  it('`/` lists the commands and skills of the chat, with their argument hints', async () => {
+    const { input } = composer('mod+enter');
+    fireEvent.change(input, { target: { value: '/st', selectionStart: 3 } });
+    expect(await screen.findByRole('option', { name: /status-report/ })).toBeTruthy();
+    // a hint without spaces (`[start|view|list|stop]`) wraps in the narrow thread panel
+    expect(screen.getByText('[note]').className).toContain('[overflow-wrap:anywhere]');
+    expect(screen.getByText('Send the full status')).toBeTruthy();
   });
 
   it('`@` lists the files of the chat', async () => {
@@ -222,6 +235,7 @@ describe('thread draft', () => {
         submitKey="mod+enter"
         history={[]}
         agents={[]}
+        commands={[]}
         quote={null}
         onClearQuote={vi.fn()}
         onSend={vi.fn(async () => true)}
@@ -251,6 +265,7 @@ describe('thread draft', () => {
         submitKey="mod+enter"
         history={[]}
         agents={[]}
+        commands={[]}
         quote={null}
         onClearQuote={vi.fn()}
         onSend={onSend}

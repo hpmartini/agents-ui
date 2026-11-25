@@ -74,6 +74,7 @@ import {
   quoteHeader,
   stripTag,
   routeThreads,
+  threadCommand,
   unreadCount,
 } from '../../../utils/chatThreads';
 import { clampWidth, ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
@@ -472,9 +473,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     () =>
       routeThreads(
         items.filter((item) => item !== recap),
-        threadList
+        threadList,
+        !state.older?.more,
+        state.older?.olderTs
       ),
-    [items, recap, threadList]
+    [items, recap, threadList, state.older]
   );
   const shown = useMemo(
     () =>
@@ -736,8 +739,24 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       setOpenThreadId(thread.id);
     }
     const quoted = threadQuote ? quoteHeader(threadQuote.ts, threadQuote.text) : '';
-    const sent = await sendPrompt(`${thread.tag}\n${quoted}`, body, files);
-    if (sent) setThreadQuote(null);
+    const command = threadCommand(body, state.commands);
+    if (!command) {
+      const sent = await sendPrompt(`${thread.tag}\n${quoted}`, body, files);
+      if (sent) setThreadQuote(null);
+      return sent;
+    }
+    // A command: marked first (host time, before it is typed), so its turn lands in the thread
+    try {
+      await threads.update(thread.id, { command });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.threadsFailed);
+      return false;
+    }
+    const sent = await sendPrompt('', body, files);
+    // a mark left behind would take the next same command of the main chat
+    if (!sent) void threads.update(thread.id, { cancelCommand: true }).catch(() => {});
+    // the CLI runs a command only as the first word: a quote is not sent with it, the chip goes
+    else setThreadQuote(null);
     return sent;
   };
   const unreadTotal = threadList.reduce(
@@ -1429,6 +1448,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                         submitKey={submitKey}
                         history={threadHistory}
                         agents={state.agents}
+                        commands={state.commands}
                         quote={threadQuote}
                         onClearQuote={() => setThreadQuote(null)}
                         onSend={sendInThread}

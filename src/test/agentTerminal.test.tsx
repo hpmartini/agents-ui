@@ -6,7 +6,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { AgentSession } from '../types';
 import type { AgentsTransport, PtySocket } from '../transport';
 import { renderWithAgents, testHost, testTransport } from './agents';
-import { AgentTerminal } from '../components/AgentsView/AgentTerminal';
+import { AgentTerminal, typeIntoPane } from '../components/AgentsView/AgentTerminal';
 
 // xterm needs a canvas and real layout: a stand-in that records what reaches it
 const terminals = vi.hoisted(() => [] as { write: Mock; options: Record<string, unknown> }[]);
@@ -17,6 +17,8 @@ vi.mock('@xterm/xterm', () => ({
     element: HTMLElement | undefined;
     options: Record<string, unknown>;
     write = vi.fn();
+    // xterm brackets a paste only in the mode it saw switched on: this one never saw it
+    paste = vi.fn();
     constructor(options: Record<string, unknown>) {
       this.options = { ...options };
       terminals.push(this);
@@ -203,5 +205,29 @@ describe('AgentTerminal', () => {
       '\x1b[31mThis host cannot start terminals\x1b[0m\r\n'
     );
     expect(screen.getByText(/Detached\./)).toBeInTheDocument();
+  });
+
+  it('types a multi-line message as one bracketed paste, also when the replay lost the mode', async () => {
+    // a TUI turns bracketed paste on once at start; a late xterm whose backlog no longer holds
+    // that switch would paste line by line, and omp would submit the tag line on its own
+    const { socket } = setup('t-paste');
+    act(() => {
+      socket.readyState = WebSocket.OPEN;
+      socket.onopen?.();
+    });
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Connected' })).toBeInTheDocument());
+    vi.useFakeTimers();
+    try {
+      expect(typeIntoPane('t-paste', '[Thread: a · b]\nhello\x1b[201~')).toBe(true);
+      vi.advanceTimersByTime(100);
+    } finally {
+      vi.useRealTimers();
+    }
+    const inputs = socket.send.mock.calls
+      .map(([m]) => JSON.parse(m as string))
+      .filter((m) => m.type === 'input')
+      .map((m) => m.data);
+    // an ESC inside would end the paste early: control characters other than tab / newline go
+    expect(inputs).toEqual(['\x1b[200~[Thread: a · b]\nhello[201~\x1b[201~', '\r']);
   });
 });
