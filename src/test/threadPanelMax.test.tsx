@@ -255,6 +255,16 @@ describe('rename a thread', () => {
     expect(screen.queryByRole('textbox', { name: /^Thread name/ })).toBeNull();
   });
 
+  it("double-click on the open thread's list title keeps it open", () => {
+    const { onOpen } = panel();
+    const row = document.querySelector<HTMLElement>('[data-thread-row="t1"]')!;
+    fireEvent.click(row, { detail: 1 });
+    fireEvent.click(row, { detail: 2 });
+    fireEvent.doubleClick(listTitle('t1'));
+    expect(onOpen).toHaveBeenLastCalledWith('t1');
+    expect(field().value).toBe('Shop · Task t1');
+  });
+
   it('"Project · Task" sets both parts; leaving the field saves', () => {
     const onRename = vi.fn();
     panel({ onRename });
