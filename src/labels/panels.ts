@@ -13,8 +13,6 @@ export interface PanelsLabels {
   settingsTaskCwd: string;
   settingsTaskCwdPlaceholder: string;
   settingsGroupBy: string;
-  settingsGroupState: string;
-  settingsGroupDirectory: string;
   settingsCardDensity: string;
   settingsDensityComfortable: string;
   settingsDensityCompact: string;
@@ -233,8 +231,6 @@ export const panelsEn: PanelsLabels = {
   settingsTaskCwd: 'New tasks start in',
   settingsTaskCwdPlaceholder: 'Selected project or last pick, e.g. ~/MAPLE',
   settingsGroupBy: 'Group by',
-  settingsGroupState: 'State (pinned · review · needs input · working · completed)',
-  settingsGroupDirectory: 'Directory',
   settingsCardDensity: 'Card density',
   settingsDensityComfortable: 'Comfortable (metrics on their own line)',
   settingsDensityCompact: 'Compact',
@@ -528,8 +524,6 @@ export const panelsDe: PanelsLabels = {
   settingsTaskCwd: 'Neue Aufgaben starten in',
   settingsTaskCwdPlaceholder: 'Gewähltes Projekt oder letzte Wahl, z. B. ~/MAPLE',
   settingsGroupBy: 'Gruppieren nach',
-  settingsGroupState: 'Status (angeheftet · Review · wartet auf Eingabe · arbeitet · fertig)',
-  settingsGroupDirectory: 'Verzeichnis',
   settingsCardDensity: 'Kartendichte',
   settingsDensityComfortable: 'Großzügig (Kennzahlen in eigener Zeile)',
   settingsDensityCompact: 'Kompakt',

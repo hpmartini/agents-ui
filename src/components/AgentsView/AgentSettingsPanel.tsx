@@ -3,6 +3,7 @@ import { X, Settings2, AlertTriangle, Power, RefreshCw } from 'lucide-react';
 import { useHost, useTransport } from '../../host';
 import { useLabels } from '../../labels';
 import { Choice } from '../Choice';
+import { GROUP_MODES } from './ProjectsRail';
 import type {
   AgentHarness,
   AgentViewSettings,
@@ -159,10 +160,10 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                   label={t.settingsGroupBy}
                   value={settings.grouping}
                   onChange={(grouping) => onUpdate({ grouping })}
-                  options={[
-                    { value: 'state', label: t.settingsGroupState },
-                    { value: 'directory', label: t.settingsGroupDirectory },
-                  ]}
+                  options={GROUP_MODES.map((mode) => ({
+                    value: mode,
+                    label: labels.shell.groupModes[mode],
+                  }))}
                 />
               </div>
               <div>

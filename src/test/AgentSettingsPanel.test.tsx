@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AgentSettingsPanel } from '../components/AgentsView/AgentSettingsPanel';
 import { DEFAULT_AGENT_VIEW_SETTINGS } from '../types';
 import { renderWithAgents, testHost, testTransport } from './agents';
@@ -53,5 +54,32 @@ describe('AgentSettingsPanel choices', () => {
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(list).not.toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('"Group by" offers every grouping and shows the stored one, the default included', async () => {
+    const user = userEvent.setup();
+    for (const [grouping, label] of [
+      ['project', 'Project'],
+      ['state', 'Status'],
+      ['directory', 'Directory'],
+      ['none', 'None'],
+    ] as const) {
+      const { unmount } = renderWithAgents(
+        <AgentSettingsPanel {...props} settings={{ ...DEFAULT_AGENT_VIEW_SETTINGS, grouping }} />
+      );
+      const trigger = screen.getByRole('button', { name: /^Group by/ });
+      expect(trigger).toHaveTextContent(label);
+      await user.click(trigger);
+      const list = screen.getByRole('listbox', { name: 'Group by' });
+      expect(within(list).getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Project',
+        'Status',
+        'Directory',
+        'None',
+      ]);
+      expect(within(list).getByRole('option', { selected: true })).toHaveTextContent(label);
+      unmount();
+    }
+    expect(DEFAULT_AGENT_VIEW_SETTINGS.grouping).toBe('project');
   });
 });
