@@ -68,6 +68,7 @@ export const ChatStatusLine: React.FC<{
   return (
     <div
       ref={boxRef}
+      data-chat-status
       className={`mt-2 grid ${
         width && width < 400
           ? 'grid-cols-1'

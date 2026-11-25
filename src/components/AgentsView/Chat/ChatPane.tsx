@@ -852,6 +852,15 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         ? t.statusWorking
         : t.statusReady;
 
+  const paneDrop =
+    uploads &&
+    imageDropHandlers(
+      (files) => setImages((prev) => [...prev, ...files]),
+      (list) => attachableFiles(list, uploads.attachmentExtensions)
+    );
+  const inThreads = (e: React.SyntheticEvent) =>
+    e.target instanceof Node && !!asideRef.current?.contains(e.target);
+
   const view = (
     <div
       className={`flex flex-col h-full min-h-0 bg-gray-950 border rounded-lg overflow-hidden ${
@@ -866,11 +875,13 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       data-agent-pane={pane.id}
       data-chat-pane
       data-pane-active={active}
-      {...(uploads &&
-        imageDropHandlers(
-          (files) => setImages((prev) => [...prev, ...files]),
-          (list) => attachableFiles(list, uploads.attachmentExtensions)
-        ))}
+      {...(paneDrop && {
+        onDragOver: paneDrop.onDragOver,
+        // the threads panel has its own composer: its pastes and drops never reach the main one
+        onPaste: (e: React.ClipboardEvent) => !inThreads(e) && paneDrop.onPaste(e),
+        // a file let go elsewhere on the panel is dropped, not opened by the window
+        onDrop: (e: React.DragEvent) => (inThreads(e) ? e.preventDefault() : paneDrop.onDrop(e)),
+      })}
     >
       <div
         {...headerProps}
@@ -1264,54 +1275,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 files={uploads.attachmentExtensions}
               />
             )}
-            {chatId && (
-              <div className="flex items-end gap-3">
-                <div className="flex-1 min-w-0">
-                  <ChatStatusLine
-                    chatId={chatId}
-                    turns={turns}
-                    visible={active}
-                    picker={
-                      (harness === 'claude' || harness === 'omp') && (
-                        <ModelEffortPicker
-                          harness={harness}
-                          model=""
-                          effort=""
-                          keepLabel={t.keepCurrent}
-                          currentModel={state.model}
-                          currentEffort={state.effort}
-                          placement="up"
-                          disabled={busy || !connected}
-                          onPick={switchModel}
-                          title={
-                            busy
-                              ? t.switchModelBusy
-                              : t.switchModel(
-                                  harness === 'omp' ? '/switch, /effort' : '/model, /effort'
-                                )
-                          }
-                        />
-                      )
-                    }
-                  />
-                </div>
-                <div className="mt-2">
-                  <ChatArtifactsButton
-                    artifacts={artifacts}
-                    onOpen={() => setArtifactsOpen(true)}
-                  />
-                </div>
-              </div>
-            )}
-            {chatId && artifactsOpen && (
-              <ChatArtifactsModal
-                chatId={chatId}
-                cwd={pane.cwd}
-                title={pane.name}
-                artifacts={artifacts}
-                onClose={() => setArtifactsOpen(false)}
-              />
-            )}
           </div>
         </div>
         {showThreads && threadsOverlay && !threadsFull && (
@@ -1372,6 +1335,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 onNewFree={() => openThreadIn(DRAFT_THREAD)}
                 onClose={(id, closed) =>
                   threads.update(id, { closed }).catch((e: Error) => setError(e.message))
+                }
+                onRename={(id, name) =>
+                  threads.update(id, { name }).catch((e: Error) => setError(e.message))
                 }
                 maximized={threadsFull}
                 onMaximize={maximizeThreads}
@@ -1464,6 +1430,53 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           </div>
         )}
       </div>
+      {chatId && (
+        <div
+          data-chat-footer
+          // under the main chat and the threads panel; empty until the status loads
+          className="hidden shrink-0 items-end gap-3 border-t border-gray-800 px-2 pb-2 has-[button]:flex has-[[data-chat-status]]:flex"
+        >
+          <div className="flex-1 min-w-0">
+            <ChatStatusLine
+              chatId={chatId}
+              turns={turns}
+              visible={active}
+              picker={
+                (harness === 'claude' || harness === 'omp') && (
+                  <ModelEffortPicker
+                    harness={harness}
+                    model=""
+                    effort=""
+                    keepLabel={t.keepCurrent}
+                    currentModel={state.model}
+                    currentEffort={state.effort}
+                    placement="up"
+                    disabled={busy || !connected}
+                    onPick={switchModel}
+                    title={
+                      busy
+                        ? t.switchModelBusy
+                        : t.switchModel(harness === 'omp' ? '/switch, /effort' : '/model, /effort')
+                    }
+                  />
+                )
+              }
+            />
+          </div>
+          <div className="mt-2">
+            <ChatArtifactsButton artifacts={artifacts} onOpen={() => setArtifactsOpen(true)} />
+          </div>
+        </div>
+      )}
+      {chatId && artifactsOpen && (
+        <ChatArtifactsModal
+          chatId={chatId}
+          cwd={pane.cwd}
+          title={pane.name}
+          artifacts={artifacts}
+          onClose={() => setArtifactsOpen(false)}
+        />
+      )}
     </div>
   );
   // tool results load their images from this chat

@@ -135,6 +135,7 @@ const panel = (props: Partial<React.ComponentProps<typeof ThreadsPanel>> = {}) =
       onNewTask={vi.fn()}
       onNewFree={vi.fn()}
       onClose={vi.fn()}
+      onRename={vi.fn()}
       renderThread={() => null}
       maximized={false}
       onMaximize={vi.fn()}
