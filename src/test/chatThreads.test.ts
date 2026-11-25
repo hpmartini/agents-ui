@@ -278,13 +278,28 @@ describe('answer time', () => {
 });
 
 describe('a command sent from a thread (no tag: the CLI runs a command only as the first word)', () => {
+  const CMDS = [
+    { name: 'status-report', description: '' },
+    { name: 'skill:ping', description: '' },
+    { name: 'mattpocock-skills:retro', description: '' },
+  ];
   it('a message that starts with a command goes out unchanged; any other keeps its tag', () => {
-    expect(threadCommand('/status-report')).toBe('/status-report');
-    expect(threadCommand('/skill:ping now')).toBe('/skill:ping');
-    expect(threadCommand(' /mattpocock-skills:retro Dann …')).toBe('/mattpocock-skills:retro');
-    expect(threadCommand('how far? /status-report')).toBeNull();
+    expect(threadCommand('/status-report', CMDS)).toBe('/status-report');
+    expect(threadCommand('/skill:ping now', CMDS)).toBe('/skill:ping');
+    expect(threadCommand(' /mattpocock-skills:retro Dann …', CMDS)).toBe(
+      '/mattpocock-skills:retro'
+    );
+    // with or without the plugin prefix the list has
+    expect(threadCommand('/retro', CMDS)).toBe('/retro');
+    expect(threadCommand('/demo:status-report', CMDS)).toBe('/demo:status-report');
+    expect(threadCommand('how far? /status-report', CMDS)).toBeNull();
     // a path is text, not a command
-    expect(threadCommand('/Users/someone/file.ts broken')).toBeNull();
+    expect(threadCommand('/Users/someone/file.ts broken', CMDS)).toBeNull();
+  });
+
+  it('a sentence starting with a slash-word that is no listed command keeps its tag', () => {
+    expect(threadCommand('/tmp ist voll, bitte aufräumen', CMDS)).toBeNull();
+    expect(threadCommand('/status-report', [])).toBeNull();
   });
 
   // the transcript as the host serves it: `/status-report` is the user turn (Claude), then a
@@ -320,14 +335,14 @@ describe('a command sent from a thread (no tag: the CLI runs a command only as t
   it('after reload too: the mark is part of the stored thread, routing is the same', () => {
     const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
     const items = commandTurn(min(1) + 500);
-    const again = routeThreads(items, JSON.parse(JSON.stringify([marked, weather])));
+    const again = routeThreads(items, JSON.parse(JSON.stringify([marked, weather])), true);
     expect(again.byThread.get('t1')).toHaveLength(2);
   });
 
   it('one mark claims one command turn; a command from the main chat stays there', () => {
     const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
     const items = [...commandTurn(min(2)), ...commandTurn(min(3))];
-    const r = routeThreads(items, [marked, weather]);
+    const r = routeThreads(items, [marked, weather], true);
     expect(r.byThread.get('t1')).toHaveLength(2);
     expect(r.main.filter((i) => i.kind === 'user')).toHaveLength(1);
   });
@@ -344,7 +359,30 @@ describe('a command sent from a thread (no tag: the CLI runs a command only as t
       user('/demo-skills:retro what went wrong?', min(2)),
       answer('This.', min(3)),
     ]);
-    expect(routeThreads(items, [marked, weather]).byThread.get('t1')).toHaveLength(2);
+    expect(routeThreads(items, [marked, weather], true).byThread.get('t1')).toHaveLength(2);
+  });
+
+  it('a mark takes the first prompt after it only: a later same command from the main chat stays', () => {
+    const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
+    const items = [
+      ...groupAnswers([user('main question', min(0)), answer('main answer', min(0))]),
+      ...groupAnswers([user('plain', min(2)), answer('ok', min(2) + 1)]),
+      ...commandTurn(min(30)),
+    ];
+    const r = routeThreads(items, [marked, weather], true);
+    expect(r.byThread.size).toBe(0);
+  });
+
+  it('paged window: the thread turn is paged out, a later main /status-report stays in main', () => {
+    const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
+    const items = commandTurn(min(300));
+    const r = routeThreads(items, [marked, weather], false);
+    expect(r.main.filter((i) => i.kind === 'user')).toHaveLength(1);
+    expect(r.byThread.size).toBe(0);
+    // once the older pages are in, the mark finds its own turn again
+    const all = routeThreads([...commandTurn(min(1) + 500), ...items], [marked, weather], true);
+    expect(all.byThread.get('t1')).toHaveLength(2);
+    expect(all.main.filter((i) => i.kind === 'user')).toHaveLength(1);
   });
 
   it('a command before the mark, a prompt that is no command, a worker message: not claimed', () => {

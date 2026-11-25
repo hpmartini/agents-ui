@@ -473,9 +473,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     () =>
       routeThreads(
         items.filter((item) => item !== recap),
-        threadList
+        threadList,
+        !state.older?.more
       ),
-    [items, recap, threadList]
+    [items, recap, threadList, state.older]
   );
   const shown = useMemo(
     () =>
@@ -737,7 +738,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       setOpenThreadId(thread.id);
     }
     const quoted = threadQuote ? quoteHeader(threadQuote.ts, threadQuote.text) : '';
-    const command = threadCommand(body);
+    const command = threadCommand(body, state.commands);
     if (!command) {
       const sent = await sendPrompt(`${thread.tag}\n${quoted}`, body, files);
       if (sent) setThreadQuote(null);
@@ -753,6 +754,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     const sent = await sendPrompt('', body, files);
     // a mark left behind would take the next same command of the main chat
     if (!sent) void threads.update(thread.id, { cancelCommand: true }).catch(() => {});
+    // the CLI runs a command only as the first word: a quote is not sent with it, the chip goes
+    else setThreadQuote(null);
     return sent;
   };
   const unreadTotal = threadList.reduce(
