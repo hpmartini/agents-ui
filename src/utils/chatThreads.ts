@@ -195,7 +195,8 @@ export function threadOf(item: ChatItem, threads: ChatThread[]): string | null {
 
 /**
  * Command prompts the threads' marks claim: a mark is one turn, so it takes the first prompt at or
- * after it that is its command, one each. Prompts in between are skipped: Claude Code logs a
+ * after it that is its command, one each (a tidy-up move of it still uses the mark up: the move
+ * decides where it goes). Prompts in between are skipped: Claude Code logs a
  * command typed while the agent works only when the turn ends, after prompts typed later. Only
  * while the loaded items reach back to the mark (an item before it, the host's `olderTs`: the
  * prompt before the window, or the whole history): with its turn paged out, a later identical
@@ -207,8 +208,7 @@ function commandTurns(
   items: ChatItem[],
   threads: ChatThread[],
   complete: boolean,
-  olderTs: number | undefined,
-  overrides: ChatThreadOverrides | undefined
+  olderTs: number | undefined
 ): Map<ChatItem, string> {
   const claimed = new Map<ChatItem, string>();
   const marks = threads
@@ -226,8 +226,7 @@ function commandTurns(
         !claimed.has(i) &&
         !agentMessage(i.text) &&
         sameCommand(leadingCommand(i.text.trim())?.command ?? '', mark.command) &&
-        !threadOf(i, threads) &&
-        !overrides?.entries[entryKey(i)]
+        !threadOf(i, threads)
     );
     if (own) claimed.set(own, mark.id);
   }
@@ -265,7 +264,7 @@ export function routeThreads(
   );
   const known = new Set(threads.map((t) => t.id));
   const target = (id: string | null) => id && threadTarget(id, threads, overrides);
-  const commands = commandTurns(items, threads, complete, olderTs, overrides);
+  const commands = commandTurns(items, threads, complete, olderTs);
   let prev: string | null = null;
   for (const item of items) {
     // An answer without a tag (orchestrators started before the tag rule, tool steps only) is the

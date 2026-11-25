@@ -364,7 +364,8 @@ describe('a command sent from a thread (no tag: the CLI runs a command only as t
 
   it('a tidy-up move beats a command mark; a merge carries the marked turn to its target', () => {
     const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
-    const items = commandTurn(min(1) + 500);
+    // a second same command from the main chat after it: the moved one used the mark up
+    const items = [...commandTurn(min(1) + 500), ...commandTurn(min(5))];
     const moved = routeThreads(items, [marked, weather], true, undefined, {
       entries: { [entryKey(items[0])]: 'main' },
       merged: {},
@@ -375,6 +376,7 @@ describe('a command sent from a thread (no tag: the CLI runs a command only as t
       merged: { t1: 't2' },
     });
     expect(merged.byThread.get('t2')).toHaveLength(2);
+    expect(merged.main.filter((i) => i.kind === 'user')).toHaveLength(1);
   });
 
   it('after reload too: the mark is part of the stored thread, routing is the same', () => {
