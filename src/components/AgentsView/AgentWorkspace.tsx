@@ -580,8 +580,13 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     }
     // The stored tree stays; only the rendering stacks panes that would be too narrow
     const stacked = node.dir === 'column' || width / node.children.length < MIN_PANE_PX;
-    return (
-      <Group orientation={stacked ? 'vertical' : 'horizontal'} className="h-full w-full">
+    const group = (
+      <Group
+        orientation={stacked ? 'vertical' : 'horizontal'}
+        className="h-full w-full"
+        // stacked panes keep their minimum height; a window too short for all scrolls
+        style={stacked ? { minHeight: node.children.length * (MIN_PANE_HEIGHT_PX + 4) } : undefined}
+      >
         {node.children.map((child, index) => (
           <React.Fragment key={child.id}>
             {index > 0 && (
@@ -600,6 +605,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
         ))}
       </Group>
     );
+    return stacked ? <div className="h-full w-full overflow-y-auto">{group}</div> : group;
   };
 
   const renderPanes = (resolved: ResolvedTab, visible: boolean) =>

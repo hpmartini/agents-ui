@@ -143,8 +143,12 @@ const mainInputMax = (el) => {
     const pane = el.closest('[data-chat-pane]');
     const byPane = (pane?.clientHeight ?? window.innerHeight) * 0.4;
     const log = pane?.querySelector('[role="log"]');
-    // field + log share the free height: what the field takes, the log loses
-    return log ? Math.min(byPane, el.offsetHeight + log.clientHeight - MAIN_LOG_ROOM) : byPane;
+    if (!pane || !log)
+        return byPane;
+    // field + log share the free height: what the field takes, the log loses; content
+    // already past the pane's bottom (pane just got shorter) comes off as well
+    const overflow = Math.max(0, pane.scrollHeight - pane.clientHeight);
+    return Math.min(byPane, el.offsetHeight + log.clientHeight - MAIN_LOG_ROOM - overflow);
 };
 /** Header shows model and path only where they stay readable beside the title */
 const SHOW_MODEL_PANE = 800;
@@ -633,20 +637,17 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
         const el = threadListRef.current;
         if (!el || typeof ResizeObserver === 'undefined')
             return;
-        let atEnd = true;
-        const onScroll = () => {
-            atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
-        };
+        // judged with the height before this resize: scroll events fired by the shrink itself
+        // would otherwise read as the user scrolling away from the end
+        let height = el.clientHeight;
         const observer = new ResizeObserver(() => {
+            const atEnd = el.scrollHeight - el.scrollTop - height < 8;
+            height = el.clientHeight;
             if (atEnd)
                 el.scrollTop = el.scrollHeight;
         });
-        el.addEventListener('scroll', onScroll);
         observer.observe(el);
-        return () => {
-            el.removeEventListener('scroll', onScroll);
-            observer.disconnect();
-        };
+        return () => observer.disconnect();
     }, [openThreadId, showThreads, threadsFull]);
     useEffect(() => {
         if (quote)

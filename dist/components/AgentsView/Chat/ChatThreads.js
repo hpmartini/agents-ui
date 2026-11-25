@@ -122,10 +122,11 @@ const SHORT_PANEL = 520;
  * (stacked) pane 40 % of the thread view, so header, log and Attach stay inside the panel
  */
 /** Room the open thread keeps above its input: thread header, binding line, a few log lines */
-const THREAD_VIEW_ROOM = 180;
+const THREAD_VIEW_ROOM = 230;
 const threadInputMax = (el) => Math.min((el.closest('[data-chat-pane]')?.clientHeight ?? window.innerHeight) * 0.4, (el.closest('section')?.clientHeight ?? window.innerHeight) - THREAD_VIEW_ROOM);
 /** Unsent thread input per chat and thread: hiding the panel unmounts the composer */
 const threadDrafts = new Map();
+const threadFiles = new Map();
 export const THREAD_COMPOSER_HEIGHT_KEY = 'devOrbitChatThreadComposerHeight';
 /**
  * Composer of the open thread: the main chat's composer (send key from the settings, height grip,
@@ -147,7 +148,16 @@ export const ThreadComposer = ({ chatId, submitKey, history, agents, quote, onCl
     }, [storeKey]);
     const currentKey = useRef(storeKey);
     currentKey.current = storeKey;
-    const [files, setFiles] = useState([]);
+    const [files, setFilesState] = useState(() => threadFiles.get(storeKey) ?? []);
+    useEffect(() => setFilesState(threadFiles.get(storeKey) ?? []), [storeKey]);
+    const setFiles = useCallback((next) => setFilesState((prev) => {
+        const value = typeof next === 'function' ? next(prev) : next;
+        if (value.length)
+            threadFiles.set(storeKey, value);
+        else
+            threadFiles.delete(storeKey);
+        return value;
+    }), [storeKey]);
     const [sending, setSending] = useState(false);
     const input = useRef(null);
     useEffect(() => {
@@ -166,8 +176,10 @@ export const ThreadComposer = ({ chatId, submitKey, history, agents, quote, onCl
                     setText('');
                     setFiles([]);
                 }
-                else
+                else {
                     threadDrafts.delete(sentKey);
+                    threadFiles.delete(sentKey);
+                }
             }
         }
         finally {

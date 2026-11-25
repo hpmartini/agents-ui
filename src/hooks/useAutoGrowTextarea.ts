@@ -72,10 +72,12 @@ export function useAutoGrowTextarea(
     // border-box: scrollHeight excludes the border, so add it or the text scrolls by 2px
     const content = el.scrollHeight + el.offsetHeight - el.clientHeight;
     // a stored height above the cap (smaller pane or window since) shows capped, stays stored
+    // an empty field shows its whole placeholder: the cap is for typed text
+    const floor = el.value ? min : Math.max(min, content);
     const { height, scroll } = fitHeight(content, {
-      min,
-      max: Math.min(max, cap),
-      pinned: pinned === null ? null : Math.min(pinned, cap),
+      min: floor,
+      max: el.value ? Math.min(max, cap) : Math.max(max, floor),
+      pinned: pinned === null ? null : Math.max(Math.min(pinned, cap), floor),
     });
     el.style.height = `${height}px`;
     el.style.overflowY = scroll ? 'auto' : 'hidden';
@@ -87,13 +89,16 @@ export function useAutoGrowTextarea(
     const el = ref.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     let width = -1;
-    const observer = new ResizeObserver(() => {
-      // Only width changes matter; fit() itself changes the height
-      if (el.clientWidth === width) return;
+    const observer = new ResizeObserver((entries) => {
+      // the field: only width changes matter, fit() itself changes its height
+      if (entries.every((e) => e.target === el) && el.clientWidth === width) return;
       width = el.clientWidth;
       fit();
     });
     observer.observe(el);
+    // the pane: a shorter pane (divider, window) lowers the cap, so refit on any change
+    const pane = el.closest('[data-chat-pane]');
+    if (pane) observer.observe(pane);
     return () => observer.disconnect();
   }, [ref, fit]);
 

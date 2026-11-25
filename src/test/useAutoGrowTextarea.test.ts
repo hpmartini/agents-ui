@@ -25,11 +25,21 @@ describe('useAutoGrowTextarea cap', () => {
     const el = document.createElement('textarea');
     const size = { clientWidth: 300, scrollHeight: 480, offsetHeight: 0, clientHeight: 0 };
     for (const [k, v] of Object.entries(size)) Object.defineProperty(el, k, { value: v });
+    el.value = 'many\nlines';
     const ref = { current: el };
-    renderHook(() =>
-      useAutoGrowTextarea(ref, 'many\nlines', { min: 42, max: 320, pinMax: () => 144 })
-    );
+    renderHook(() => useAutoGrowTextarea(ref, el.value, { min: 42, max: 320, pinMax: () => 144 }));
     expect(el.style.height).toBe('144px');
     expect(el.style.overflowY).toBe('auto');
+  });
+
+  it('an empty field shows its whole placeholder, even above pinMax', () => {
+    const el = document.createElement('textarea');
+    const size = { clientWidth: 300, scrollHeight: 66, offsetHeight: 0, clientHeight: 0 };
+    for (const [k, v] of Object.entries(size)) Object.defineProperty(el, k, { value: v });
+    renderHook(() =>
+      useAutoGrowTextarea({ current: el }, '', { min: 42, max: 320, pinMax: () => 42 })
+    );
+    expect(el.style.height).toBe('66px');
+    expect(el.style.overflowY).toBe('hidden');
   });
 });
