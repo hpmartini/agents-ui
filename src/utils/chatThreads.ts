@@ -174,8 +174,8 @@ function commandTurns(
     const own = items.find(
       (i) =>
         i.kind === 'user' &&
-        i.ts !== undefined &&
-        i.ts >= mark.at &&
+        // a queued prompt (no time yet) comes after every logged one
+        (i.queued || (i.ts !== undefined && i.ts >= mark.at)) &&
         !claimed.has(i) &&
         !agentMessage(i.text) &&
         sameCommand(leadingCommand(i.text.trim())?.command ?? '', mark.command) &&

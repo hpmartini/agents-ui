@@ -518,7 +518,7 @@ const PlainItem: React.FC<{ item: Exclude<ChatItem, ChatAnswer> }> = React.memo(
   const t = useLabels().terminal;
   switch (item.kind) {
     case 'user':
-      return <UserMessage text={item.text} />;
+      return <UserMessage text={item.text} queued={item.queued} />;
     case 'recap':
       return (
         <div className="my-3 flex gap-2 rounded-md border border-gray-800 bg-gray-900/60 px-3 py-2 text-sm text-gray-300">
