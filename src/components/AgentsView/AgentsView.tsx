@@ -2020,9 +2020,11 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         return;
       }
 
-      // Rail, tab strip and popover controls keep their own Enter/Space/arrow behaviour
+      // Rail, tab strip and popover controls (Choice popups too) keep their own keys
       if (
-        target?.closest('button, a, [role="dialog"], [role="tab"], [role="tablist"], [role="menu"]')
+        target?.closest(
+          'button, a, [role="dialog"], [role="tab"], [role="tablist"], [role="menu"], [data-choice]'
+        )
       )
         return;
 

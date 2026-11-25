@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Settings2, AlertTriangle, Power, RefreshCw } from 'lucide-react';
 import { useHost, useTransport } from '../../host';
 import { useLabels } from '../../labels';
+import { Choice } from '../Choice';
 import type {
   AgentHarness,
   AgentViewSettings,
@@ -92,6 +93,8 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
   const field =
     'w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-100 outline-none focus:border-blue-500';
   const label = 'block text-xs text-gray-400 mb-1';
+  // Form size; a menu trigger fills its column like the inputs next to it
+  const md = { size: 'md', className: 'w-full' } as const;
 
   return (
     <div
@@ -122,19 +125,20 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
             <h4 className="text-xs text-gray-500">{t.settingsView}</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className={label}>{t.settingsScope}</label>
-                <select
-                  className={field}
+                <span className={label}>{t.settingsScope}</span>
+                <Choice
+                  {...md}
+                  label={t.settingsScope}
                   value={settings.scopeCwd || ''}
-                  onChange={(e) => onUpdate({ scopeCwd: e.target.value || null })}
-                >
-                  <option value="">{t.settingsAllSessions}</option>
-                  {repos.map((repo) => (
-                    <option key={repo.path} value={repo.path}>
-                      {repo.name} — {repo.path}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => onUpdate({ scopeCwd: v || null })}
+                  options={[
+                    { value: '', label: t.settingsAllSessions },
+                    ...repos.map((repo) => ({
+                      value: repo.path,
+                      label: `${repo.name} — ${repo.path}`,
+                    })),
+                  ]}
+                />
               </div>
               <div>
                 <label className={label} htmlFor="agent-task-cwd">
@@ -149,69 +153,59 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                 />
               </div>
               <div>
-                <label className={label}>{t.settingsGroupBy}</label>
-                <select
-                  className={field}
+                <span className={label}>{t.settingsGroupBy}</span>
+                <Choice<AgentViewSettings['grouping']>
+                  {...md}
+                  label={t.settingsGroupBy}
                   value={settings.grouping}
-                  onChange={(e) =>
-                    onUpdate({ grouping: e.target.value as AgentViewSettings['grouping'] })
-                  }
-                >
-                  <option value="state">{t.settingsGroupState}</option>
-                  <option value="directory">{t.settingsGroupDirectory}</option>
-                </select>
+                  onChange={(grouping) => onUpdate({ grouping })}
+                  options={[
+                    { value: 'state', label: t.settingsGroupState },
+                    { value: 'directory', label: t.settingsGroupDirectory },
+                  ]}
+                />
               </div>
               <div>
-                <label className={label} htmlFor="agent-card-density">
-                  {t.settingsCardDensity}
-                </label>
-                <select
+                <span className={label}>{t.settingsCardDensity}</span>
+                <Choice<AgentViewSettings['cardDensity']>
+                  {...md}
                   id="agent-card-density"
-                  className={field}
+                  label={t.settingsCardDensity}
                   value={settings.cardDensity}
-                  onChange={(e) =>
-                    onUpdate({ cardDensity: e.target.value as AgentViewSettings['cardDensity'] })
-                  }
-                >
-                  <option value="comfortable">{t.settingsDensityComfortable}</option>
-                  <option value="compact">{t.settingsDensityCompact}</option>
-                </select>
+                  onChange={(cardDensity) => onUpdate({ cardDensity })}
+                  options={[
+                    { value: 'comfortable', label: t.settingsDensityComfortable },
+                    { value: 'compact', label: t.settingsDensityCompact },
+                  ]}
+                />
               </div>
               <div>
-                <label className={label} htmlFor="agent-chat-submit-key">
-                  {t.settingsChatSubmit}
-                </label>
-                <select
+                <span className={label}>{t.settingsChatSubmit}</span>
+                <Choice<AgentViewSettings['chatSubmitKey']>
+                  {...md}
                   id="agent-chat-submit-key"
-                  className={field}
+                  label={t.settingsChatSubmit}
                   value={settings.chatSubmitKey}
-                  onChange={(e) =>
-                    onUpdate({
-                      chatSubmitKey: e.target.value as AgentViewSettings['chatSubmitKey'],
-                    })
-                  }
-                >
-                  <option value="mod+enter">{t.settingsSubmitModEnter}</option>
-                  <option value="enter">{t.settingsSubmitEnter}</option>
-                </select>
+                  onChange={(chatSubmitKey) => onUpdate({ chatSubmitKey })}
+                  options={[
+                    { value: 'mod+enter', label: t.settingsSubmitModEnter },
+                    { value: 'enter', label: t.settingsSubmitEnter },
+                  ]}
+                />
               </div>
               <div>
-                <label className={label} htmlFor="agent-open-view">
-                  {t.settingsOpenAgentsIn}
-                </label>
-                <select
+                <span className={label}>{t.settingsOpenAgentsIn}</span>
+                <Choice<AgentViewSettings['agentOpenView']>
+                  {...md}
                   id="agent-open-view"
-                  className={field}
+                  label={t.settingsOpenAgentsIn}
                   value={settings.agentOpenView}
-                  onChange={(e) =>
-                    onUpdate({
-                      agentOpenView: e.target.value as AgentViewSettings['agentOpenView'],
-                    })
-                  }
-                >
-                  <option value="chat">{t.settingsOpenChat}</option>
-                  <option value="terminal">{t.settingsOpenTerminal}</option>
-                </select>
+                  onChange={(agentOpenView) => onUpdate({ agentOpenView })}
+                  options={[
+                    { value: 'chat', label: t.settingsOpenChat },
+                    { value: 'terminal', label: t.settingsOpenTerminal },
+                  ]}
+                />
               </div>
             </div>
             <fieldset className="space-y-2">
@@ -228,31 +222,24 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1.5">
                 {CARD_ELEMENTS.map((element) => (
                   <div key={element.key} className="flex items-center gap-2">
-                    <label
-                      htmlFor={`agent-card-field-${element.key}`}
-                      className="flex-1 min-w-0 truncate text-xs text-gray-300"
-                    >
+                    <span className="flex-1 min-w-0 truncate text-xs text-gray-300">
                       {labels.shell.cardElements[element.key]}
-                    </label>
-                    <select
-                      id={`agent-card-field-${element.key}`}
-                      className={`${field.replace('w-full', 'w-44')} shrink-0`}
-                      value={settings.cardFields[element.key]}
-                      onChange={(e) =>
-                        onUpdate({
-                          cardFields: {
-                            ...settings.cardFields,
-                            [element.key]: e.target.value as AgentCardSlot,
-                          },
-                        })
-                      }
-                    >
-                      {CARD_SLOTS.map((slot) => (
-                        <option key={slot.key} value={slot.key}>
-                          {labels.shell.cardSlots[slot.key]}
-                        </option>
-                      ))}
-                    </select>
+                    </span>
+                    <div className="w-44 shrink-0">
+                      <Choice<AgentCardSlot>
+                        {...md}
+                        id={`agent-card-field-${element.key}`}
+                        label={labels.shell.cardElements[element.key]}
+                        value={settings.cardFields[element.key]}
+                        onChange={(slot) =>
+                          onUpdate({ cardFields: { ...settings.cardFields, [element.key]: slot } })
+                        }
+                        options={CARD_SLOTS.map((slot) => ({
+                          value: slot.key,
+                          label: labels.shell.cardSlots[slot.key],
+                        }))}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -294,21 +281,15 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
           <section className="space-y-2">
             <h4 className="text-xs text-gray-500">{t.settingsHarness}</h4>
             <div className="max-w-xs">
-              <label className={label} htmlFor="agent-default-harness">
-                {t.settingsDefaultHarness}
-              </label>
-              <select
+              <span className={label}>{t.settingsDefaultHarness}</span>
+              <Choice<AgentHarness>
+                {...md}
                 id="agent-default-harness"
-                className={field}
+                label={t.settingsDefaultHarness}
                 value={dispatch.harness}
-                onChange={(e) => setDispatch({ harness: e.target.value as AgentHarness })}
-              >
-                {HARNESSES.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(harness) => setDispatch({ harness })}
+                options={HARNESSES.map((h) => ({ value: h.id, label: h.label }))}
+              />
             </div>
             <p className="text-xs text-gray-500">{t.settingsHarnessHint}</p>
           </section>
@@ -353,32 +334,27 @@ export const AgentSettingsPanel: React.FC<AgentSettingsPanelProps> = ({
                 </datalist>
               </div>
               <div>
-                <label className={label}>--effort</label>
-                <select
-                  className={field}
+                <span className={label}>--effort</span>
+                <Choice
+                  {...md}
+                  label="--effort"
                   value={dispatch.effort || ''}
-                  onChange={(e) => setDispatch({ effort: e.target.value || null })}
-                >
-                  {EFFORTS.map((e) => (
-                    <option key={e} value={e}>
-                      {e || t.settingsDefault}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setDispatch({ effort: v || null })}
+                  options={EFFORTS.map((e) => ({ value: e, label: e || t.settingsDefault }))}
+                />
               </div>
               <div>
-                <label className={label}>--permission-mode</label>
-                <select
-                  className={field}
+                <span className={label}>--permission-mode</span>
+                <Choice
+                  {...md}
+                  label="--permission-mode"
                   value={dispatch.permissionMode || ''}
-                  onChange={(e) => setDispatch({ permissionMode: e.target.value || null })}
-                >
-                  {PERMISSION_MODES.map((m) => (
-                    <option key={m} value={m}>
-                      {m || t.settingsDirectoryRules}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setDispatch({ permissionMode: v || null })}
+                  options={PERMISSION_MODES.map((m) => ({
+                    value: m,
+                    label: m || t.settingsDirectoryRules,
+                  }))}
+                />
               </div>
               <div>
                 <label className={label}>--agent ({t.settingsDefaultSubagent})</label>

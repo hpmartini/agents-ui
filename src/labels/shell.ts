@@ -90,6 +90,14 @@ export interface ShellLabels {
   filterAny: (label: string) => string;
   resetFilters: string;
   pullsToolbar: string;
+  /** The "any" pill of a filter shown as pills */
+  anyOption: string;
+  repoTree: string;
+  allRepositories: string;
+  repoTreeLoading: string;
+  repoTreeEmpty: string;
+  expandNode: (label: string) => string;
+  collapseNode: (label: string) => string;
   searchPulls: string;
   searchPullsPlaceholder: string;
   pullFilters: Record<
@@ -538,6 +546,13 @@ export const shellEn: ShellLabels = {
   filterAny: (label) => `${label}: any`,
   resetFilters: 'Reset filters',
   pullsToolbar: 'Filter, group and sort pull requests',
+  anyOption: 'Any',
+  repoTree: 'Repositories',
+  allRepositories: 'All repositories',
+  repoTreeLoading: 'Loading…',
+  repoTreeEmpty: 'No repositories with open pull requests',
+  expandNode: (label) => `Expand ${label}`,
+  collapseNode: (label) => `Collapse ${label}`,
   searchPulls: 'Search pull requests',
   searchPullsPlaceholder: 'Title, #number, branch, author',
   pullFilters: {
@@ -1027,6 +1042,13 @@ export const shellDe: ShellLabels = {
   filterAny: (label) => `${label}: alle`,
   resetFilters: 'Filter zurücksetzen',
   pullsToolbar: 'Pull Requests filtern, gruppieren und sortieren',
+  anyOption: 'Alle',
+  repoTree: 'Repositories',
+  allRepositories: 'Alle Repositories',
+  repoTreeLoading: 'Wird geladen…',
+  repoTreeEmpty: 'Keine Repositories mit offenen Pull Requests',
+  expandNode: (label) => `${label} aufklappen`,
+  collapseNode: (label) => `${label} zuklappen`,
   searchPulls: 'Pull Requests durchsuchen',
   searchPullsPlaceholder: 'Titel, #Nummer, Branch, Autor',
   pullFilters: {

@@ -39,17 +39,19 @@ function renderInput(
 describe('harness picker (#195, AC-5, AC-7)', () => {
   it('shows the preset harness and reports a change', () => {
     const { onHarnessChange } = renderInput('codex');
-    const select = screen.getByRole('combobox', { name: /Harness/ });
-    expect(select).toHaveProperty('value', 'codex');
-    fireEvent.change(select, { target: { value: 'pi' } });
+    const trigger = screen.getByRole('button', { name: /^Harness/ });
+    expect(trigger).toHaveTextContent('Codex');
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('option', { name: 'Pi' }));
     expect(onHarnessChange).toHaveBeenCalledWith('pi');
   });
 
   it('marks a missing CLI as not installed and disables it', () => {
     renderInput('claude');
+    fireEvent.click(screen.getByRole('button', { name: /^Harness/ }));
     const option = screen.getByRole('option', { name: 'OpenCode (not installed)' });
-    expect(option).toHaveProperty('disabled', true);
-    expect(screen.getByRole('option', { name: 'Codex' })).toHaveProperty('disabled', false);
+    expect(option).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('option', { name: 'Codex' })).not.toHaveAttribute('aria-disabled');
   });
 
   it('turns off the Claude-only parts for another harness', () => {
@@ -67,7 +69,7 @@ describe('harness picker (#195, AC-5, AC-7)', () => {
 
   it('has no picker for chats', () => {
     renderInput(undefined, { variant: 'chat' });
-    expect(screen.queryByRole('combobox', { name: /Harness/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Harness/ })).toBeNull();
   });
 });
 

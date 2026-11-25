@@ -18,6 +18,8 @@ export interface PullQuery {
   /** Free text: title, number, head branch, author */
   q: string;
   repo: string | null;
+  /** Folder node of the repo tree (`utils/repoTree`); excludes `repo` */
+  folder: string | null;
   ci: CiKey | null;
   merge: MergeKey | null;
   review: ReviewKey | null;
@@ -41,6 +43,7 @@ export const SORT_LABELS: Record<SortKey, string> = shellEn.pulls.sort;
 export const DEFAULT_QUERY: PullQuery = {
   q: '',
   repo: null,
+  folder: null,
   ci: null,
   merge: null,
   review: null,
@@ -76,6 +79,7 @@ export function parsePullQuery(params: URLSearchParams): PullQuery {
   return {
     q: params.get('q') ?? '',
     repo: params.get('repo') || null,
+    folder: params.get('folder') || null,
     ci: pick(params.get('ci'), CI_LABELS),
     merge: pick(params.get('merge'), MERGE_LABELS),
     review: pick(params.get('review'), REVIEW_LABELS),
@@ -107,6 +111,7 @@ export const hasFilters = (q: PullQuery) =>
   !!(
     q.q.trim() ||
     q.repo ||
+    q.folder ||
     q.ci ||
     q.merge ||
     q.review ||
@@ -120,6 +125,7 @@ export const hasFilters = (q: PullQuery) =>
 export const FILTER_RESET: Partial<PullQuery> = {
   q: '',
   repo: null,
+  folder: null,
   ci: null,
   merge: null,
   review: null,
@@ -137,11 +143,16 @@ function matchesText(pr: AgentPullRequest, text: string): boolean {
   );
 }
 
-/** All filters combine with AND */
-export function filterPulls(rows: PullRequestRow[], q: PullQuery): PullRequestRow[] {
+/** All filters combine with AND; `folders` (lower-case slug → folder key) serves `q.folder` */
+export function filterPulls(
+  rows: PullRequestRow[],
+  q: PullQuery,
+  folders?: Map<string, string>
+): PullRequestRow[] {
   return rows.filter(({ pr, agents }) => {
     if (!matchesText(pr, q.q)) return false;
     if (q.repo && pr.repoSlug.toLowerCase() !== q.repo.toLowerCase()) return false;
+    if (q.folder && folders?.get(pr.repoSlug.toLowerCase()) !== q.folder) return false;
     if (q.ci && pr.ci !== q.ci) return false;
     if (q.merge && mergeKey(pr) !== q.merge) return false;
     if (q.review && reviewKey(pr) !== q.review) return false;
@@ -231,7 +242,12 @@ export function pullOptions(rows: PullRequestRow[]) {
 }
 
 /** filter -> sort -> group, as the view shows it */
-export function queryPulls(rows: PullRequestRow[], q: PullQuery, labels?: PullLabels) {
-  const shown = sortPulls(filterPulls(rows, q), q.sort, q.dir);
+export function queryPulls(
+  rows: PullRequestRow[],
+  q: PullQuery,
+  labels?: PullLabels,
+  folders?: Map<string, string>
+) {
+  const shown = sortPulls(filterPulls(rows, q, folders), q.sort, q.dir);
   return { shown, groups: groupPulls(shown, q.group, labels) };
 }

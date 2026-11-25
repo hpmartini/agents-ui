@@ -210,6 +210,7 @@ describe('URL state (AC-6)', () => {
     const full: PullQuery = {
       q: 'fix',
       repo: 'o/r',
+      folder: 'apps',
       ci: 'failure',
       merge: 'blocked',
       review: 'changes',

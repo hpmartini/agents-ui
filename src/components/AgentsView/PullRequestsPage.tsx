@@ -1,7 +1,14 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { useHost } from '../../host';
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, GitPullRequest, RotateCcw } from 'lucide-react';
+import {
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  ChevronDown,
+  ChevronRight,
+  GitPullRequest,
+  RotateCcw,
+} from 'lucide-react';
 import type { AgentPullRequest } from '../../types';
 import { BrowserPane } from './AgentWorkspace';
 import { PullRequestList, type PullRequestListProps } from './PullRequestsPanel';
@@ -11,11 +18,17 @@ import {
   hasFilters,
   parsePullQuery,
   patchPullParams,
+  filterPulls,
   pullOptions,
   queryPulls,
+  type GroupKey,
   type PullQuery,
+  type SortKey,
 } from '../../utils/pullRequestQuery';
 import { useLabels } from '../../labels';
+import { Choice, choiceMode } from '../Choice';
+import { RepoTree } from './RepoTree';
+import { buildRepoTree, folderKeys, type RepoSelection } from '../../utils/repoTree';
 
 /** Filters, grouping and sorting live in the URL of /pulls (#191), not in these props */
 export type PullRequestsPageProps = Omit<
@@ -43,6 +56,43 @@ export const ConnectedPullRequestsPage: React.FC<PullRequestsQueryProps> = (quer
 
 const noop = () => {};
 
+/** Below this width of the list column the tree folds into a section above the list */
+const TREE_MIN_WIDTH = 560;
+const SELECTION_KEY = 'agentsUi.pullsTreeSelection';
+
+type StoredSelection = Pick<PullQuery, 'repo' | 'folder'>;
+function readSelection(): StoredSelection | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(SELECTION_KEY) || 'null');
+    const str = (x: unknown) => (typeof x === 'string' && x ? x : null);
+    const s = v && typeof v === 'object' ? { repo: str(v.repo), folder: str(v.folder) } : null;
+    return s && (s.repo || s.folder) ? s : null;
+  } catch {
+    return null;
+  }
+}
+function writeSelection(s: StoredSelection | null) {
+  try {
+    if (s && (s.repo || s.folder)) localStorage.setItem(SELECTION_KEY, JSON.stringify(s));
+    else localStorage.removeItem(SELECTION_KEY);
+  } catch {
+    // unavailable: the URL still holds the selection
+  }
+}
+
+/** True while the element is narrower than TREE_MIN_WIDTH (no ResizeObserver: wide) */
+function useNarrow(ref: React.RefObject<HTMLElement | null>): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current?.parentElement;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => setNarrow(entry.contentRect.width < TREE_MIN_WIDTH));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return narrow;
+}
+
 export const SELECT_CLS =
   'bg-gray-850 border border-gray-700 rounded px-2 py-1 text-gray-200 text-xs max-w-[12rem] focus-visible:outline focus-visible:outline-2 focus-visible:outline-cursor';
 export const ICON_BTN =
@@ -52,7 +102,11 @@ type Options = Record<string, string>;
 export const asOptions = (values: string[]): Options =>
   Object.fromEntries(values.map((v) => [v, v]));
 
-/** One select filter; the empty option means "any" (also used by the Issues mode) */
+/**
+ * One filter over `options` (key → text) plus "any" (null), as a `Choice`: pills with a visible
+ * label for up to two values, else a menu (searchable from 7 values). Also used by Orkumo's
+ * Issues and History pages.
+ */
 export const Filter: React.FC<{
   label: string;
   value: string | null;
@@ -60,22 +114,31 @@ export const Filter: React.FC<{
   onChange: (value: string | null) => void;
 }> = ({ label, value, options, onChange }) => {
   const t = useLabels().shell;
-  return (
-    <select
-      aria-label={label}
+  const entries = Object.entries(options);
+  // A value from the URL that no item has (any more) stays visible and clearable
+  if (value && !Object.hasOwn(options, value)) entries.push([value, value]);
+  const pills = choiceMode(entries.length + 1) === 'pills';
+  const choice = (
+    <Choice
+      label={label}
       value={value ?? ''}
-      onChange={(e) => onChange(e.target.value || null)}
-      className={`${SELECT_CLS} ${value ? 'border-blue-500/70 text-white' : ''}`}
-    >
-      <option value="">{t.filterAny(label)}</option>
-      {Object.entries(options).map(([key, text]) => (
-        <option key={key} value={key}>
-          {text}
-        </option>
-      ))}
-      {/* A value from the URL that no PR has (any more) stays visible and clearable */}
-      {value && !Object.hasOwn(options, value) && <option value={value}>{value}</option>}
-    </select>
+      onChange={(v) => onChange(v || null)}
+      options={[
+        { value: '', label: pills ? t.anyOption : t.filterAny(label) },
+        ...entries.map(([key, text]) => ({ value: key, label: text })),
+      ]}
+      className={pills ? '' : `max-w-[12rem] ${value ? 'border-blue-500/70 text-white' : ''}`}
+    />
+  );
+  return pills ? (
+    <span className="flex items-center gap-1.5">
+      <span className="text-xs text-gray-400" aria-hidden>
+        {label}
+      </span>
+      {choice}
+    </span>
+  ) : (
+    choice
   );
 };
 
@@ -104,10 +167,43 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
   const viewRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const query = useMemo(() => parsePullQuery(params), [params]);
-  const { shown, groups } = useMemo(
-    () => queryPulls(props.rows, query, t.pulls),
-    [props.rows, query, t.pulls]
+  // Local checkout per repo: the tree groups repos by their folder
+  const roots = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const ctx of Object.values(props.contexts))
+      if (ctx?.repo?.slug && ctx.repo.root) map[ctx.repo.slug.toLowerCase()] = ctx.repo.root;
+    return map;
+  }, [props.contexts]);
+  const folders = useMemo(
+    () =>
+      folderKeys(
+        props.rows.map((r) => r.pr.repoSlug),
+        roots
+      ),
+    [props.rows, roots]
   );
+  const { shown, groups } = useMemo(
+    () => queryPulls(props.rows, query, t.pulls, folders),
+    [props.rows, query, t.pulls, folders]
+  );
+  // Tree counts follow every filter except the tree's own
+  const tree = useMemo(
+    () =>
+      buildRepoTree(
+        props.rows,
+        filterPulls(props.rows, { ...query, repo: null, folder: null }),
+        roots
+      ),
+    [props.rows, query, roots]
+  );
+  const selection: RepoSelection = query.repo
+    ? { kind: 'repo', slug: query.repo }
+    : query.folder
+      ? { kind: 'folder', key: query.folder }
+      : { kind: 'all' };
+  const listRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(listRef);
+  const [treeOpen, setTreeOpen] = useState(false);
   const options = useMemo(() => pullOptions(props.rows), [props.rows]);
   const filtered = hasFilters(query);
   // Typing replaces the history entry; every other change is one Back step
@@ -116,6 +212,36 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
 
   // Arriving from the popover: its trigger is hidden here, so focus lands on the view
   useEffect(() => viewRef.current?.focus(), []);
+
+  // The tree's selection lives in the URL; a visit without one restores the last one
+  useEffect(() => {
+    if (query.repo || query.folder) return;
+    const stored = readSelection();
+    if (stored) update(stored, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, []);
+  const selectRepos = (s: RepoSelection) => {
+    const patch = {
+      repo: s.kind === 'repo' ? s.slug : null,
+      folder: s.kind === 'folder' ? s.key : null,
+    };
+    writeSelection(patch);
+    update(patch);
+  };
+  const selectionLabel =
+    selection.kind === 'repo'
+      ? selection.slug
+      : selection.kind === 'folder'
+        ? (tree.folders.find((f) => f.key === selection.key)?.label ?? selection.key)
+        : t.allRepositories;
+  const repoTree = (
+    <RepoTree
+      tree={tree}
+      selection={selection}
+      onSelect={selectRepos}
+      loading={Object.keys(props.contexts).length === 0}
+    />
+  );
 
   const openPr = (pr: AgentPullRequest) => {
     if (!pr.url.startsWith('https://')) return;
@@ -154,6 +280,7 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
                 {filtered && (
                   <button
                     onClick={() => {
+                      writeSelection(null);
                       update(FILTER_RESET);
                       // the button unmounts once no filter is left; keep focus in the toolbar
                       searchRef.current?.focus();
@@ -177,12 +304,6 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
                   value={query.q}
                   onChange={(e) => update({ q: e.target.value }, true)}
                   className={`${SELECT_CLS} w-56 placeholder:text-gray-500`}
-                />
-                <Filter
-                  label={t.pullFilters.repo}
-                  value={query.repo}
-                  options={asOptions(options.repos)}
-                  onChange={keyed(update, 'repo')}
                 />
                 <Filter
                   label={t.pullFilters.ci}
@@ -227,30 +348,27 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
                   onChange={keyed(update, 'agent')}
                 />
                 <span className="w-px h-4 bg-gray-700 mx-1" aria-hidden />
-                <select
-                  aria-label={t.groupBy}
+                <Choice
+                  label={t.groupBy}
                   value={query.group}
-                  onChange={(e) => keyed(update, 'group')(e.target.value)}
-                  className={SELECT_CLS}
-                >
-                  {Object.entries(t.pulls.group).map(([key, text]) => (
-                    <option key={key} value={key}>
-                      {key === 'none' ? text : t.groupOption(text)}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  aria-label={t.sortBy}
+                  onChange={(v) => update({ group: v })}
+                  options={(Object.entries(t.pulls.group) as [GroupKey, string][]).map(
+                    ([key, text]) => ({
+                      value: key,
+                      label: key === 'none' ? text : t.groupOption(text),
+                    })
+                  )}
+                  className="max-w-[12rem]"
+                />
+                <Choice
+                  label={t.sortBy}
                   value={query.sort}
-                  onChange={(e) => keyed(update, 'sort')(e.target.value)}
-                  className={SELECT_CLS}
-                >
-                  {Object.entries(t.pulls.sort).map(([key, text]) => (
-                    <option key={key} value={key}>
-                      {t.sortOption(text)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => update({ sort: v })}
+                  options={(Object.entries(t.pulls.sort) as [SortKey, string][]).map(
+                    ([key, text]) => ({ value: key, label: t.sortOption(text) })
+                  )}
+                  className="max-w-[12rem]"
+                />
                 <button
                   onClick={() => update({ dir: query.dir === 'asc' ? 'desc' : 'asc' })}
                   aria-label={query.dir === 'asc' ? t.sortAscending : t.sortDescending}
@@ -265,14 +383,42 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto min-h-0">
-              <PullRequestList
-                {...props}
-                repoFilter={query.repo}
-                groups={groups}
-                onOpenPr={openPr}
-                openUrl={openUrl}
-              />
+            {narrow && (
+              <div className="shrink-0 border-b border-gray-800">
+                <button
+                  type="button"
+                  aria-expanded={treeOpen}
+                  onClick={() => setTreeOpen((o) => !o)}
+                  className={`w-full flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cursor`}
+                >
+                  {treeOpen ? (
+                    <ChevronDown size={12} aria-hidden />
+                  ) : (
+                    <ChevronRight size={12} aria-hidden />
+                  )}
+                  <span className="text-gray-400">{t.repoTree}</span>
+                  <span className="min-w-0 truncate text-gray-100">{selectionLabel}</span>
+                </button>
+                {treeOpen && (
+                  <div className="max-h-[40vh] overflow-y-auto px-1 pb-1">{repoTree}</div>
+                )}
+              </div>
+            )}
+            <div ref={listRef} className="flex-1 flex min-h-0">
+              {!narrow && (
+                <div className="w-56 shrink-0 border-r border-gray-800 overflow-y-auto px-1">
+                  {repoTree}
+                </div>
+              )}
+              <div className="flex-1 min-w-0 overflow-y-auto min-h-0">
+                <PullRequestList
+                  {...props}
+                  repoFilter={query.repo}
+                  groups={groups}
+                  onOpenPr={openPr}
+                  openUrl={openUrl}
+                />
+              </div>
             </div>
           </div>
         </Panel>

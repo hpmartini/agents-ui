@@ -192,9 +192,8 @@ describe('New chat without a project (#19)', () => {
   it('AK-2: Codex gets --model before its first message, in the chats folder', async () => {
     openNewChat();
     const composer = await dialog();
-    fireEvent.change(within(composer).getByRole('combobox', { name: /Harness/ }), {
-      target: { value: 'codex' },
-    });
+    fireEvent.click(within(composer).getByRole('button', { name: /^Harness/ }));
+    fireEvent.click(within(composer).getByRole('option', { name: 'Codex' }));
     const model = within(composer).getByRole('textbox', { name: 'Model' });
     expect(model).toHaveAttribute('placeholder', 'default');
     fireEvent.change(model, { target: { value: 'gpt-5-codex' } });

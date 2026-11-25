@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { AgentSettingsPanel } from '../components/AgentsView/AgentSettingsPanel';
 import { DEFAULT_AGENT_VIEW_SETTINGS } from '../types';
 import { renderWithAgents, testHost, testTransport } from './agents';
@@ -38,3 +38,21 @@ describe('AgentSettingsPanel transport groups', () => {
     expect(props.onRefresh).toHaveBeenCalled();
   });
 });
+
+describe('AgentSettingsPanel choices', () => {
+  it('two-value settings are pills, longer lists menus; Escape closes only the menu', () => {
+    const onUpdate = vi.fn(async () => {});
+    const onClose = vi.fn();
+    renderWithAgents(<AgentSettingsPanel {...props} onUpdate={onUpdate} onClose={onClose} />);
+    const density = screen.getByRole('radiogroup', { name: 'Card density' });
+    fireEvent.click(within(density).getByRole('radio', { name: 'Compact' }));
+    expect(onUpdate).toHaveBeenLastCalledWith({ cardDensity: 'compact' });
+    fireEvent.click(screen.getByRole('button', { name: /^--permission-mode/ }));
+    const list = screen.getByRole('listbox', { name: '--permission-mode' });
+    expect(screen.getByRole('combobox', { name: 'Search --permission-mode' })).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(list).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
