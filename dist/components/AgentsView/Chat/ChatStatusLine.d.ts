@@ -16,6 +16,8 @@ export declare const ChatStatusLine: React.FC<{
     chatId: string;
     turns: number;
     visible: boolean;
+    /** The chat's stream is down: its id may be gone with the server, nothing is asked */
+    paused?: boolean;
     /** Model × effort picker of the session, shown under the branch */
     picker?: React.ReactNode;
 }>;

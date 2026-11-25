@@ -16,6 +16,8 @@ export declare const QuoteBox: React.FC<{
     time: string | null;
     text: string;
 }>;
+/** Tags of every thread of the chat's session: only those are hidden in message text */
+export declare const ChatTagsContext: React.Context<ReadonlySet<string>>;
 /** The chat a message list belongs to: its tool results' images load from there */
 export declare const ChatIdContext: React.Context<string | null>;
 export declare const AssistantBlock: React.FC<{

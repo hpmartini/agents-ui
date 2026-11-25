@@ -22,6 +22,8 @@ export const QuoteBox = ({ time, text }) => {
     const t = useLabels().terminal;
     return (_jsxs("div", { "data-quote": true, className: "mb-1.5 flex gap-1.5 rounded border border-blue-400/25 bg-blue-500/10 px-2 py-1 text-xs text-blue-100/90", children: [_jsx(Quote, { size: 11, "aria-hidden": true, className: "mt-0.5 shrink-0 text-blue-300" }), _jsxs("span", { className: "min-w-0", children: [_jsx("span", { className: "text-blue-300", children: time ? `${t.replyTo(time)}: ` : `${t.reply}: ` }), _jsx("span", { className: "line-clamp-2", children: text })] })] }));
 };
+/** Tags of every thread of the chat's session: only those are hidden in message text */
+export const ChatTagsContext = React.createContext(new Set());
 /** The chat a message list belongs to: its tool results' images load from there */
 export const ChatIdContext = React.createContext(null);
 /** A tool result's screenshots, loaded only once the step is open and in view */
@@ -65,7 +67,7 @@ const AgentMessage = ({ id, name, body, }) => {
     const actions = React.useContext(ViewActionsContext);
     const t = useLabels().terminal;
     const label = name || id || t.unknownAgent;
-    const text = stripTag(body);
+    const text = stripTag(body, React.useContext(ChatTagsContext));
     return (_jsx("div", { className: "flex flex-col items-start my-3", "data-agent-message": true, children: _jsxs("div", { className: "max-w-[85%] rounded-lg border border-violet-800/60 bg-violet-950/40 px-3 py-2 text-sm text-gray-100", children: [_jsxs("div", { className: "mb-1 flex items-center gap-1.5 text-xs text-violet-300", children: [_jsx(Bot, { size: 12, "aria-hidden": true }), _jsx("span", { children: t.messageFrom }), id && actions ? (_jsx("button", { type: "button", onClick: () => actions.openAgent(id), title: t.openAgent(id), className: "font-medium text-violet-200 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-blue-400", children: label })) : (_jsx("span", { className: "font-medium text-violet-200", children: label }))] }), _jsx("div", { className: "whitespace-pre-wrap break-words", children: text })] }) }));
 };
 export const UserMessage = ({ text, queued }) => {
@@ -75,7 +77,7 @@ export const UserMessage = ({ text, queued }) => {
     return _jsx(OwnMessage, { text: text, queued: queued });
 };
 const OwnMessage = ({ text, queued }) => {
-    const { text: typed, images } = splitImages(stripTag(text));
+    const { text: typed, images } = splitImages(stripTag(text, React.useContext(ChatTagsContext)));
     // a reply: its quote as a box, the user's text below
     const quote = parseQuote(typed);
     const body = quote ? quote.body : typed;
@@ -121,6 +123,7 @@ const Working = () => (_jsxs("span", { className: "flex items-center gap-1.5 tex
 const AnswerCard = ({ answer, showSteps, live, harness, model }) => {
     const t = useLabels().terminal;
     const replies = React.useContext(ChatRepliesContext);
+    const tags = React.useContext(ChatTagsContext);
     const card = React.useRef(null);
     const [selected, setSelected] = React.useState('');
     const parts = answer?.parts ?? [];
@@ -128,7 +131,7 @@ const AnswerCard = ({ answer, showSteps, live, harness, model }) => {
     const blocks = parts
         .flatMap((m) => m.blocks)
         .filter(Boolean)
-        .map((b) => (b.type === 'text' ? { ...b, text: stripTag(b.text) } : b));
+        .map((b) => (b.type === 'text' ? { ...b, text: stripTag(b.text, tags) } : b));
     const visible = showSteps ? blocks : blocks.filter((b) => b.type === 'text');
     const hasBody = visible.some((b) => b.type !== 'text' || b.text);
     const steps = blocks.filter((b) => b.type === 'tool').length;

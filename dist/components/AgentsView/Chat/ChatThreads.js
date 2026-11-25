@@ -1,5 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUp, ChevronRight, Layers, ChevronUp, FolderGit2, Loader2, Expand, MessagesSquare, MoreHorizontal, Pencil, Shrink, PanelLeft, Plus, Quote, RotateCcw, Undo2, X, } from 'lucide-react';
 import { useTransport } from '../../../host';
 import { useLabels } from '../../../labels';
@@ -10,6 +10,7 @@ import { answerText, hhmm, itemTime, stripTag, threadTitle, unreadCount, } from 
 import { clampMenuPosition } from '../../../utils/menuPosition';
 import { isMac } from '../../../utils/platform';
 import { ImageAttachments, imageDropHandlers } from '../../ImageAttachments';
+import { ChatTagsContext } from './ChatMessages';
 import { ChatComposer } from './ChatComposer';
 const focusRing = 'focus-visible:outline-2 focus-visible:outline-blue-400';
 const smallBtn = `inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] text-gray-400 hover:bg-gray-800 hover:text-white ${focusRing}`;
@@ -113,13 +114,13 @@ export function useChatThreads(session, active = false) {
     };
 }
 /** What a thread list row shows of an item */
-function itemPreview(item) {
+function itemPreview(item, tags) {
     if (item.kind === 'answer')
-        return stripTag(answerText(item));
+        return stripTag(answerText(item), tags);
     if (item.kind !== 'user')
         return '';
     const sent = agentMessage(item.text);
-    return splitImages(stripTag(sent ? sent.body : item.text)).text;
+    return splitImages(stripTag(sent ? sent.body : item.text, tags)).text;
 }
 const lastTime = (thread, items) => {
     for (let i = items.length - 1; i >= 0; i--) {
@@ -337,7 +338,8 @@ const NewThreadMenu = ({ tasks, onTask, onFree, onDismiss }) => {
 const ThreadListRow = ({ thread, items, open, onOpen, renaming, onRename }) => {
     const t = useLabels().terminal;
     const unread = unreadCount(items, thread.readAt);
-    const first = items.map((i) => itemPreview(i)).find(Boolean);
+    const tags = React.useContext(ChatTagsContext);
+    const first = items.map((i) => itemPreview(i, tags)).find(Boolean);
     if (renaming)
         return (_jsx("li", { className: "flex border-l-2 border-blue-400 px-3 py-1.5", children: _jsx(RenameField, { thread: thread, onDone: onRename }) }));
     return (_jsxs("li", { className: "group relative", children: [_jsxs("button", { type: "button", onClick: onOpen, "aria-current": open || undefined, "data-thread-row": thread.id, className: `block w-full border-l-2 px-3 py-2 text-left ${focusRing} ${open ? 'border-blue-400 bg-blue-500/10' : 'border-transparent hover:bg-gray-800/60'}`, children: [_jsxs("span", { className: "flex items-center gap-1.5 text-sm", children: [_jsx("span", { onDoubleClick: () => onRename('start'), className: `min-w-0 truncate ${unread ? 'font-semibold text-white' : 'text-gray-200'}`, children: threadName(thread) }), unread > 0 && (_jsx("span", { className: "shrink-0 rounded-full bg-blue-500 px-1.5 text-[10px] font-semibold leading-4 text-white tabular-nums", title: t.unreadCount(unread), children: t.unreadNew(unread) })), _jsx("span", { className: "ml-auto shrink-0 text-[11px] tabular-nums text-gray-500", children: hhmm(lastTime(thread, items)) })] }), thread.repo && (_jsxs("span", { className: "mt-0.5 flex items-center gap-1 truncate text-[11px] text-gray-500", children: [_jsx(FolderGit2, { size: 10, "aria-hidden": true, className: "shrink-0" }), _jsx("span", { className: "truncate", children: thread.repo })] })), thread.summary && (_jsx("span", { className: "mt-0.5 block truncate text-xs text-gray-400", children: thread.summary })), first && _jsx("span", { className: "mt-0.5 block truncate text-xs text-gray-500", children: first })] }), _jsx(ThreadMenu, { onRename: () => onRename('start'), className: "absolute right-1 top-1.5 opacity-0 focus-within:opacity-100 group-hover:opacity-100" })] }));

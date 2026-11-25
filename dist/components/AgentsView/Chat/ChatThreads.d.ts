@@ -2,7 +2,7 @@ import React from 'react';
 import type { ChatThreadList, ChatThreadTask } from '../../../transport';
 import { type ChatCommand, type ChatItem, type ChatSubmitKey } from '../../../utils/chatEvents';
 import { type ChatThread } from '../../../utils/chatThreads';
-import type { ChatQuote } from './ChatMessages';
+import { type ChatQuote } from './ChatMessages';
 export type ThreadsStatus = 'loading' | 'ready' | 'error';
 /** Threads of the pane's session from the host; `orchestrator` null: no threads for it */
 export declare function useChatThreads(session: string | null | undefined, active?: boolean): {

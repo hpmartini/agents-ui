@@ -83,10 +83,13 @@ export declare function threadCommand(body: string, commands: {
     name: string;
 }[]): string | null;
 /**
- * Message text without its thread tag lines, whichever thread's: after a merge or a move a
- * message keeps its source's tag, shown in another thread or the main chat
+ * Message text without the tags of `tags` (every thread of the session, merged and closed ones
+ * too: after a merge or a move a message keeps its source's tag, shown in another thread or the
+ * main chat): a leading one, and lines that are only one (one answer to prompts of several
+ * threads opens each part with one). Other text that looks like a tag stays, and nothing inside
+ * a fenced code block goes (an unclosed fence, e.g. while streaming, runs to the end)
  */
-export declare function stripTag(text: string): string;
+export declare function stripTag(text: string, tags: ReadonlySet<string>): string;
 export declare const hhmm: (ms: number) => string;
 /** First lines of a quoted text, cut with an ellipsis */
 export declare function quoteExcerpt(text: string): string;

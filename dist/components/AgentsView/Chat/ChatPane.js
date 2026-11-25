@@ -9,7 +9,7 @@ import { ImageAttachments, imageDropHandlers } from '../../ImageAttachments';
 import { ChatFileContext } from './ChatMarkdown';
 import { ChatArtifactsButton, ChatArtifactsModal, artifactRefreshKey, useChatArtifacts, } from './ChatArtifacts';
 import { ChatComposer } from './ChatComposer';
-import { ChatIdContext, ChatItemView, ChatRepliesContext, } from './ChatMessages';
+import { ChatIdContext, ChatItemView, ChatRepliesContext, ChatTagsContext, } from './ChatMessages';
 import { DRAFT_THREAD, QuoteChip, ThreadComposer, ThreadMarkerRow, ThreadsPanel, isThreadsMaxKey, useChatThreads, } from './ChatThreads';
 import { answerText, entryKey, threadTarget, visibleThreads, itemTime, parseQuote, quoteHeader, stripTag, queuedCommands, routeThreads, threadCommand, unreadCount, } from '../../../utils/chatThreads';
 import { clampWidth, ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
@@ -228,16 +228,24 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
     }, [chat, pane.id, pane.cwd, harness, sessionId, generation]);
     // the session the log last opened on: a reopen of the same one replays its history
     const openedFor = useRef(null);
+    // the stream is down (server restarting): the view's id may be gone, its status waits
+    const [streamDown, setStreamDown] = useState(false);
     useEffect(() => {
         if (!chatId || !chat)
             return;
         return chat.subscribeToChat(chatId, {
+            onClose: () => setStreamDown(true),
             onOpen: () => {
-                // a reconnect keeps a scrolled-up place; another session starts at its end
-                if (openedFor.current === sessionId)
+                setStreamDown(false);
+                // a reconnect keeps a scrolled-up place (main and thread log); another session starts at its end
+                if (openedFor.current === sessionId) {
                     mainLog.replay();
-                else
+                    threadLog.replay();
+                }
+                else {
                     mainLog.toEnd();
+                    threadLog.toEnd();
+                }
                 openedFor.current = sessionId ?? null;
                 dispatch({ type: 'reset' });
             },
@@ -278,12 +286,14 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
         if (active)
             mainLog.keep();
     }, [active, mainLog.keep]);
+    // every thread's tag (merged and closed ones too): only these are hidden in message text
+    const tags = useMemo(() => new Set(threads.threads.map((x) => x.tag)), [threads.threads]);
     const history = useMemo(() => state.messages
         .filter((m) => m.kind === 'user')
         .filter((m) => !agentMessage(m.text))
         // a message moved here from a thread: recalled without its tag (it would route back)
-        .map((m) => splitImages(stripTag(m.text)).text)
-        .filter(Boolean), [state.messages]);
+        .map((m) => splitImages(stripTag(m.text, tags)).text)
+        .filter(Boolean), [state.messages, tags]);
     const turns = useMemo(() => state.messages.filter((m) => m.kind === 'result').length, [state.messages]);
     // One card per answer; regrouped per event, cards memoize on their messages
     const items = useMemo(() => groupAnswers(state.messages), [state.messages]);
@@ -617,10 +627,10 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
     const threadHistory = useMemo(() => threadItems
         .filter((i) => i.kind === 'user')
         .map((i) => {
-        const text = stripTag(i.text);
+        const text = stripTag(i.text, tags);
         return splitImages(parseQuote(text)?.body ?? text).text;
     })
-        .filter(Boolean), [threadItems]);
+        .filter(Boolean), [threadItems, tags]);
     // The running turn: its answer (or the working card) shows where its last item went
     const lastItem = items.at(-1);
     const lastThread = lastItem
@@ -736,9 +746,9 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
                                         return (_jsxs(_Fragment, { children: [_jsx("div", { ref: threadListRef, className: "min-h-20 flex-1 overflow-y-auto [overflow-anchor:none] px-3 py-1", onScroll: threadLog.onScroll, onWheel: threadLog.onWheel, children: _jsxs("div", { ref: threadContentRef, children: [needsOlder && (_jsx("div", { role: "status", className: "py-2 text-center text-xs text-gray-500", children: t.loadingThreadHistory })), parent && (_jsx("div", { className: "opacity-70", "data-thread-parent": true, children: _jsx(ChatItemView, { item: parent, showSteps: false, harness: harnessName, model: state.model }) })), _jsx(ChatFileContext.Provider, { value: pane.cwd, children: _jsxs(ChatRepliesContext.Provider, { value: threadReplies, children: [threadItems.map((item) => (_jsx(ChatItemView, { item: item, showSteps: showSteps, live: isLive(item), harness: harnessName, model: state.model }, item.key))), workingCard && thread && lastThread === thread.id && (_jsx(ChatItemView, { item: null, showSteps: showSteps, live: true, harness: harnessName, model: state.model }))] }) }), thread && threadItems.length === 0 && !parent && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.firstThreadMessage(thread.tag) })), !thread && (_jsx("p", { className: "py-3 text-xs text-gray-500", children: t.threadWithoutTaskHint }))] }) }), threadLog.unseen && _jsx(NewMessages, { onClick: threadLog.toEnd }), thread?.binding && (_jsx("div", { className: "shrink-0 px-2 pb-1 text-[11px] text-gray-500", children: _jsx("span", { className: "truncate", children: t.boundTo(thread.repo ?? null) }) })), threadsFull && error && (_jsx("div", { role: "alert", className: "px-2 pb-1 text-xs text-red-300", children: error })), _jsx(ThreadComposer, { chatId: chatId, submitKey: submitKey, history: threadHistory, agents: state.agents, commands: state.commands, quote: threadQuote, onClearQuote: () => setThreadQuote(null), onSend: sendInThread, disabled: !connected, focusKey: `${openId}:${threadsFull}`, draftKey: openId })] }));
                                     } }) })] }))] }), chatId && (_jsxs("div", { "data-chat-footer": true, 
                 // under the main chat and the threads panel; empty until the status loads
-                className: "hidden shrink-0 items-end gap-3 border-t border-gray-800 px-2 pb-2 has-[button]:flex has-[[data-chat-status]]:flex", children: [_jsx("div", { className: "flex-1 min-w-0", children: _jsx(ChatStatusLine, { chatId: chatId, turns: turns, visible: active, picker: (harness === 'claude' || harness === 'omp') && (_jsx(ModelEffortPicker, { harness: harness, model: "", effort: "", keepLabel: t.keepCurrent, currentModel: state.model, currentEffort: state.effort, placement: "up", disabled: busy || !connected, onPick: switchModel, title: busy
+                className: "hidden shrink-0 items-end gap-3 border-t border-gray-800 px-2 pb-2 has-[button]:flex has-[[data-chat-status]]:flex", children: [_jsx("div", { className: "flex-1 min-w-0", children: _jsx(ChatStatusLine, { chatId: chatId, turns: turns, visible: active, paused: streamDown, picker: (harness === 'claude' || harness === 'omp') && (_jsx(ModelEffortPicker, { harness: harness, model: "", effort: "", keepLabel: t.keepCurrent, currentModel: state.model, currentEffort: state.effort, placement: "up", disabled: busy || !connected, onPick: switchModel, title: busy
                                     ? t.switchModelBusy
                                     : t.switchModel(harness === 'omp' ? '/switch, /effort' : '/model, /effort') })) }) }), _jsx("div", { className: "mt-2", children: _jsx(ChatArtifactsButton, { artifacts: artifacts, onOpen: () => setArtifactsOpen(true) }) })] })), chatId && artifactsOpen && (_jsx(ChatArtifactsModal, { chatId: chatId, cwd: pane.cwd, title: pane.name, artifacts: artifacts, onClose: () => setArtifactsOpen(false) }))] }));
     // tool results load their images from this chat
-    return _jsx(ChatIdContext.Provider, { value: chatId, children: view });
+    return (_jsx(ChatIdContext.Provider, { value: chatId, children: _jsx(ChatTagsContext.Provider, { value: tags, children: view }) }));
 };

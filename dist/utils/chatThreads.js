@@ -48,16 +48,37 @@ export function threadCommand(body, commands) {
         ? command
         : null;
 }
-/** A leading thread tag: names never hold `[` or `]` (the server cleans them) */
-const LEADING_TAG_RE = /^\s*\[Thread: [^[\]\n]*\][ \t]*\n?/;
-/** A line that is only a tag: one answer to prompts of several threads opens each part with one */
-const TAG_LINE_RE = /^[ \t]*\[Thread: [^[\]\n]*\][ \t]*(?:\n|$)/gm;
+const FENCE_RE = /^\s*(`{3,}|~{3,})/;
 /**
- * Message text without its thread tag lines, whichever thread's: after a merge or a move a
- * message keeps its source's tag, shown in another thread or the main chat
+ * Message text without the tags of `tags` (every thread of the session, merged and closed ones
+ * too: after a merge or a move a message keeps its source's tag, shown in another thread or the
+ * main chat): a leading one, and lines that are only one (one answer to prompts of several
+ * threads opens each part with one). Other text that looks like a tag stays, and nothing inside
+ * a fenced code block goes (an unclosed fence, e.g. while streaming, runs to the end)
  */
-export function stripTag(text) {
-    return text.replace(LEADING_TAG_RE, '').replace(TAG_LINE_RE, '');
+export function stripTag(text, tags) {
+    if (!tags.size)
+        return text;
+    const start = text.trimStart();
+    const lead = [...tags].find((tag) => start.startsWith(tag));
+    const body = lead ? start.slice(lead.length).replace(/^[ \t]*\n?/, '') : text;
+    let fence = null;
+    const kept = [];
+    for (const line of body.split('\n')) {
+        const mark = FENCE_RE.exec(line)?.[1];
+        if (mark && !fence)
+            fence = mark;
+        else if (mark &&
+            fence &&
+            mark[0] === fence[0] &&
+            mark.length >= fence.length &&
+            !line.trim().slice(mark.length))
+            fence = null;
+        else if (!fence && tags.has(line.trim()))
+            continue;
+        kept.push(line);
+    }
+    return kept.join('\n');
 }
 export const hhmm = (ms) => {
     const d = new Date(ms);

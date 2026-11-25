@@ -28,7 +28,7 @@ export function statusLayout(width) {
  * TUI-like status line: branch with untracked (?) / changed (±) counts, prompt cache and
  * context, 5h / 7d plan limits. Refreshes while visible and after each finished turn.
  */
-export const ChatStatusLine = ({ chatId, turns, visible, picker }) => {
+export const ChatStatusLine = ({ chatId, turns, visible, paused = false, picker }) => {
     const [status, setStatus] = useState(null);
     // the pane, not the viewport, decides the columns: a narrow split pane stacks them
     const [width, setWidth] = useState(0);
@@ -45,7 +45,7 @@ export const ChatStatusLine = ({ chatId, turns, visible, picker }) => {
     const t = useLabels().terminal;
     useEffect(() => {
         const fetchStatus = chat?.fetchChatStatus;
-        if (!fetchStatus)
+        if (!fetchStatus || paused)
             return;
         let cancelled = false;
         const load = () => fetchStatus(chatId)
@@ -65,7 +65,7 @@ export const ChatStatusLine = ({ chatId, turns, visible, picker }) => {
             cancelled = true;
             stop();
         };
-    }, [chat, chatId, turns, visible]);
+    }, [chat, chatId, turns, visible, paused]);
     if (!status)
         return null;
     const { git, cache, context, limits } = status;
