@@ -97,6 +97,15 @@ describe('Claude question tabs: back to an answered question, multi select movin
     expect(dialogKeys(d!, { type: 'pick', row: 0 })).toBe('1');
   });
 
+  it('review with the cursor on its last option', () => {
+    const d = parseAgentDialog(
+      screen('claude-question-review')
+        .replace('❯ 1. Submit answers', '  1. Submit answers')
+        .replace('  2. Cancel', '❯ 2. Cancel')
+    );
+    expect(d).toMatchObject({ kind: 'review', cursor: 1 });
+  });
+
   it('to a tab: from the first row, ← or → by the distance; ←/→ one step', () => {
     const d = parseAgentDialog(screen('claude-question-tabs-back'), 'Groesse')!;
     expect(d.tab).toBe(2);

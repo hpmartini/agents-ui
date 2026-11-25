@@ -334,8 +334,11 @@ export function dialogRange(lines: string[]): { start: number; end: number } | n
   let end = lastIndex(lines, (l) => DIALOG_HINT_RE.test(l));
   if (end < cursor || end < 0) {
     if (cursor < 0 || !CHOICE_CURSOR_RE.test(lines[cursor])) return null;
-    if (RULE_LINE_RE.test(lines[lastIndex(lines, (l) => !!l.trim(), cursor)] ?? '')) return null;
+    const above = lines[lastIndex(lines, (l) => !!l.trim(), cursor)] ?? '';
+    if (RULE_LINE_RE.test(above)) return null;
     end = lastIndex(lines, (l, i) => i > cursor && OPTION_LINE_RE.test(l));
+    // the cursor on the last option: its neighbour is above
+    if (end < 0 && OPTION_LINE_RE.test(above)) end = cursor;
     if (end < 0) return null;
   }
   const rule = lastIndex(lines, (l) => RULE_LINE_RE.test(l), cursor >= 0 ? cursor : end);

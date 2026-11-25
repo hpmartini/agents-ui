@@ -98,24 +98,37 @@ describe('question on the agent screen (yellow box)', () => {
     expect(screenPrompt(fixture('claude-question-review'))).toContain('Submit answers');
   });
 
-  it('the excerpt is the dialog only, without the input line, status lines or private glyphs', () => {
+  it('the excerpt is the dialog only, without the input line or anything under its footer', () => {
+    // folder trust dialog as Claude Code 2.1.332 draws it (path neutral)
     const trust = [
       '❯ an earlier prompt',
       RULE,
       ' Accessing workspace:',
       ' /work/demo',
       ' Quick safety check: Is this a project you created or one you trust?',
-      ' ❯ 1. Yes, I trust this folder',
-      '   2. No, exit',
+      " Claude Code'll be able to read, edit, and execute files here.",
+      ' Security guide',
+      ' ❯ No, exit',
+      '   Yes, I trust this folder',
       ' Enter to confirm · Esc to cancel',
-      '  \ue0b6 devbox \ue0b4 \uf4bc Opus 5.5',
+      `${RULE} demo-session ─`,
     ].join('\n');
     const text = screenPrompt(trust) ?? '';
     expect(text.split('\n')[0].trim()).toBe('Accessing workspace:');
-    expect(text).not.toMatch(/an earlier prompt|devbox|[\ue000-\uf8ff]/u);
-    expect(extractNumberedChoices(text).map((c) => c.label)).toEqual([
-      'Yes, I trust this folder',
-      'No, exit',
-    ]);
+    expect(text.split('\n').at(-1)?.trim()).toBe('Enter to confirm · Esc to cancel');
+    expect(text).not.toMatch(/an earlier prompt|demo-session/);
+  });
+
+  it('private-use glyphs (Nerd-Font icons) never reach the excerpt', () => {
+    const permission = fixture('claude-permission-bash').replaceAll('echo 42', 'echo \ue0b6 42');
+    expect(screenPrompt(permission)).toContain('echo  42');
+    expect(screenPrompt(permission)).not.toMatch(/[\ue000-\uf8ff]/u);
+  });
+
+  it('review step with the cursor on its last option', () => {
+    const review = fixture('claude-question-review')
+      .replace('❯ 1. Submit answers', '  1. Submit answers')
+      .replace('  2. Cancel', '❯ 2. Cancel');
+    expect(screenPrompt(review)).toContain('❯ 2. Cancel');
   });
 });
