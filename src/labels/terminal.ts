@@ -212,6 +212,8 @@ export interface TerminalLabels {
   notBound: string;
   resizeThreads: string;
   threadLog: (name: string) => string;
+  /** Button over a log scrolled up while new content came in */
+  newMessages: string;
   loadingThreadHistory: string;
 
   // ChatPane
@@ -524,6 +526,7 @@ export const terminalEn: TerminalLabels = {
   notBound: 'Not bound to a status task',
   resizeThreads: 'Resize threads panel',
   threadLog: (name) => `Thread ${name}`,
+  newMessages: 'New messages',
   loadingThreadHistory: 'Loading earlier messages of this thread…',
 
   // ChatPane
@@ -845,6 +848,7 @@ export const terminalDe: TerminalLabels = {
   notBound: 'Nicht an eine Status-Aufgabe gebunden',
   resizeThreads: 'Breite des Thread-Panels ändern',
   threadLog: (name) => `Thread ${name}`,
+  newMessages: 'Neue Nachrichten',
   loadingThreadHistory: 'Frühere Nachrichten dieses Threads werden geladen…',
 
   // ChatPane
