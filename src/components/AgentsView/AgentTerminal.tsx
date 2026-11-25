@@ -119,14 +119,24 @@ export function usePaneConnected(id: string): boolean {
 }
 
 /**
- * Types a message into pane `id`'s agent like a paste followed by Enter (the UI view's input).
- * xterm's paste wraps it in bracketed-paste markers when the TUI asked for them, so a multi-line
- * message stays one message. false when the PTY is not connected.
+ * `text` as a bracketed paste, always: a page that attached to a long-running agent never saw the
+ * TUI turn paste mode on (that output fell out of the replayed backlog), and xterm's own paste
+ * then sends the lines bare, so each line break submits a message of its own. Control characters
+ * other than tab / newline go: an ESC would end the paste (as the server's typeIntoPanePty)
+ */
+export function agentPaste(text: string): string {
+  // eslint-disable-next-line no-control-regex -- dropping control characters is the point
+  return `\x1b[200~${text.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')}\x1b[201~`;
+}
+
+/**
+ * Types a message into pane `id`'s agent like a paste followed by Enter (the UI view's input);
+ * a multi-line message stays one message. false when the PTY is not connected.
  */
 export function typeIntoPane(id: string, text: string): boolean {
   const pane = paneTerminals.get(id);
   if (!pane?.connected) return false;
-  pane.terminal.paste(text);
+  sendTo(pane, { type: 'input', data: agentPaste(text) });
   // A TUI that just received a paste treats an Enter in the same chunk as part of it
   window.setTimeout(() => sendTo(pane, { type: 'input', data: '\r' }), 80);
   return true;
