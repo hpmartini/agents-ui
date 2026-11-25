@@ -4,7 +4,6 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  Check,
   CircleDot,
   GitPullRequest,
   ListFilter,
@@ -15,11 +14,13 @@ import type { AgentDaemonStatus } from '../../types';
 import {
   AgentQuickFilter,
   AgentSort,
+  type AgentSortKey,
   LinkFilterEntry,
   QUICK_FILTERS,
   SORT_OPTIONS,
 } from '../../utils/agentSessions';
 import { useLabels } from '../../labels';
+import { Choice } from '../Choice';
 import { usePopover } from './PullRequestsPanel';
 import { SEARCH_SHORTCUT, isMac } from '../../utils/platform';
 
@@ -286,7 +287,6 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
   trailing,
 }) => {
   const t = useLabels().shell;
-  const [open, setOpen] = useState(false);
   const [chipsOpen, setChipsOpenState] = useState(() => {
     try {
       return localStorage.getItem(CHIPS_OPEN_KEY) === '1';
@@ -303,7 +303,6 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
     }
   };
   const [searchOpen, setSearchOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const current = SORT_OPTIONS.find((o) => o.key === sort.key) || SORT_OPTIONS[0];
 
@@ -326,22 +325,6 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
     return () => document.removeEventListener('keydown', onKey, true);
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
   const searching = query.trim() !== '' || linkSelected.size > 0;
 
   return (
@@ -349,41 +332,17 @@ export const AgentFilterBar: React.FC<AgentFilterBarProps> = ({
       {/* relative: the search panel spans the whole row */}
       <div className="relative flex items-center gap-1 text-xs">
         {leading}
-        <div className="relative min-w-0" ref={rootRef}>
-          <button
-            onClick={() => setOpen((v) => !v)}
-            aria-haspopup="menu"
-            aria-expanded={open}
-            aria-label={t.sortAgentsBy(t.sortOptions[current.key])}
-            title={t.sortAgents}
-            className="w-full flex items-center gap-1 px-1.5 py-1 rounded text-gray-300 hover:bg-gray-800 border border-gray-800"
-          >
-            <ArrowUpDown size={12} className="shrink-0" />
-            <span className="truncate">{t.sortOptions[current.key]}</span>
-          </button>
-          {open && (
-            <div
-              role="menu"
-              className="absolute left-0 top-full mt-1 z-30 min-w-[180px] bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1"
-            >
-              {SORT_OPTIONS.map((option) => (
-                <button
-                  key={option.key}
-                  role="menuitemradio"
-                  aria-checked={option.key === sort.key}
-                  onClick={() => {
-                    onSort({ key: option.key, dir: option.dir });
-                    setOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-gray-200 hover:bg-gray-700 hover:text-white"
-                >
-                  <span className="w-3">{option.key === sort.key && <Check size={12} />}</span>
-                  {t.sortOptions[option.key]}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <Choice<AgentSortKey>
+          label={t.sortAgents}
+          value={current.key}
+          onChange={(key) => {
+            const option = SORT_OPTIONS.find((o) => o.key === key)!;
+            onSort({ key, dir: option.dir });
+          }}
+          options={SORT_OPTIONS.map((o) => ({ value: o.key, label: t.sortOptions[o.key] }))}
+          icon={<ArrowUpDown size={12} aria-hidden className="shrink-0" />}
+          className="bg-transparent border-gray-800 text-gray-300 hover:bg-gray-800"
+        />
         <button
           onClick={() => onSort({ ...sort, dir: sort.dir === 'asc' ? 'desc' : 'asc' })}
           disabled={!current.directional}

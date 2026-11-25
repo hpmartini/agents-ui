@@ -9,3 +9,4 @@ export { createMockTransport, } from './transports/mock';
 export { DEFAULT_TERMINAL_FONT, refreshTerminalTheme } from './components/AgentsView/AgentTerminal';
 export { configureLinks } from './utils/links';
 export { ResizeHandle, clampWidth, useStoredWidth } from './ResizeHandle';
+export { CHOICE_PILL_MAX, CHOICE_SEARCH_THRESHOLD, Choice, choiceMode, } from './components/Choice';

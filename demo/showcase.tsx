@@ -1,0 +1,311 @@
+// Demo surfaces for the shared Choice and the /pulls repo tree: ?view=choice, ?view=pulls
+// (&state=loading|empty). Fake owners, repos and paths only (public repo).
+import React, { useCallback, useMemo, useState } from 'react';
+import { Choice, type ChoiceOption } from '../src/components/Choice';
+import { PullRequestsPage } from '../src/components/AgentsView/PullRequestsPage';
+import type { AgentContext, AgentPullRequest, AgentSession } from '../src/types';
+import type { PullRequestRow } from '../src/utils/agentSessions';
+
+const greek = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'].map((l) => ({
+  value: l.toLowerCase(),
+  label: l,
+}));
+const harnesses: ChoiceOption[] = [
+  { value: 'claude', label: 'Claude Code' },
+  { value: 'omp', label: 'Oh My Pi' },
+  { value: 'opencode', label: 'OpenCode (not installed)', disabled: true },
+  { value: 'codex', label: 'Codex', hint: 'GPT' },
+  { value: 'pi', label: 'Pi' },
+];
+const repos: ChoiceOption[] = [
+  ...['web', 'api', 'docs', 'design-system', 'mobile'].map((r) => ({
+    value: `acme/${r}`,
+    label: `acme/${r}`,
+    group: 'acme',
+  })),
+  ...['tools', 'billing', 'search-indexer', 'infra'].map((r) => ({
+    value: `globex/${r}`,
+    label: `globex/${r}`,
+    group: 'globex',
+  })),
+  ...['tps-reports', 'printer'].map((r) => ({
+    value: `initech/${r}`,
+    label: `initech/${r}`,
+    group: 'initech',
+  })),
+];
+
+const slices: ChoiceOption[] = [
+  { value: 'inbox', label: 'Inbox' },
+  { value: 'sprint', label: 'Sprint' },
+  { value: 'icebox', label: 'Icebox', muted: true, hint: 'hidden' },
+  { value: 'archive', label: 'Archive', muted: true, hint: 'hidden' },
+  { value: 'review', label: 'Review' },
+];
+
+const Row: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <section className="space-y-1.5">
+    <h3 className="text-xs text-gray-400">{title}</h3>
+    {children}
+  </section>
+);
+
+export const ChoiceShowcase: React.FC = () => {
+  const [density, setDensity] = useState('comfortable');
+  const [scope, setScope] = useState('mine');
+  const [letter, setLetter] = useState('beta');
+  const [harness, setHarness] = useState('claude');
+  const [repo, setRepo] = useState('acme/web');
+  const [bottom, setBottom] = useState('globex/tools');
+  const [slice, setSlice] = useState('inbox');
+  const [lane, setLane] = useState('todo');
+  const [theme, setTheme] = useState('');
+  const [invalidLetter, setInvalidLetter] = useState('');
+  const [live, setLive] = useState('beta');
+  const [liveMany, setLiveMany] = useState(true);
+  const [liveOff, setLiveOff] = useState(false);
+  return (
+    <div className="h-full overflow-y-auto p-6 bg-gray-900 text-gray-200 text-sm">
+      <div className="max-w-xl space-y-6">
+        <Row title="Pills (2 options)">
+          <Choice
+            label="Card density"
+            value={density}
+            onChange={setDensity}
+            options={[
+              { value: 'comfortable', label: 'Comfortable' },
+              { value: 'compact', label: 'Compact' },
+            ]}
+          />
+        </Row>
+        <Row title="Pills, long labels in a narrow column (wrap, no clipping)">
+          <div className="w-56 border border-dashed border-gray-700 p-2">
+            <Choice
+              label="Scope"
+              value={scope}
+              onChange={setScope}
+              options={[
+                { value: 'all', label: 'All sessions on this machine' },
+                { value: 'mine', label: 'Only sessions I started' },
+                { value: 'pinned', label: 'Pinned' },
+              ]}
+            />
+          </div>
+        </Row>
+        <Row title="Crowded toolbar: menus keep their size, pills wrap, nothing clips">
+          <div className="flex flex-wrap items-center gap-2 border border-dashed border-gray-700 p-2">
+            <input
+              aria-label="Search"
+              placeholder="Title, #number, branch"
+              className="flex-1 min-w-[6rem] bg-gray-850 border border-gray-700 rounded px-2 py-1 text-xs"
+            />
+            <Choice label="Greek letter" value={letter} onChange={setLetter} options={greek} />
+            <Choice label="Harness" value={harness} onChange={setHarness} options={harnesses} />
+            <Choice
+              label="Card density"
+              value={density}
+              onChange={setDensity}
+              options={[
+                { value: 'comfortable', label: 'Comfortable' },
+                { value: 'compact', label: 'Compact' },
+              ]}
+            />
+          </div>
+        </Row>
+        <Row title="Menu (5 options)">
+          <Choice label="Greek letter" value={letter} onChange={setLetter} options={greek} />
+        </Row>
+        <Row title="Menu with a disabled option and a hint">
+          <Choice label="Harness" value={harness} onChange={setHarness} options={harnesses} />
+        </Row>
+        <Row title="Muted options (hidden board slices): dimmed, still selectable">
+          <div className="flex flex-wrap items-center gap-2">
+            <Choice label="Slice" value={slice} onChange={setSlice} options={slices} />
+            <Choice
+              label="Lane"
+              value={lane}
+              onChange={setLane}
+              options={[
+                { value: 'todo', label: 'Todo' },
+                { value: 'doing', label: 'Doing' },
+                { value: 'parked', label: 'Parked', muted: true },
+              ]}
+            />
+          </div>
+        </Row>
+        <Row title="Search (11 options, grouped)">
+          <Choice label="Repository" value={repo} onChange={setRepo} options={repos} />
+        </Row>
+        <Row title="Disabled">
+          <Choice label="Locked" value="beta" onChange={() => {}} options={greek} disabled />
+        </Row>
+        <Row title="Settings rows: visible label (htmlFor + labelledBy), invalid">
+          <div className="grid grid-cols-[8rem_1fr] items-center gap-2">
+            <label id="demo-l-theme" htmlFor="demo-theme" className="text-gray-300">
+              Theme
+            </label>
+            <Choice
+              id="demo-theme"
+              labelledBy="demo-l-theme"
+              label="Theme"
+              value={theme}
+              onChange={setTheme}
+              invalid={!theme}
+              options={[
+                { value: 'dark', label: 'Dark' },
+                { value: 'light', label: 'Light' },
+              ]}
+            />
+            <label id="demo-l-letter" htmlFor="demo-letter" className="text-gray-300">
+              Letter
+            </label>
+            <Choice
+              id="demo-letter"
+              labelledBy="demo-l-letter"
+              label="Letter"
+              value={invalidLetter}
+              onChange={setInvalidLetter}
+              invalid={!invalidLetter}
+              placeholder="Pick one"
+              options={greek}
+            />
+          </div>
+        </Row>
+        <Row title="Invalid with a selected value">
+          <Choice
+            label="Server-rejected theme"
+            value="dark"
+            onChange={() => {}}
+            invalid
+            options={[
+              { value: 'dark', label: 'Dark' },
+              { value: 'light', label: 'Light' },
+            ]}
+          />
+        </Row>
+        <Row title="Runtime changes (after 2 s)">
+          <div className="flex flex-wrap items-center gap-2">
+            <Choice
+              label="Live"
+              value={live}
+              onChange={setLive}
+              disabled={liveOff}
+              options={liveMany ? greek.slice(0, 4) : greek.slice(0, 3)}
+            />
+            <button
+              type="button"
+              className="text-xs text-gray-400 underline"
+              onClick={() => setTimeout(() => setLiveMany((m) => !m), 2000)}
+            >
+              toggle 4th option
+            </button>
+            <button
+              type="button"
+              className="text-xs text-gray-400 underline"
+              onClick={() => setTimeout(() => setLiveOff((d) => !d), 2000)}
+            >
+              toggle disabled
+            </button>
+          </div>
+        </Row>
+        <div className="h-[60vh]" />
+        <Row title="Near the bottom: opens upwards">
+          <Choice label="Bottom repository" value={bottom} onChange={setBottom} options={repos} />
+        </Row>
+      </div>
+    </div>
+  );
+};
+
+const pr = (
+  n: number,
+  repoSlug: string,
+  over: Partial<AgentPullRequest> = {}
+): AgentPullRequest => ({
+  number: n,
+  title: `Pull request ${n}`,
+  url: `https://github.com/${repoSlug}/pull/${n}`,
+  author: 'dev',
+  isDraft: false,
+  headRef: `feat/${n}`,
+  baseRef: 'main',
+  updatedAt: new Date(Date.now() - n * 3_600_000).toISOString(),
+  reviewDecision: null,
+  mergeable: 'MERGEABLE',
+  ci: 'success',
+  ciPassed: 3,
+  ciFailed: 0,
+  ciPending: 0,
+  mergeReady: true,
+  repoSlug,
+  ...over,
+});
+const fakeRows: PullRequestRow[] = [
+  { pr: pr(12, 'acme/web', { title: 'Speed up the checkout page' }), agents: [] },
+  {
+    pr: pr(15, 'acme/web', { title: 'Fix login redirect', ci: 'failure', mergeReady: false }),
+    agents: [],
+  },
+  { pr: pr(7, 'acme/api', { title: 'Rate limit the search endpoint', ci: 'pending' }), agents: [] },
+  { pr: pr(3, 'acme/docs', { title: 'Document the webhooks', isDraft: true }), agents: [] },
+  { pr: pr(41, 'globex/tools', { title: 'Release script for the CLI' }), agents: [] },
+  {
+    pr: pr(9, 'globex/billing', {
+      title: 'Invoice rounding',
+      reviewDecision: 'CHANGES_REQUESTED',
+      mergeReady: false,
+    }),
+    agents: [],
+  },
+  { pr: pr(2, 'initech/tps-reports', { title: 'New cover sheet' }), agents: [] },
+  {
+    pr: pr(5, 'acme/design-system-component-library-playground', { title: 'Token audit' }),
+    agents: [],
+  },
+  {
+    pr: pr(6, 'acme/landing', { title: 'Hero copy', ci: 'failure', mergeReady: false }),
+    agents: [],
+  },
+];
+const ctx = (slug: string, root: string) =>
+  ({ repo: { slug, root }, pulls: { open: 0, url: null, items: [] } }) as unknown as AgentContext;
+// Nested checkouts below a fake home: REPOS/{apps,services/backend}, a single-child chain
+// (PROJECTS/clients/globex), one checkout directly in home; initech/tps-reports has none: owner
+const fakeContexts: Record<string, AgentContext> = {
+  a: ctx('acme/web', '/Users/dev/REPOS/apps/web'),
+  b: ctx('acme/api', '/Users/dev/REPOS/services/backend/api'),
+  c: ctx('acme/docs', '/Users/dev/REPOS/apps/docs'),
+  d: ctx('globex/tools', '/Users/dev/PROJECTS/clients/globex/globex-tools'),
+  e: ctx('globex/billing', '/Users/dev/billing'),
+  f: ctx(
+    'acme/design-system-component-library-playground',
+    '/Users/dev/REPOS/websites/design-system-component-library-playground'
+  ),
+  g: ctx('acme/landing', '/Users/dev/REPOS/websites/landing'),
+};
+
+export const PullsShowcase: React.FC<{ state: string | null }> = ({ state }) => {
+  const [search, setSearch] = useState(() => new URLSearchParams());
+  const setSearchParams = useCallback(
+    (next: (prev: URLSearchParams) => URLSearchParams) => setSearch((prev) => next(prev)),
+    []
+  );
+  const rows = state === 'loading' || state === 'empty' ? [] : fakeRows;
+  const contexts = state === 'loading' ? {} : fakeContexts;
+  const sessions = useMemo(
+    () => Object.keys(contexts).map((id) => ({ id }) as AgentSession),
+    [contexts]
+  );
+  return (
+    <div className="relative h-full">
+      <PullRequestsPage
+        rows={rows}
+        sessions={sessions}
+        contexts={contexts}
+        onSelectAgent={() => {}}
+        searchParams={search}
+        setSearchParams={setSearchParams}
+      />
+    </div>
+  );
+};

@@ -6,6 +6,7 @@ import { useLabels } from '../../labels';
 import { computeSuggestions, Suggestion } from '../../utils/agentInput';
 import { submitIntent } from '../../utils/composer';
 import { useAutoGrowTextarea } from '../../hooks/useAutoGrowTextarea';
+import { Choice } from '../Choice';
 import { ModelEffortPicker } from './ModelEffortPicker';
 
 interface DispatchInputProps {
@@ -271,23 +272,21 @@ export const DispatchInput: React.FC<DispatchInputProps> = ({
       {attachments}
       <div className="flex flex-wrap items-center gap-2 mt-3">
         {harness !== undefined && (
-          <label className="flex items-center gap-1.5 text-xs text-gray-200">
-            <span>{t.dispatchHarness}</span>
-            <select
+          <div className="flex items-center gap-1.5 text-xs text-gray-200">
+            <span aria-hidden>{t.dispatchHarness}</span>
+            <Choice<AgentHarness>
+              label={t.dispatchHarness}
               value={harness}
-              onChange={(e) => onHarnessChange?.(e.target.value as AgentHarness)}
+              onChange={(h) => onHarnessChange?.(h)}
               disabled={disabled}
-              className="bg-gray-900 border border-gray-600 rounded-md px-1.5 py-1 text-xs text-gray-50 focus-visible:outline-2 focus-visible:outline-blue-400"
               title={t.dispatchHarnessTitle}
-            >
-              {HARNESSES.map((h) => (
-                <option key={h.id} value={h.id} disabled={harnessInstalled[h.id] === false}>
-                  {h.label}
-                  {harnessInstalled[h.id] === false ? t.dispatchNotInstalled : ''}
-                </option>
-              ))}
-            </select>
-          </label>
+              options={HARNESSES.map((h) => ({
+                value: h.id,
+                label: `${h.label}${harnessInstalled[h.id] === false ? t.dispatchNotInstalled : ''}`,
+                disabled: harnessInstalled[h.id] === false,
+              }))}
+            />
+          </div>
         )}
         {harness !== undefined && onModelChange && (harness === 'claude' || harness === 'omp') && (
           <ModelEffortPicker

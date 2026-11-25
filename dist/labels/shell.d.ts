@@ -87,6 +87,14 @@ export interface ShellLabels {
     filterAny: (label: string) => string;
     resetFilters: string;
     pullsToolbar: string;
+    /** The "any" pill of a filter shown as pills */
+    anyOption: string;
+    repoTree: string;
+    allRepositories: string;
+    repoTreeLoading: string;
+    repoTreeEmpty: string;
+    expandNode: (label: string) => string;
+    collapseNode: (label: string) => string;
     searchPulls: string;
     searchPullsPlaceholder: string;
     pullFilters: Record<'repo' | 'ci' | 'merge' | 'review' | 'draft' | 'author' | 'base' | 'agent', string>;
@@ -133,7 +141,6 @@ export interface ShellLabels {
     newKinds: Record<'task' | 'agent' | 'chat' | 'issue', string>;
     imagesNote: string;
     groupModes: Record<AgentGrouping, string>;
-    groupAgentsByCurrent: (label: string) => string;
     groupAgentsByTitle: string;
     groupAgentsBy: string;
     expandAllGroups: string;

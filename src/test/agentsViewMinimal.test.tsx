@@ -120,7 +120,7 @@ describe('AgentsView with the required transport groups only', () => {
     expect(within(composer).queryByRole('tab', { name: 'Agent' })).toBeNull();
     expect(within(composer).queryByRole('tab', { name: 'Chat' })).toBeNull();
     expect(within(composer).queryByRole('button', { name: 'Dispatch and attach' })).toBeNull();
-    expect(within(composer).queryByRole('combobox')).toBeNull();
+    expect(within(composer).queryByRole('button', { name: /^Harness/ })).toBeNull();
     expect(within(composer).queryByRole('option', { name: /Codex|OpenCode|Oh My Pi/ })).toBeNull();
     fireEvent.change(within(composer).getByRole('textbox'), {
       target: { value: 'Refactor the vault importer into smaller modules' },

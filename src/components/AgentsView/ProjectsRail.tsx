@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  Check,
   ChevronDown,
   ChevronRight,
   ChevronsDownUp,
@@ -15,6 +14,7 @@ import type { AgentGrouping } from '../../types';
 import type { AgentConfigLike } from './types';
 import { useHost } from '../../host';
 import { useLabels } from '../../labels';
+import { Choice } from '../Choice';
 
 /** A work mode of the host (Orkumo: a module's mode); opened through `host.openMode` */
 export interface RailMode {
@@ -38,106 +38,28 @@ export interface RailNavProps {
   onOpenProject: (appId: string) => void;
 }
 
-const GROUP_MODES: AgentGrouping[] = ['project', 'state', 'directory', 'none'];
+/** Every value `AgentGrouping` accepts, in the order the picker, the settings and Ctrl+S use */
+export const GROUP_MODES: AgentGrouping[] = ['project', 'state', 'directory', 'none'];
 
 const PROJECTS_COLLAPSED_KEY = 'devOrbitAgentProjectsCollapsed';
 
-/** Pointer may cross the gap between trigger and menu without the menu closing */
-const HOVER_CLOSE_MS = 150;
-
-/** Grouping of the agent list: shows only the current grouping; hovering (or clicking) opens the others */
+/** Grouping of the agent list: a Choice menu with the four groupings */
 export const GroupingPicker: React.FC<{
   grouping: AgentGrouping;
   onGrouping: (grouping: AgentGrouping) => void;
 }> = ({ grouping, onGrouping }) => {
   const t = useLabels().shell;
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const closeTimer = useRef<number | undefined>(undefined);
-  const current = GROUP_MODES.includes(grouping) ? grouping : GROUP_MODES[0];
-
-  const cancelClose = () => window.clearTimeout(closeTimer.current);
-  useEffect(() => cancelClose, []);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.stopImmediatePropagation();
-      setOpen(false);
-      if (rootRef.current?.contains(document.activeElement))
-        rootRef.current.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey, true);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey, true);
-    };
-  }, [open]);
-
-  const run = (action: () => void) => {
-    setOpen(false);
-    action();
-  };
-  const item =
-    'w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-700 hover:text-white focus-visible:bg-gray-700 focus-visible:outline-none disabled:opacity-40 disabled:pointer-events-none';
-
   return (
-    <div
-      ref={rootRef}
-      className="relative shrink-0"
-      onMouseEnter={() => {
-        cancelClose();
-        setOpen(true);
-      }}
-      onMouseLeave={() => {
-        cancelClose();
-        closeTimer.current = window.setTimeout(() => setOpen(false), HOVER_CLOSE_MS);
-      }}
-    >
-      <button
-        type="button"
-        // Hover already opened it for the mouse; Enter / Space (detail 0) toggles
-        onClick={(e) => setOpen((v) => (e.detail === 0 ? !v : true))}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={t.groupAgentsByCurrent(t.groupModes[current])}
-        title={t.groupAgentsByTitle}
-        className={`flex items-center gap-1 px-1.5 py-1 rounded border text-gray-300 hover:bg-gray-800 ${
-          open ? 'bg-gray-800 border-gray-700' : 'border-gray-800'
-        }`}
-      >
-        <Layers size={12} aria-hidden />
-        {t.groupModes[current]}
-      </button>
-      {open && (
-        // pt-1 instead of mt-1: the pointer stays inside the hover area on its way to the menu
-        <div className="absolute left-0 top-full pt-1 z-30">
-          <div
-            role="menu"
-            aria-label={t.groupAgentsBy}
-            className="min-w-[180px] bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1"
-          >
-            {GROUP_MODES.map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                role="menuitemradio"
-                aria-checked={mode === grouping}
-                onClick={() => run(() => onGrouping(mode))}
-                className={item}
-              >
-                <span className="w-3">{mode === grouping && <Check size={12} />}</span>
-                {t.groupModes[mode]}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    <Choice<AgentGrouping>
+      label={t.groupAgentsBy}
+      title={t.groupAgentsByTitle}
+      icon={<Layers size={12} aria-hidden className="shrink-0 text-gray-400" />}
+      // Raw value: a stale stored grouping shows the placeholder and Project stays pickable
+      value={grouping}
+      placeholder={t.groupModes[GROUP_MODES[0]]}
+      onChange={onGrouping}
+      options={GROUP_MODES.map((mode) => ({ value: mode, label: t.groupModes[mode] }))}
+    />
   );
 };
 
