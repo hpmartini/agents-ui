@@ -98,7 +98,7 @@ function Pills({ value, onChange, options, label, disabled, className = '', size
                 }, type: "button", role: "radio", 
                 // On the tab stop, so <label htmlFor={id}> reaches the checked pill
                 id: i === stop ? id : undefined, "aria-label": o.label, "aria-checked": on, tabIndex: i === stop ? 0 : -1, disabled: disabled || o.disabled, title: o.hint, onClick: () => pick(i), onKeyDown: (e) => onKeyDown(e, i), className: `${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${on
-                    ? 'bg-sel border-blue-300 text-white'
+                    ? `bg-sel ${invalid ? 'border-red-400' : 'border-blue-300'} text-white`
                     : `${invalid ? 'border-red-400' : 'border-gray-700'} text-gray-300 hover:text-white hover:bg-gray-800`}`, children: o.label }, o.value));
         }) }));
 }
@@ -283,7 +283,7 @@ function Menu({ value, onChange, options, label, disabled, placeholder = '', cla
                         e.stopPropagation();
                         openMenu();
                     }
-                }, className: `flex items-center gap-1.5 min-w-0 max-w-full bg-gray-850 border ${invalid ? 'border-red-400' : 'border-gray-700'} rounded text-gray-200 text-left hover:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed ${triggerSize} ${FOCUS} ${className}`, children: [icon, _jsx("span", { id: `${uid}-value`, className: `flex-1 min-w-0 truncate ${current ? '' : 'text-gray-400'}`, children: current?.label ?? placeholder }), _jsx(Chevron, {})] }), open && !disabled && (_jsxs("div", { ref: popupRef, style: {
+                }, className: `flex items-center gap-1.5 min-w-0 max-w-full bg-gray-850 border ${invalid ? 'border-red-400' : 'border-gray-700 hover:border-gray-600'} rounded text-gray-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${triggerSize} ${FOCUS} ${className}`, children: [icon, _jsx("span", { id: `${uid}-value`, className: `flex-1 min-w-0 truncate ${current ? '' : 'text-gray-400'}`, children: current?.label ?? placeholder }), _jsx(Chevron, {})] }), open && !disabled && (_jsxs("div", { ref: popupRef, style: {
                     position: 'fixed',
                     left: place?.left ?? 0,
                     top: place?.top ?? 0,
