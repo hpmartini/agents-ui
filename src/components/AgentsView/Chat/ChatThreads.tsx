@@ -52,6 +52,9 @@ export function useChatThreads(session: string | null | undefined) {
   const [status, setStatus] = useState<ThreadsStatus>('loading');
   // no orchestrator: nothing to poll for
   const noThreads = useRef(false);
+  // the session shown now: an answer for the one before (tab switch) is dropped
+  const current = useRef(session);
+  current.current = session;
   const load = useCallback(
     (quiet = false) => {
       if (!api || !session || noThreads.current) return;
@@ -59,12 +62,13 @@ export function useChatThreads(session: string | null | undefined) {
       api
         .fetchThreads(session)
         .then((l) => {
+          if (current.current !== session) return;
           noThreads.current = !l.orchestrator;
           setList(l);
           setStatus('ready');
         })
         // the last list stays known: the panel shows the error and recovers on the next poll
-        .catch(() => setStatus('error'));
+        .catch(() => current.current === session && setStatus('error'));
     },
     [api, session]
   );
@@ -94,7 +98,7 @@ export function useChatThreads(session: string | null | undefined) {
     async (body: Parameters<NonNullable<typeof api>['createThread']>[1]) => {
       if (!api || !session) throw new Error('no threads');
       const thread = await api.createThread(session, body);
-      put(thread);
+      if (current.current === session) put(thread);
       return thread;
     },
     [api, session, put]
@@ -105,7 +109,8 @@ export function useChatThreads(session: string | null | undefined) {
       patch: { closed?: boolean; readAt?: number; command?: string; cancelCommand?: boolean }
     ) => {
       if (!api || !session) return;
-      put(await api.updateThread(session, id, patch));
+      const thread = await api.updateThread(session, id, patch);
+      if (current.current === session) put(thread);
     },
     [api, session, put]
   );
