@@ -68,7 +68,8 @@ describe('thread state per session', () => {
     const { unmount } = renderWithAgents(<Pane session="orch-a" testId="p" />, { transport });
     await waitFor(() => expect(screen.getByTestId('p').textContent).toBe('t-orch-a'));
     unmount();
-    renderWithAgents(<Pane session="orch-b" testId="p" />, { transport });
-    await waitFor(() => expect(screen.getByTestId('p').textContent).toBe('t-orch-b'));
+    renderWithAgents(<Pane session="orch-a" testId="p" />, { transport });
+    await waitFor(() => expect(screen.getByTestId('p').textContent).toBe('t-orch-a'));
+    expect(transport.threads?.fetchThreads).toHaveBeenLastCalledWith('orch-a');
   });
 });
