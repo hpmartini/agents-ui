@@ -4,7 +4,7 @@ import { X, ArrowRight, RefreshCw, Copy, ExternalLink, Maximize2, Minimize2 } fr
 import type { AgentSession, AgentLogs } from '../../types';
 import { useHost, useTransport } from '../../host';
 import { useLabels } from '../../labels';
-import { extractNumberedChoices } from '../../utils/agentInput';
+import { extractNumberedChoices, screenPrompt } from '../../utils/agentInput';
 import { renderTerminalScreen } from '../../utils/terminalScreen';
 import { useDialogA11y } from '../CommandPalette/useDialogA11y';
 import { appOriginLabel, sessionHarness, stateGlyph } from '../../utils/agentSessions';
@@ -107,7 +107,9 @@ export const PeekPanel: React.FC<PeekPanelProps> = ({ session, onClose, onAttach
     outputRef.current?.scrollTo({ top: outputRef.current.scrollHeight });
   }, [logs, screen, expanded]);
 
-  const choices = canReply && logs?.source === 'logs' ? extractNumberedChoices(screen) : [];
+  // only a dialog's options: a numbered list in an answer or the input's ghost text "❯ 1." is none
+  const prompt = canReply && logs?.source === 'logs' ? screenPrompt(screen) : null;
+  const choices = prompt ? extractNumberedChoices(prompt) : [];
 
   const send = async (text: string) => {
     if (!text.trim() || sending) return;

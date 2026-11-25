@@ -74,6 +74,22 @@ describe('PeekPanel output (#178)', () => {
     await waitFor(() => expect(onReply).toHaveBeenCalledWith('3'));
   });
 
+  it('an idle input line with a suggestion "❯ 1. …" offers no choices (bug D)', async () => {
+    fetchAgentLogs.mockResolvedValue(rawLogs('agentDialogs/claude-idle-suggestion.txt'));
+    const onReply = mount();
+    await waitFor(
+      () =>
+        expect(document.querySelector('[data-peek-screen]')?.textContent).toContain(
+          'Drei Wege'
+        ),
+      { timeout: 5000 }
+    );
+    expect(screen.queryByRole('button', { name: /Code-Aufgaben/ })).toBeNull();
+    fireEvent.keyDown(screen.getByLabelText('Reply to session'), { key: '1' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(onReply).not.toHaveBeenCalled();
+  });
+
   it('AC-4: large view opens as modal with output and reply, Esc returns to the panel', async () => {
     fetchAgentLogs.mockResolvedValue(rawLogs('claude-logs-question.txt'));
     const onReply = mount();
