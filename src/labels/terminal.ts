@@ -216,6 +216,8 @@ export interface TerminalLabels {
   undoTidyTitle: string;
   resizeThreads: string;
   threadLog: (name: string) => string;
+  /** Button over a log scrolled up while new content came in */
+  newMessages: string;
   loadingThreadHistory: string;
 
   // ChatPane
@@ -532,6 +534,7 @@ export const terminalEn: TerminalLabels = {
   undoTidyTitle: 'Restore the threads as they were before the last tidy-up',
   resizeThreads: 'Resize threads panel',
   threadLog: (name) => `Thread ${name}`,
+  newMessages: 'New messages',
   loadingThreadHistory: 'Loading earlier messages of this thread…',
 
   // ChatPane
@@ -857,6 +860,7 @@ export const terminalDe: TerminalLabels = {
   undoTidyTitle: 'Threads wiederherstellen wie vor dem letzten Aufräumen',
   resizeThreads: 'Breite des Thread-Panels ändern',
   threadLog: (name) => `Thread ${name}`,
+  newMessages: 'Neue Nachrichten',
   loadingThreadHistory: 'Frühere Nachrichten dieses Threads werden geladen…',
 
   // ChatPane

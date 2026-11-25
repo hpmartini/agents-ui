@@ -79,6 +79,7 @@ import {
   unreadCount,
 } from '../../../utils/chatThreads';
 import { clampWidth, ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
+import { useFollowLog } from '../../../hooks/useFollowLog';
 import { ChatActivity } from './ChatActivity';
 import { ChatStatusLine } from './ChatStatusLine';
 import { QuestionCard } from './QuestionCard';
@@ -293,6 +294,24 @@ interface ChatPaneProps {
   meta?: React.ReactNode;
 }
 
+/** Over the bottom of a log scrolled up while new content came in: back to the end, following again */
+const NewMessages: React.FC<{ onClick: () => void }> = ({ onClick }) => {
+  const t = useLabels().terminal;
+  return (
+    // zero height: the log above keeps its size, so the reader's place does not move
+    <div className="relative h-0 shrink-0">
+      <button
+        type="button"
+        onClick={onClick}
+        className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-blue-400/40 bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-lg hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-blue-300"
+      >
+        <span aria-hidden>↓ </span>
+        {t.newMessages}
+      </button>
+    </div>
+  );
+};
+
 /**
  * UI view of an agent pane (#189): renders the agent's transcript and types into the pane's
  * terminal. The terminal process is the agent; this view never starts or stops a process.
@@ -329,8 +348,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [openError, setOpenError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const stickToBottom = useRef(true);
-  const lastScrollTop = useRef(0);
+  const mainLog = useFollowLog(listRef, contentRef);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const connected = usePaneConnected(pane.id);
   const harness = sessionHarness(pane);
@@ -359,28 +377,18 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     if (!chatId || !chat) return;
     return chat.subscribeToChat(chatId, {
       onOpen: () => {
-        stickToBottom.current = true;
+        mainLog.toEnd();
         dispatch({ type: 'reset' });
       },
       onEvent: (event) => dispatch({ type: 'event', event }),
       onGone: () => setGeneration((g) => g + 1),
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toEnd only reads refs
   }, [chat, chatId]);
 
-  // Follow the stream unless the user scrolled up to read. Message heights settle late
-  // (content-visibility, markdown, images), so every size change re-pins to the bottom.
-  const pinBottom = useCallback(() => {
-    const el = listRef.current;
-    if (el && stickToBottom.current) {
-      el.scrollTop = el.scrollHeight;
-      lastScrollTop.current = el.scrollTop;
-    }
-  }, []);
   // Older turns load page by page near the top; the view keeps its place while they go in front
   const [loadingOlder, setLoadingOlder] = useState(false);
   const loadingRef = useRef(false);
-  // The message at the top of the view and its offset: put back there once the page is in
-  const restoreScroll = useRef<{ key: string; offset: number } | null>(null);
   const loadOlder = useCallback(() => {
     const older = state.older;
     const el = listRef.current;
@@ -389,61 +397,24 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     setLoadingOlder(true);
     chat
       .fetchChatHistory(chatId, older.before)
-      .then((page) => {
-        const top = el.getBoundingClientRect().top;
-        const first = [...el.querySelectorAll<HTMLElement>('[data-chat-key]')].find(
-          (m) => m.getBoundingClientRect().bottom > top
-        );
-        if (first?.dataset.chatKey)
-          restoreScroll.current = {
-            key: first.dataset.chatKey,
-            offset: first.getBoundingClientRect().top - top,
-          };
-        dispatch({ type: 'older', page });
-      })
+      // the log keeps the reader's first message in place while the page goes in front
+      .then((page) => dispatch({ type: 'older', page }))
       .catch((e: Error) => setError(e.message))
       .finally(() => {
         loadingRef.current = false;
         setLoadingOlder(false);
       });
   }, [chat, chatId, state.older]);
-  useLayoutEffect(() => {
-    const el = listRef.current;
-    const saved = restoreScroll.current;
-    if (!el || !saved) return;
-    restoreScroll.current = null;
-    const anchor = el.querySelector<HTMLElement>(
-      `[data-chat-key="${globalThis.CSS.escape(saved.key)}"]`
-    );
-    if (!anchor) return;
-    // by the element, not the height: estimated heights (content-visibility) settle later
-    el.scrollTop +=
-      anchor.getBoundingClientRect().top - el.getBoundingClientRect().top - saved.offset;
-    lastScrollTop.current = el.scrollTop;
-  }, [state.messages]);
   // A short tail that does not fill the view cannot be scrolled: load on until it does
   useEffect(() => {
     const el = listRef.current;
     if (el && el.scrollHeight <= el.clientHeight + LOAD_OLDER_PX) loadOlder();
   }, [state.older, loadOlder]);
-  useLayoutEffect(pinBottom, [state.messages, showSteps, pinBottom]);
-  useEffect(() => {
-    const content = contentRef.current;
-    const list = listRef.current;
-    if (!content || !list) return;
-    const observer = new ResizeObserver(pinBottom);
-    observer.observe(content);
-    // The list shrinks too when the status line or work panel below it appears late
-    observer.observe(list);
-    return () => observer.disconnect();
-  }, [pinBottom]);
+  useLayoutEffect(mainLog.keep, [state.messages, showSteps, mainLog.keep]);
   // Back on a hidden tab: jump to the newest messages
   useEffect(() => {
-    if (active) {
-      stickToBottom.current = true;
-      pinBottom();
-    }
-  }, [active, pinBottom]);
+    if (active) mainLog.toEnd();
+  }, [active, mainLog.toEnd]);
 
   const history = useMemo(
     () =>
@@ -501,7 +472,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const jumpTo = (key: string) => {
     const target = listRef.current?.querySelector<HTMLElement>(`[data-chat-key="${key}"]`);
     if (!target) return;
-    stickToBottom.current = false;
+    mainLog.release();
     target.scrollIntoView({ block: 'start' });
     // content-visibility renders the skipped messages above late: settle, then aim again
     requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
@@ -611,7 +582,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         setText('');
         setImages([]);
         setQuote(null);
-        stickToBottom.current = true;
+        mainLog.toEnd();
       }
     } finally {
       setSending(false);
@@ -829,26 +800,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     [openThread?.tag]
   );
   const threadListRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const el = threadListRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-    // showThreads: a reopened panel mounts a new log, which starts at the top
-  }, [threadItems, openId, showThreads]);
-  // a log at its newest message stays there when the pane or the thread input resizes it
-  useEffect(() => {
-    const el = threadListRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    // judged with the height before this resize: scroll events fired by the shrink itself
-    // would otherwise read as the user scrolling away from the end
-    let height = el.clientHeight;
-    const observer = new ResizeObserver(() => {
-      const atEnd = el.scrollHeight - el.scrollTop - height < 8;
-      height = el.clientHeight;
-      if (atEnd) el.scrollTop = el.scrollHeight;
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [openId, showThreads, threadsFull]);
+  const threadContentRef = useRef<HTMLDivElement>(null);
+  // another thread or a reopened panel (a new log element) starts at its end
+  const threadLog = useFollowLog(threadListRef, threadContentRef, `${openId}:${showThreads}`);
+  useLayoutEffect(threadLog.keep, [threadItems, showSteps, threadLog.keep]);
   useEffect(() => {
     if (quote) inputRef.current?.focus();
   }, [quote]);
@@ -1094,15 +1049,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             ref={listRef}
             role="log"
             aria-label={t.chatLog(pane.name)}
-            className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2"
+            className="flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] px-3 sm:px-4 py-2"
+            onWheel={mainLog.onWheel}
             onScroll={(e) => {
-              const el = e.currentTarget;
-              const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-              // Only a scroll up by the user lets go; layout shifts never do
-              if (nearBottom) stickToBottom.current = true;
-              else if (el.scrollTop < lastScrollTop.current - 2) stickToBottom.current = false;
-              lastScrollTop.current = el.scrollTop;
-              if (el.scrollTop < LOAD_OLDER_PX) loadOlder();
+              mainLog.onScroll();
+              if (e.currentTarget.scrollTop < LOAD_OLDER_PX) loadOlder();
             }}
           >
             <div ref={contentRef}>
@@ -1175,6 +1126,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               </ChatFileContext.Provider>
             </div>
           </div>
+          {mainLog.unseen && <NewMessages onClick={mainLog.toEnd} />}
 
           <div className="shrink-0 border-t border-gray-800 p-2">
             {recap && (
@@ -1370,55 +1322,60 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                     <>
                       <div
                         ref={threadListRef}
-                        className="min-h-20 flex-1 overflow-y-auto px-3 py-1"
+                        className="min-h-20 flex-1 overflow-y-auto [overflow-anchor:none] px-3 py-1"
+                        onScroll={threadLog.onScroll}
+                        onWheel={threadLog.onWheel}
                       >
-                        {needsOlder && (
-                          <div role="status" className="py-2 text-center text-xs text-gray-500">
-                            {t.loadingThreadHistory}
-                          </div>
-                        )}
-                        {parent && (
-                          <div className="opacity-70" data-thread-parent>
-                            <ChatItemView
-                              item={parent}
-                              showSteps={false}
-                              harness={harnessName}
-                              model={state.model}
-                            />
-                          </div>
-                        )}
-                        <ChatFileContext.Provider value={pane.cwd}>
-                          <ChatRepliesContext.Provider value={threadReplies}>
-                            {threadItems.map((item) => (
+                        <div ref={threadContentRef}>
+                          {needsOlder && (
+                            <div role="status" className="py-2 text-center text-xs text-gray-500">
+                              {t.loadingThreadHistory}
+                            </div>
+                          )}
+                          {parent && (
+                            <div className="opacity-70" data-thread-parent>
                               <ChatItemView
-                                key={item.key}
-                                item={item}
-                                showSteps={showSteps}
-                                live={isLive(item)}
+                                item={parent}
+                                showSteps={false}
                                 harness={harnessName}
                                 model={state.model}
                               />
-                            ))}
-                            {workingCard && thread && lastThread === thread.id && (
-                              <ChatItemView
-                                item={null}
-                                showSteps={showSteps}
-                                live
-                                harness={harnessName}
-                                model={state.model}
-                              />
-                            )}
-                          </ChatRepliesContext.Provider>
-                        </ChatFileContext.Provider>
-                        {thread && threadItems.length === 0 && !parent && (
-                          <p className="py-3 text-xs text-gray-500">
-                            {t.firstThreadMessage(thread.tag)}
-                          </p>
-                        )}
-                        {!thread && (
-                          <p className="py-3 text-xs text-gray-500">{t.threadWithoutTaskHint}</p>
-                        )}
+                            </div>
+                          )}
+                          <ChatFileContext.Provider value={pane.cwd}>
+                            <ChatRepliesContext.Provider value={threadReplies}>
+                              {threadItems.map((item) => (
+                                <ChatItemView
+                                  key={item.key}
+                                  item={item}
+                                  showSteps={showSteps}
+                                  live={isLive(item)}
+                                  harness={harnessName}
+                                  model={state.model}
+                                />
+                              ))}
+                              {workingCard && thread && lastThread === thread.id && (
+                                <ChatItemView
+                                  item={null}
+                                  showSteps={showSteps}
+                                  live
+                                  harness={harnessName}
+                                  model={state.model}
+                                />
+                              )}
+                            </ChatRepliesContext.Provider>
+                          </ChatFileContext.Provider>
+                          {thread && threadItems.length === 0 && !parent && (
+                            <p className="py-3 text-xs text-gray-500">
+                              {t.firstThreadMessage(thread.tag)}
+                            </p>
+                          )}
+                          {!thread && (
+                            <p className="py-3 text-xs text-gray-500">{t.threadWithoutTaskHint}</p>
+                          )}
+                        </div>
                       </div>
+                      {threadLog.unseen && <NewMessages onClick={threadLog.toEnd} />}
                       {thread?.binding && (
                         <div className="shrink-0 px-2 pb-1 text-[11px] text-gray-500">
                           <span className="truncate">{t.boundTo(thread.repo ?? null)}</span>
