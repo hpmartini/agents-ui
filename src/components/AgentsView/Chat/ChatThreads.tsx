@@ -872,10 +872,12 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
           aria-haspopup="menu"
           aria-expanded={menu}
           disabled={status !== 'ready'}
-          className={`${smallBtn} disabled:opacity-50`}
+          title={t.newThread}
+          // the only label that may shrink: × and maximise stay inside a 300 px panel
+          className={`${smallBtn} min-w-0 disabled:opacity-50`}
         >
-          <Plus size={12} aria-hidden />
-          {t.newThread}
+          <Plus size={12} aria-hidden className="shrink-0" />
+          <span className="truncate">{t.newThread}</span>
         </button>
         {maximized && (
           <button
