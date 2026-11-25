@@ -349,6 +349,25 @@ describe('Choice hardening', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'before' }));
   });
 
+  it('the root never shrinks in a crowded flex row; pills may wrap, capped at the row width', () => {
+    const { container } = render(
+      <div className="flex">
+        <Choice label="Few" value="a" onChange={() => {}} options={opts('A', 'B')} />
+        <Choice label="More" value="a" onChange={() => {}} options={opts('A', 'B', 'C', 'D')} />
+        <Choice
+          label="Many"
+          value="a"
+          onChange={() => {}}
+          options={opts(...'ABCDEFGHI'.split(''))}
+        />
+      </div>
+    );
+    const roots = [...container.querySelectorAll('[data-choice]')];
+    expect(roots.map((r) => r.getAttribute('data-choice'))).toEqual(['pills', 'menu', 'search']);
+    for (const r of roots) expect(r).toHaveClass('shrink-0', 'max-w-full');
+    expect(roots[0]).toHaveClass('flex-wrap');
+  });
+
   it('invalid sets aria-invalid and the error border on the pill group and the trigger', () => {
     const { rerender } = render(
       <Choice label="P" value="x" onChange={() => {}} options={opts('A', 'B')} invalid />
