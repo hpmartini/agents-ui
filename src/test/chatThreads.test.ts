@@ -117,6 +117,26 @@ const steps = (ts?: number): ChatMessage => ({
   ...(ts ? { ts } : {}),
 });
 
+describe('a renamed thread keeps its messages (routing by tag, agents and turn, never the name)', () => {
+  it('tagged, linked-worker and turn messages still go to it under its new name', () => {
+    const renamed = { ...shop, name: { project: 'Shop', task: 'Payment page' } };
+    const messages = [
+      user('[Thread: Shop · Checkout]\nhow far?', min(1)),
+      answer('Form is done.', min(2)),
+      worker('omp-aaaa0000-0000-0000-0000-000000000001', 'tests green', min(3)),
+      answer('[Thread: Shop · Checkout]\nMerging.', min(4)),
+      user('[Thread: Shop · Checkout]\nnew message with the old tag', min(5)),
+    ];
+    const before = route(messages);
+    const after = route(messages, [renamed, weather]);
+    expect(after.byThread.get('t1')).toHaveLength(5);
+    expect(after.byThread.get('t1')?.map((i) => i.key)).toEqual(
+      before.byThread.get('t1')?.map((i) => i.key)
+    );
+    expect(after.main.filter((i) => i.kind !== 'thread')).toHaveLength(0);
+  });
+});
+
 describe('an answer of tool steps only continues the turn it belongs to', () => {
   it('joins the thread of the item right before it (prompt or worker message)', () => {
     const r = route([

@@ -197,6 +197,9 @@ export interface TerminalLabels {
   noThreadsHint: string;
   pickThread: string;
   closeThread: string;
+  renameThread: string;
+  threadActions: string;
+  threadNameField: string;
   closedThreads: (count: number) => string;
   reopenThread: string;
   replyInThread: string;
@@ -508,6 +511,9 @@ export const terminalEn: TerminalLabels = {
     'Open a thread from an answer, from Instruct on a status card, or bind a new one to a task.',
   pickThread: 'Pick a thread to read it here.',
   closeThread: 'Close thread',
+  renameThread: 'Rename',
+  threadActions: 'Thread actions',
+  threadNameField: 'Thread name (Enter saves, Esc cancels)',
   closedThreads: (count) => `Closed (${count})`,
   reopenThread: 'Reopen',
   replyInThread: 'Reply in thread',
@@ -829,6 +835,9 @@ export const terminalDe: TerminalLabels = {
     'Thread an einer Antwort öffnen, über Instruct auf einer Status-Karte oder neu an eine Aufgabe binden.',
   pickThread: 'Thread wählen, um ihn hier zu lesen.',
   closeThread: 'Thread schließen',
+  renameThread: 'Umbenennen',
+  threadActions: 'Thread-Aktionen',
+  threadNameField: 'Thread-Name (Enter speichert, Esc bricht ab)',
   closedThreads: (count) => `Geschlossen (${count})`,
   reopenThread: 'Wieder öffnen',
   replyInThread: 'Im Thread antworten',

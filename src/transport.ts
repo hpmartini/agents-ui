@@ -354,7 +354,8 @@ export interface AgentsTransport {
     updateThread: (
       session: string,
       id: string,
-      patch: { closed?: boolean; readAt?: number }
+      /** `name`: display name only; the thread keeps its id and tag (routing) */
+      patch: { closed?: boolean; readAt?: number; name?: { project: string; task: string } }
     ) => Promise<ChatThread>;
   };
   /** Opening a clicked file path on the agents' machine; resolves with what the server did */

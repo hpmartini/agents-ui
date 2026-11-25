@@ -7,6 +7,8 @@ import {
   Loader2,
   Expand,
   MessagesSquare,
+  MoreHorizontal,
+  Pencil,
   Shrink,
   PanelLeft,
   Plus,
@@ -100,7 +102,7 @@ export function useChatThreads(session: string | null | undefined) {
     [api, session, put]
   );
   const update = useCallback(
-    async (id: string, patch: { closed?: boolean; readAt?: number }) => {
+    async (id: string, patch: Parameters<NonNullable<typeof api>['updateThread']>[2]) => {
       if (!api || !session) return;
       put(await api.updateThread(session, id, patch));
     },
@@ -146,6 +148,125 @@ const lastTime = (thread: ChatThread, items: ChatItem[]) => {
 };
 
 const threadName = (t: ChatThread) => `${t.name.project} · ${t.name.task}`;
+
+type ThreadNameParts = ChatThread['name'];
+
+/**
+ * A typed thread name: "Project · Task" sets both parts, a name without " · " is the task and
+ * keeps the project. null for an empty name (cancel)
+ */
+export function parseThreadName(text: string, was: ThreadNameParts): ThreadNameParts | null {
+  const value = text.replace(/\s+/g, ' ').trim();
+  if (!value) return null;
+  const at = value.indexOf(' · ');
+  const project = at > 0 ? value.slice(0, at).trim() : '';
+  const task = at > 0 ? value.slice(at + 3).trim() : '';
+  return project && task ? { project, task } : { project: was.project, task: value };
+}
+
+/** Inline name field: Enter or leaving the field saves, Esc cancels; null = nothing to save */
+const RenameField: React.FC<{
+  thread: ChatThread;
+  onDone: (name: ThreadNameParts | null) => void;
+}> = ({ thread, onDone }) => {
+  const t = useLabels().terminal;
+  // Enter and Esc unmount the field, whose blur must not save a second time
+  const done = useRef(false);
+  const finish = (text: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    const name = text === null ? null : parseThreadName(text, thread.name);
+    const same = name?.project === thread.name.project && name?.task === thread.name.task;
+    onDone(same ? null : name);
+  };
+  return (
+    <input
+      autoFocus
+      defaultValue={threadName(thread)}
+      aria-label={t.threadNameField}
+      title={t.threadNameField}
+      data-thread-rename={thread.id}
+      onFocus={(e) => e.currentTarget.select()}
+      onKeyDown={(e) => {
+        if (e.nativeEvent.isComposing) return;
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          finish(e.currentTarget.value);
+        } else if (e.key === 'Escape') {
+          // taken: the maximised panel and the drawer stay
+          e.preventDefault();
+          finish(null);
+        }
+      }}
+      onBlur={(e) => finish(e.currentTarget.value)}
+      className="min-w-0 flex-1 rounded border border-blue-400/60 bg-gray-900 px-1.5 py-0.5 text-sm text-gray-100 outline-none"
+    />
+  );
+};
+
+/** "…" beside a thread name: its actions (Rename) */
+const ThreadMenu: React.FC<{ onRename: () => void; className?: string }> = ({
+  onRename,
+  className = 'relative',
+}) => {
+  const t = useLabels().terminal;
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    box.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    const away = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', away);
+    return () => document.removeEventListener('mousedown', away);
+  }, [open]);
+  return (
+    <span
+      ref={box}
+      className={`shrink-0 ${className}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && open) {
+          e.preventDefault();
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t.threadActions}
+        title={t.threadActions}
+        className={`${smallBtn} bg-gray-950 px-1`}
+      >
+        <MoreHorizontal size={12} aria-hidden />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label={t.threadActions}
+          className="absolute right-0 top-full z-30 mt-1 w-40 rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-xl shadow-black/40"
+        >
+          <button
+            role="menuitem"
+            type="button"
+            tabIndex={-1}
+            onClick={() => {
+              setOpen(false);
+              onRename();
+            }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-blue-500/20 focus:bg-blue-500/20 focus:outline-none"
+          >
+            <Pencil size={12} aria-hidden />
+            {t.renameThread}
+          </button>
+        </div>
+      )}
+    </span>
+  );
+};
 
 /** The quote a reply will carry, above a composer */
 export const QuoteChip: React.FC<{ quote: ChatQuote; onRemove: () => void }> = ({
@@ -464,15 +585,25 @@ const ThreadListRow: React.FC<{
   items: ChatItem[];
   open: boolean;
   onOpen: () => void;
-}> = ({ thread, items, open, onOpen }) => {
+  /** The name field instead of the row */
+  renaming: boolean;
+  onRename: (name: ThreadNameParts | null | 'start') => void;
+}> = ({ thread, items, open, onOpen, renaming, onRename }) => {
   const t = useLabels().terminal;
   const unread = unreadCount(items, thread.readAt);
   const first = items.map((i) => itemPreview(i, thread.tag)).find(Boolean);
+  if (renaming)
+    return (
+      <li className="flex border-l-2 border-blue-400 px-3 py-1.5">
+        <RenameField thread={thread} onDone={onRename} />
+      </li>
+    );
   return (
-    <li>
+    <li className="group relative">
       <button
         type="button"
-        onClick={onOpen}
+        // the second click of a double-click (rename) must not close the thread again
+        onClick={(e) => e.detail < 2 && onOpen()}
         aria-current={open || undefined}
         data-thread-row={thread.id}
         className={`block w-full border-l-2 px-3 py-2 text-left ${focusRing} ${
@@ -481,6 +612,7 @@ const ThreadListRow: React.FC<{
       >
         <span className="flex items-center gap-1.5 text-sm">
           <span
+            onDoubleClick={() => onRename('start')}
             className={`min-w-0 truncate ${unread ? 'font-semibold text-white' : 'text-gray-200'}`}
           >
             {threadName(thread)}
@@ -508,6 +640,10 @@ const ThreadListRow: React.FC<{
         )}
         {first && <span className="mt-0.5 block truncate text-xs text-gray-500">{first}</span>}
       </button>
+      <ThreadMenu
+        onRename={() => onRename('start')}
+        className="absolute right-1 top-1.5 opacity-0 focus-within:opacity-100 group-hover:opacity-100"
+      />
     </li>
   );
 };
@@ -524,6 +660,8 @@ export interface ThreadsPanelProps {
   onNewTask: (task: { project: string; task: string }) => void;
   onNewFree: () => void;
   onClose: (id: string, closed: boolean) => void;
+  /** New display name of a thread (its tag, and so its routing, stays) */
+  onRename: (id: string, name: ThreadNameParts) => void;
   /** Messages and composer of the open thread (null: the draft) */
   renderThread: (thread: ChatThread | null) => React.ReactNode;
   /** Over the whole pane, the main chat hidden */
@@ -558,6 +696,7 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
   onNewTask,
   onNewFree,
   onClose,
+  onRename,
   renderThread,
   maximized,
   onMaximize,
@@ -565,11 +704,19 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
 }) => {
   const t = useLabels().terminal;
   const [menu, setMenu] = useState(false);
+  // `list:<id>` or `header:<id>`: where the name field is open
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const rename = (where: string, id: string) => (name: ThreadNameParts | null | 'start') => {
+    if (name === 'start') return setRenaming(`${where}:${id}`);
+    setRenaming(null);
+    if (name) onRename(id, name);
+  };
   const [sidebarPref, setSidebarPref] = useState(() => {
     try {
-      return localStorage.getItem(THREADS_SIDEBAR_KEY) === '1';
+      // on by default: only a stored "off" hides the list on the left
+      return localStorage.getItem(THREADS_SIDEBAR_KEY) !== '0';
     } catch {
-      return false;
+      return true;
     }
   });
   const toggleSidebar = () => {
@@ -743,6 +890,8 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
                   items={byThread.get(x.id) ?? []}
                   open={x.id === openId}
                   onOpen={() => onOpen(x.id === openId ? null : x.id)}
+                  renaming={renaming === `list:${x.id}`}
+                  onRename={rename('list', x.id)}
                 />
               ))}
             </ul>
@@ -794,10 +943,18 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
             className="flex min-h-0 min-w-0 flex-1 flex-col"
           >
             <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-gray-800 px-2 text-xs">
-              <span className="min-w-0 truncate font-medium text-gray-200">
-                {open ? threadName(open) : t.newThread}
-              </span>
+              {open && renaming === `header:${open.id}` ? (
+                <RenameField thread={open} onDone={rename('header', open.id)} />
+              ) : (
+                <span
+                  onDoubleClick={open ? () => setRenaming(`header:${open.id}`) : undefined}
+                  className="min-w-0 truncate font-medium text-gray-200"
+                >
+                  {open ? threadName(open) : t.newThread}
+                </span>
+              )}
               <span className="flex-1" />
+              {open && <ThreadMenu onRename={() => setRenaming(`header:${open.id}`)} />}
               {open && !open.closed && (
                 <button type="button" onClick={() => onClose(open.id, true)} className={smallBtn}>
                   {t.closeThread}
