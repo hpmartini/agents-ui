@@ -82,7 +82,7 @@ export const ChoiceShowcase: React.FC = () => {
             />
           </div>
         </Row>
-        <Row title="Crowded toolbar: Choices keep their size, the search field gives way">
+        <Row title="Crowded nowrap toolbar: Choices keep their size, the search field gives way, the row scrolls">
           <div className="flex items-center gap-2 overflow-x-auto border border-dashed border-gray-700 p-2">
             <input
               aria-label="Search"
