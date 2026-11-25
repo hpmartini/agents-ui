@@ -122,6 +122,11 @@ export interface ChatHandlers {
   onOpen: () => void;
   onEvent: (event: unknown) => void;
   onGone: () => void;
+  /**
+   * The stream dropped (e.g. the server restarts): until the next `onOpen` the view may be gone,
+   * so nothing polls its id. Optional: a host without it never pauses
+   */
+  onClose?: () => void;
 }
 
 /** A page of older transcript events; `before` is the cursor of the next older page */

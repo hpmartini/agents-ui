@@ -41,8 +41,11 @@ export function useFollowLog(
   const wheelEnd = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // the log had no height (hidden): the browser may have dropped its offset
   const hidden = useRef(false);
-  // a reset whose history comes again: the anchored row (by its key) is waited for
+  // a reset whose history comes again: the anchored row (by its key) is waited for. Only the
+  // reader's input after it began decides meanwhile: a wheel just before is no scroll of the reset
   const replaying = useRef(false);
+  const replayAt = useRef(0);
+  const readerSinceReplay = () => reader.current > replayAt.current;
 
   const record = useCallback(
     (el: HTMLElement) => {
@@ -155,7 +158,7 @@ export function useFollowLog(
       judge(el);
       // still in the zone: the end is taken again once the wheel is done
       if (follow.current) return;
-    } else if (replaying.current && !byReader()) {
+    } else if (replaying.current && !readerSinceReplay()) {
       // the reset emptied the log for a moment: no decision until its rows are back
       return;
     } else if (el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_PX) {
@@ -169,7 +172,7 @@ export function useFollowLog(
       // only the reader's scroll up out of the zone lets go; layout shifts never move the top up
       follow.current = false;
     }
-    if (byReader()) replaying.current = false;
+    if (byReader() && (!replaying.current || readerSinceReplay())) replaying.current = false;
     record(el);
   }, [listRef, record, judge, shown]);
 
@@ -210,6 +213,7 @@ export function useFollowLog(
   const replayEnd = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const replay = useCallback(() => {
     replaying.current = !follow.current;
+    replayAt.current = performance.now();
     clearTimeout(replayEnd.current);
     // a row that never comes back (it was on an older page) holds the place no longer than this
     replayEnd.current = setTimeout(() => (replaying.current = false), REPLAY_MS);

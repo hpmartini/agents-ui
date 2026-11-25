@@ -8,6 +8,7 @@ import { quoteHeader, threadTag, type ChatThread } from '../utils/chatThreads';
 import {
   ChatItemView,
   ChatRepliesContext,
+  ChatTagsContext,
   type ChatReplies,
 } from '../components/AgentsView/Chat/ChatMessages';
 import { ThreadsPanel } from '../components/AgentsView/Chat/ChatThreads';
@@ -76,17 +77,19 @@ describe('reply on an answer', () => {
     expect(screen.getByText('Go ahead')).toBeTruthy();
   });
 
-  it('the tag line of an answer is hidden (any thread, main chat too)', () => {
+  it('the tag line of an answer is hidden (any thread of the session, main chat too)', () => {
     const tag = threadTag({ project: 'Shop', task: 'Checkout' });
     renderWithAgents(
-      <ChatRepliesContext.Provider value={{ reply: vi.fn() }}>
-        <ChatItemView
-          item={answerOf(`${tag}\nForm is done.`)}
-          showSteps={false}
-          harness="omp"
-          model={null}
-        />
-      </ChatRepliesContext.Provider>
+      <ChatTagsContext.Provider value={new Set([tag])}>
+        <ChatRepliesContext.Provider value={{ reply: vi.fn() }}>
+          <ChatItemView
+            item={answerOf(`${tag}\nForm is done.`)}
+            showSteps={false}
+            harness="omp"
+            model={null}
+          />
+        </ChatRepliesContext.Provider>
+      </ChatTagsContext.Provider>
     );
     expect(screen.queryByText(tag, { exact: false })).toBeNull();
     expect(screen.getByText('Form is done.')).toBeTruthy();

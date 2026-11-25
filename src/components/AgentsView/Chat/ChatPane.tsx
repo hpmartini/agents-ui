@@ -52,6 +52,7 @@ import {
   ChatIdContext,
   ChatItemView,
   ChatRepliesContext,
+  ChatTagsContext,
   type ChatQuote,
   type ChatReplies,
 } from './ChatMessages';
@@ -382,13 +383,22 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
   // the session the log last opened on: a reopen of the same one replays its history
   const openedFor = useRef<string | null>(null);
+  // the stream is down (server restarting): the view's id may be gone, its status waits
+  const [streamDown, setStreamDown] = useState(false);
   useEffect(() => {
     if (!chatId || !chat) return;
     return chat.subscribeToChat(chatId, {
+      onClose: () => setStreamDown(true),
       onOpen: () => {
-        // a reconnect keeps a scrolled-up place; another session starts at its end
-        if (openedFor.current === sessionId) mainLog.replay();
-        else mainLog.toEnd();
+        setStreamDown(false);
+        // a reconnect keeps a scrolled-up place (main and thread log); another session starts at its end
+        if (openedFor.current === sessionId) {
+          mainLog.replay();
+          threadLog.replay();
+        } else {
+          mainLog.toEnd();
+          threadLog.toEnd();
+        }
         openedFor.current = sessionId ?? null;
         dispatch({ type: 'reset' });
       },
@@ -428,15 +438,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     if (active) mainLog.keep();
   }, [active, mainLog.keep]);
 
+  // every thread's tag (merged and closed ones too): only these are hidden in message text
+  const tags = useMemo(() => new Set(threads.threads.map((x) => x.tag)), [threads.threads]);
   const history = useMemo(
     () =>
       state.messages
         .filter((m): m is Extract<typeof m, { kind: 'user' }> => m.kind === 'user')
         .filter((m) => !agentMessage(m.text))
         // a message moved here from a thread: recalled without its tag (it would route back)
-        .map((m) => splitImages(stripTag(m.text)).text)
+        .map((m) => splitImages(stripTag(m.text, tags)).text)
         .filter(Boolean),
-    [state.messages]
+    [state.messages, tags]
   );
   const turns = useMemo(
     () => state.messages.filter((m) => m.kind === 'result').length,
@@ -809,11 +821,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       threadItems
         .filter((i): i is Extract<ChatItem, { kind: 'user' }> => i.kind === 'user')
         .map((i) => {
-          const text = stripTag(i.text);
+          const text = stripTag(i.text, tags);
           return splitImages(parseQuote(text)?.body ?? text).text;
         })
         .filter(Boolean),
-    [threadItems]
+    [threadItems, tags]
   );
   // The running turn: its answer (or the working card) shows where its last item went
   const lastItem = items.at(-1);
@@ -1488,6 +1500,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               chatId={chatId}
               turns={turns}
               visible={active}
+              paused={streamDown}
               picker={
                 (harness === 'claude' || harness === 'omp') && (
                   <ModelEffortPicker
@@ -1527,5 +1540,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     </div>
   );
   // tool results load their images from this chat
-  return <ChatIdContext.Provider value={chatId}>{view}</ChatIdContext.Provider>;
+  return (
+    <ChatIdContext.Provider value={chatId}>
+      <ChatTagsContext.Provider value={tags}>{view}</ChatTagsContext.Provider>
+    </ChatIdContext.Provider>
+  );
 };

@@ -42,7 +42,7 @@ import {
 import { clampMenuPosition } from '../../../utils/menuPosition';
 import { isMac } from '../../../utils/platform';
 import { ImageAttachments, imageDropHandlers } from '../../ImageAttachments';
-import type { ChatQuote } from './ChatMessages';
+import { ChatTagsContext, type ChatQuote } from './ChatMessages';
 import { ChatComposer } from './ChatComposer';
 
 const focusRing = 'focus-visible:outline-2 focus-visible:outline-blue-400';
@@ -160,11 +160,11 @@ export function useChatThreads(session: string | null | undefined, active = fals
 }
 
 /** What a thread list row shows of an item */
-function itemPreview(item: ChatItem): string {
-  if (item.kind === 'answer') return stripTag(answerText(item));
+function itemPreview(item: ChatItem, tags: ReadonlySet<string>): string {
+  if (item.kind === 'answer') return stripTag(answerText(item), tags);
   if (item.kind !== 'user') return '';
   const sent = agentMessage(item.text);
-  return splitImages(stripTag(sent ? sent.body : item.text)).text;
+  return splitImages(stripTag(sent ? sent.body : item.text, tags)).text;
 }
 
 const lastTime = (thread: ChatThread, items: ChatItem[]) => {
@@ -638,7 +638,8 @@ const ThreadListRow: React.FC<{
 }> = ({ thread, items, open, onOpen, renaming, onRename }) => {
   const t = useLabels().terminal;
   const unread = unreadCount(items, thread.readAt);
-  const first = items.map((i) => itemPreview(i)).find(Boolean);
+  const tags = React.useContext(ChatTagsContext);
+  const first = items.map((i) => itemPreview(i, tags)).find(Boolean);
   if (renaming)
     return (
       <li className="flex border-l-2 border-blue-400 px-3 py-1.5">

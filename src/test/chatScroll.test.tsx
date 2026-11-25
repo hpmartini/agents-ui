@@ -612,4 +612,42 @@ describe('the 40 px zone and coming back (F6, F7)', () => {
     expect(row).not.toBeNull();
     expect(Math.abs(row.getBoundingClientRect().top - before)).toBeLessThanOrEqual(2);
   });
+
+  it('N3: a reconnect keeps a scrolled-up place in the thread log too', async () => {
+    const s = setup();
+    await s.ready();
+    const { list } = await openThreadLog(s);
+    wheelTo(list, 300);
+    const key = firstVisible(list).row.getAttribute('data-chat-key');
+    const before = firstVisible(list).top();
+    s.reopen();
+    // the emptied log: the browser clamps its offset and says so
+    fireEvent.scroll(list);
+    await settle();
+    for (let n = 0; n < 12; n++) s.push(...turn(n, at + n * 1000, T1.tag));
+    await settle();
+    const row = list.querySelector(`[data-chat-key="${key}"]`);
+    expect(row).not.toBeNull();
+    expect(Math.abs(row!.getBoundingClientRect().top - before)).toBeLessThanOrEqual(2);
+    expect(atBottom(list)).toBe(false);
+  });
+
+  it("N3: the browser's reset scroll right after the reader's wheel does not turn on follow", async () => {
+    const s = setup();
+    await s.ready();
+    const { list } = await openMainLog(s);
+    // the reader's wheel moments ago (within its 1.5 s), then the reconnect
+    wheelTo(list, 300);
+    const key = firstVisible(list).row.getAttribute('data-chat-key');
+    const before = firstVisible(list).top();
+    s.reopen();
+    fireEvent.scroll(list);
+    await settle();
+    for (let n = 0; n < 12; n++) s.push(...turn(n, at + n * 1000, null));
+    await settle();
+    const row = list.querySelector(`[data-chat-key="${key}"]`);
+    expect(row).not.toBeNull();
+    expect(Math.abs(row!.getBoundingClientRect().top - before)).toBeLessThanOrEqual(2);
+    expect(atBottom(list)).toBe(false);
+  });
 });

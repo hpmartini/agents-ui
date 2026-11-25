@@ -33,9 +33,11 @@ export const ChatStatusLine: React.FC<{
   chatId: string;
   turns: number;
   visible: boolean;
+  /** The chat's stream is down: its id may be gone with the server, nothing is asked */
+  paused?: boolean;
   /** Model × effort picker of the session, shown under the branch */
   picker?: React.ReactNode;
-}> = ({ chatId, turns, visible, picker }) => {
+}> = ({ chatId, turns, visible, paused = false, picker }) => {
   const [status, setStatus] = useState<ChatStatus | null>(null);
   // the pane, not the viewport, decides the columns: a narrow split pane stacks them
   const [width, setWidth] = useState(0);
@@ -52,7 +54,7 @@ export const ChatStatusLine: React.FC<{
 
   useEffect(() => {
     const fetchStatus = chat?.fetchChatStatus;
-    if (!fetchStatus) return;
+    if (!fetchStatus || paused) return;
     let cancelled = false;
     const load = () =>
       fetchStatus(chatId)
@@ -72,7 +74,7 @@ export const ChatStatusLine: React.FC<{
       cancelled = true;
       stop();
     };
-  }, [chat, chatId, turns, visible]);
+  }, [chat, chatId, turns, visible, paused]);
 
   if (!status) return null;
   const { git, cache, context, limits } = status;

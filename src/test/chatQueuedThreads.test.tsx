@@ -211,28 +211,37 @@ describe('queued prompts go where they belong (AC-14)', () => {
 
   it('F5: a tag that opens a later text of the answer (after tool calls) does not show', async () => {
     const TAG_B = threadTag({ project: 'Demo', task: 'B' });
-    await mount(thread(), [
-      { type: 'devorbit_user', key: 'u-1', text: 'Run two sleeps', ts: at + 10 },
-      {
-        type: 'assistant',
-        message: { id: 'a1', content: [{ type: 'text', text: 'First sleep.' }] },
-      },
-      {
-        type: 'assistant',
-        message: {
-          id: 'a2',
-          content: [{ type: 'tool_use', id: 'x1', name: 'Bash', input: { command: 'sleep 1' } }],
+    const b: ChatThread = {
+      ...thread(),
+      id: 't2',
+      name: { project: 'Demo', task: 'B' },
+      tag: TAG_B,
+    };
+    await mount(
+      [thread(), b],
+      [
+        { type: 'devorbit_user', key: 'u-1', text: 'Run two sleeps', ts: at + 10 },
+        {
+          type: 'assistant',
+          message: { id: 'a1', content: [{ type: 'text', text: 'First sleep.' }] },
         },
-      },
-      {
-        type: 'user',
-        message: { content: [{ type: 'tool_result', tool_use_id: 'x1', content: '' }] },
-      },
-      {
-        type: 'assistant',
-        message: { id: 'a3', content: [{ type: 'text', text: `${TAG_B}\nBoth sleeps done.` }] },
-      },
-    ]);
+        {
+          type: 'assistant',
+          message: {
+            id: 'a2',
+            content: [{ type: 'tool_use', id: 'x1', name: 'Bash', input: { command: 'sleep 1' } }],
+          },
+        },
+        {
+          type: 'user',
+          message: { content: [{ type: 'tool_result', tool_use_id: 'x1', content: '' }] },
+        },
+        {
+          type: 'assistant',
+          message: { id: 'a3', content: [{ type: 'text', text: `${TAG_B}\nBoth sleeps done.` }] },
+        },
+      ]
+    );
     await waitFor(() => expect(document.body.textContent).toContain('Both sleeps done.'));
     // (the empty thread's hint names its own tag on purpose)
     expect(document.body.textContent).not.toContain(TAG_B);
@@ -240,23 +249,58 @@ describe('queued prompts go where they belong (AC-14)', () => {
 
   it('F5: one answer to two queued prompts: the tag line between its parts does not show', async () => {
     const TAG_B = threadTag({ project: 'Demo', task: 'B' });
-    await mount(thread(), [
-      { type: 'devorbit_user', key: 'u-1', text: 'Main control', ts: at + 10 },
+    const b: ChatThread = {
+      ...thread(),
+      id: 't2',
+      name: { project: 'Demo', task: 'B' },
+      tag: TAG_B,
+    };
+    await mount(
+      [thread(), b],
+      [
+        { type: 'devorbit_user', key: 'u-1', text: 'Main control', ts: at + 10 },
+        {
+          type: 'assistant',
+          message: {
+            id: 'a1',
+            content: [
+              {
+                type: 'text',
+                text: `Done.\n\nMain control: got it.\n\n${TAG_B}\nThread check: got it.`,
+              },
+            ],
+          },
+        },
+      ]
+    );
+    await waitFor(() => expect(document.body.textContent).toContain('Thread check: got it.'));
+    expect(document.body.textContent).not.toContain(TAG_B);
+  });
+
+  it('N1: a tag-like line of no thread of this session, or inside a code block, stays', async () => {
+    const code = '```\n[Thread: Example · Syntax]\n```';
+    const { aside } = await mount(thread(), [
+      { type: 'devorbit_user', key: 'u-1', text: `How do I write\n${code}`, ts: at + 10 },
       {
         type: 'assistant',
         message: {
           id: 'a1',
           content: [
-            {
-              type: 'text',
-              text: `Done.\n\nMain control: got it.\n\n${TAG_B}\nThread check: got it.`,
-            },
+            { type: 'text', text: `Like this:\n\n${code}\n\n[Thread: Other · Topic]\nDone.` },
           ],
         },
       },
+      // a known tag inside a fence is code too
+      { type: 'devorbit_user', key: 'u-2', text: `Quote:\n\`\`\`\n${TAG}\n\`\`\``, ts: at + 20 },
     ]);
-    await waitFor(() => expect(document.body.textContent).toContain('Thread check: got it.'));
-    expect(document.body.textContent).not.toContain(TAG_B);
+    await waitFor(() => expect(document.body.textContent).toContain('Done.'));
+    const main = [...document.querySelectorAll('[data-chat-key]')].filter(
+      (e) => !aside.contains(e)
+    );
+    const text = main.map((e) => e.textContent).join('\n');
+    expect(text.split('[Thread: Example · Syntax]')).toHaveLength(3);
+    expect(text).toContain('[Thread: Other · Topic]');
+    expect(text).toContain(TAG);
   });
 
   it('a main-chat message typed while busy stays in the main chat', async () => {
