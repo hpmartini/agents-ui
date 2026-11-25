@@ -99,6 +99,16 @@ describe('Choice pills', () => {
     await user.keyboard('{ArrowRight}');
     expect(spy).toHaveBeenLastCalledWith('c');
   });
+
+  it('a disabled selected pill leaves the tab stop on the first enabled pill', async () => {
+    const user = userEvent.setup();
+    const options = opts('A', 'B', 'C');
+    options[0].disabled = true;
+    render(<Host label="P" initial="a" options={options} />);
+    await user.click(screen.getByRole('button', { name: 'before' }));
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'B' }));
+  });
 });
 
 describe('Choice menu', () => {

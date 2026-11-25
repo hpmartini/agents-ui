@@ -98,7 +98,10 @@ function highlight(text: string, query: string): React.ReactNode {
   for (let i = lower.indexOf(query); i !== -1; i = lower.indexOf(query, at)) {
     if (i > at) parts.push(text.slice(at, i));
     parts.push(
-      <mark key={i} className="bg-blue-500/30 text-white rounded-sm">
+      <mark
+        key={i}
+        className="bg-transparent text-white font-semibold underline decoration-blue-300 decoration-2 underline-offset-2"
+      >
         {text.slice(i, i + query.length)}
       </mark>
     );
@@ -126,8 +129,9 @@ function Pills<V extends string>({
 }: ChoiceProps<V>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const selected = options.findIndex((o) => o.value === value);
-  // Roving tab stop: the checked pill, else the first enabled one
-  const stop = selected >= 0 ? selected : options.findIndex((o) => !o.disabled);
+  // Roving tab stop: the checked pill if enabled, else the first enabled one
+  const stop =
+    selected >= 0 && !options[selected].disabled ? selected : options.findIndex((o) => !o.disabled);
 
   const pick = (i: number) => {
     refs.current[i]?.focus();
@@ -182,7 +186,7 @@ function Pills<V extends string>({
             onKeyDown={(e) => onKeyDown(e, i)}
             className={`${pad} rounded-full border leading-5 text-left break-words min-w-0 transition-colors ${FOCUS} disabled:opacity-40 disabled:cursor-not-allowed ${
               on
-                ? 'bg-blue-500/20 border-blue-500/70 text-white'
+                ? 'bg-sel border-blue-300 text-white'
                 : 'border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800'
             }`}
           >
