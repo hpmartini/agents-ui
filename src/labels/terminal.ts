@@ -78,7 +78,9 @@ export interface TerminalLabels {
   planOpen: string;
   backgroundShell: (command: string) => string;
   subAgent: (type: string, description: string) => string;
-  agentsRunning: (count: number) => string;
+  chipsMore: (count: number) => string;
+  chipsLess: string;
+  agentsDone: (count: number) => string;
   noSubagentOutput: string;
   stepCount: (count: number) => string;
 
@@ -391,7 +393,9 @@ export const terminalEn: TerminalLabels = {
   planOpen: 'open',
   backgroundShell: (command) => `Background shell: ${command}`,
   subAgent: (type, description) => `Sub-agent ${type}: ${description}`,
-  agentsRunning: (count) => `${count} running`,
+  chipsMore: (count) => `+${count} more`,
+  chipsLess: 'Show less',
+  agentsDone: (count) => `${count} done`,
   noSubagentOutput: 'No sub-agent output yet',
   stepCount: (count) => `${count} steps`,
 
@@ -715,7 +719,9 @@ export const terminalDe: TerminalLabels = {
   planOpen: 'offen',
   backgroundShell: (command) => `Hintergrund-Shell: ${command}`,
   subAgent: (type, description) => `Sub-Agent ${type}: ${description}`,
-  agentsRunning: (count) => `${count} laufen`,
+  chipsMore: (count) => `+${count} weitere`,
+  chipsLess: 'Weniger',
+  agentsDone: (count) => `${count} fertig`,
   noSubagentOutput: 'Noch keine Ausgabe des Sub-Agents',
   stepCount: (count) => `${count} Schritte`,
 

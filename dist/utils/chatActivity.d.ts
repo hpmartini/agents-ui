@@ -24,6 +24,6 @@ export interface ChatSubagent {
     done: boolean;
     isError: boolean;
 }
-export declare function chatSubagents(messages: ChatMessage[]): ChatSubagent[];
+export declare function chatSubagents(messages: ChatMessage[], ended?: string[]): ChatSubagent[];
 /** Thinking + tool blocks since the last user message: the work of the current turn */
 export declare function turnSteps(messages: ChatMessage[]): ChatBlock[];

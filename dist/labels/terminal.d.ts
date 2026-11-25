@@ -69,7 +69,9 @@ export interface TerminalLabels {
     planOpen: string;
     backgroundShell: (command: string) => string;
     subAgent: (type: string, description: string) => string;
-    agentsRunning: (count: number) => string;
+    chipsMore: (count: number) => string;
+    chipsLess: string;
+    agentsDone: (count: number) => string;
     noSubagentOutput: string;
     stepCount: (count: number) => string;
     artifactsButtonTitle: string;

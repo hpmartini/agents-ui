@@ -34,9 +34,17 @@ export function chatPlan(messages) {
     }
     return items;
 }
+/** Reported ends plus tasks the agent stopped itself (TaskStop / KillShell send no notification) */
+function endedIds(messages, ended) {
+    const ids = new Set(ended);
+    for (const b of toolBlocks(messages))
+        if ((b.name === 'TaskStop' || b.name === 'KillShell') && b.result !== undefined && !b.isError)
+            ids.add(String(b.input.task_id ?? b.input.shell_id ?? ''));
+    return ids;
+}
 /** Background shells still running: started by Bash `run_in_background`, no end reported yet */
 export function chatShells(messages, ended = []) {
-    const done = new Set(ended);
+    const done = endedIds(messages, ended);
     return toolBlocks(messages).flatMap((b) => {
         if (b.name !== 'Bash' || !b.input.run_in_background)
             return [];
@@ -52,14 +60,28 @@ export function chatShells(messages, ended = []) {
             : [];
     });
 }
-export function chatSubagents(messages) {
+/**
+ * A background agent's result is only its launch receipt: it ends with its <task-notification>,
+ * named by tool-use id or (without one, e.g. after a resume) by the receipt's agentId
+ */
+function agentDone(b, ended) {
+    if (b.result === undefined)
+        return ended.has(b.id);
+    const receipt = String(b.result);
+    if (!/^Async agent launched/.test(receipt))
+        return true;
+    const agentId = receipt.match(/agentId: (\w+)/)?.[1];
+    return ended.has(b.id) || (!!agentId && ended.has(agentId));
+}
+export function chatSubagents(messages, ended = []) {
+    const over = endedIds(messages, ended);
     return toolBlocks(messages)
         .filter((b) => b.name === 'Agent' || b.name === 'Task')
         .map((b) => ({
         toolId: b.id,
         type: String(b.input.subagent_type ?? 'agent'),
         description: String(b.input.description ?? ''),
-        done: b.result !== undefined,
+        done: agentDone(b, over),
         isError: b.isError === true,
     }));
 }
