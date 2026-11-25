@@ -289,17 +289,17 @@ export function reduceChat(state: ChatState, event: unknown): ChatState {
     case 'system':
       if (event.subtype === 'init') return { ...state, model: str(event.model) || state.model };
       if (Object.hasOwn(DIVIDERS, str(event.subtype))) {
-        // none above the first turn; a switch mark right before the /clear record is that clear
+        // none above the first turn; back to back, the first one names the switch (a resumed
+        // session may open with its own old /clear)
         const last = state.messages.at(-1);
-        if (!last) return { ...state, boundary: true };
-        const kept = last.kind === 'divider' ? state.messages.slice(0, -1) : state.messages;
+        if (!last || last.kind === 'divider') return { ...state, boundary: true };
         const divider: ChatMessage = {
           kind: 'divider',
-          key: `d${kept.length}`,
+          key: `d${state.messages.length}`,
           reason: DIVIDERS[str(event.subtype)],
           ...(typeof event.ts === 'number' ? { ts: event.ts } : {}),
         };
-        return { ...state, boundary: true, messages: [...kept, divider] };
+        return { ...state, boundary: true, messages: [...state.messages, divider] };
       }
       if (event.subtype === 'away_summary' && str(event.content))
         return {

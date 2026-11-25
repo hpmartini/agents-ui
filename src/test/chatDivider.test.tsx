@@ -24,15 +24,15 @@ describe('context divider', () => {
     expect(state.messages[2]).toMatchObject({ text: 'after', initial: true });
   });
 
-  it('one divider per switch: a session mark right before the /clear record becomes the clear', () => {
+  it('one divider per switch: a resumed session opening with its own old /clear stays a switch', () => {
     const state = fold([
       prompt('before'),
-      { type: 'system', subtype: 'session_switch', ts: at - 1000 },
-      { type: 'system', subtype: 'clear', ts: at },
+      { type: 'system', subtype: 'session_switch', ts: at },
+      { type: 'system', subtype: 'clear', ts: at - 86_400_000 },
       prompt('after'),
     ]);
     expect(state.messages.filter((m) => m.kind === 'divider')).toEqual([
-      { kind: 'divider', key: 'd1', reason: 'clear', ts: at },
+      { kind: 'divider', key: 'd1', reason: 'switch', ts: at },
     ]);
   });
 
