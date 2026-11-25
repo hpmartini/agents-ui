@@ -162,11 +162,12 @@ export const ThreadComposer = ({ chatId, submitKey, history, agents, quote, onCl
         try {
             if (await onSend(text.trim(), files)) {
                 // another thread opened meanwhile: only the sent thread's draft goes
-                if (sentKey === currentKey.current)
+                if (sentKey === currentKey.current) {
                     setText('');
+                    setFiles([]);
+                }
                 else
                     threadDrafts.delete(sentKey);
-                setFiles([]);
             }
         }
         finally {

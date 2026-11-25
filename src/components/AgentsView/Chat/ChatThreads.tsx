@@ -289,9 +289,10 @@ export const ThreadComposer: React.FC<{
     try {
       if (await onSend(text.trim(), files)) {
         // another thread opened meanwhile: only the sent thread's draft goes
-        if (sentKey === currentKey.current) setText('');
-        else threadDrafts.delete(sentKey);
-        setFiles([]);
+        if (sentKey === currentKey.current) {
+          setText('');
+          setFiles([]);
+        } else threadDrafts.delete(sentKey);
       }
     } finally {
       setSending(false);

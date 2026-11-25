@@ -38,7 +38,7 @@ export const ChatStatusLine: React.FC<{
 
   useEffect(() => {
     const fetchStatus = chat?.fetchChatStatus;
-    if (!visible || !fetchStatus) return;
+    if (!fetchStatus) return;
     let cancelled = false;
     const load = () =>
       fetchStatus(chatId)
@@ -46,6 +46,13 @@ export const ChatStatusLine: React.FC<{
         .catch(() => {
           // keep the last status; the chat itself reports a gone session
         });
+    // an inactive pane loads once (its chip and usage show), only the active one polls
+    if (!visible) {
+      load();
+      return () => {
+        cancelled = true;
+      };
+    }
     const stop = pollWhileVisible(load, POLL_MS);
     return () => {
       cancelled = true;

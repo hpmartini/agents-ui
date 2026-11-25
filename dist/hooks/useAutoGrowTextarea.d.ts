@@ -22,7 +22,7 @@ export declare function useAutoGrowTextarea(ref: React.RefObject<HTMLTextAreaEle
     min: number;
     max: number;
     storageKey?: string;
-    /** Tallest a dragged height may be, read at use (default 70 % of the window) */
+    /** Tallest the field may be, dragged or grown by typing, read at use (default 70 % of the window) */
     pinMax?: (el: HTMLTextAreaElement) => number;
 }): {
     pinned: boolean;

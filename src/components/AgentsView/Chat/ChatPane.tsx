@@ -223,6 +223,18 @@ export function threadsLayout(row: number): { overlay: boolean; min: number; max
 const THREADS_DRAWER_MAX = 4096;
 /** The widest drawer leaves this much chat visible, so its handle never lands on the split divider */
 const DRAWER_GAP = 24;
+/** Main input at most 40 % of the pane, and the chat log keeps MAIN_LOG_ROOM (short stacked panes) */
+const MAIN_LOG_ROOM = 100;
+const mainInputMax = (el: HTMLTextAreaElement) => {
+  const pane = el.closest('[data-chat-pane]');
+  const byPane = (pane?.clientHeight ?? window.innerHeight) * 0.4;
+  const log = pane?.querySelector('[role="log"]');
+  // field + log share the free height: what the field takes, the log loses
+  return log ? Math.min(byPane, el.offsetHeight + log.clientHeight - MAIN_LOG_ROOM) : byPane;
+};
+/** Header shows model and path only where they stay readable beside the title */
+const SHOW_MODEL_PANE = 800;
+const SHOW_PATH_PANE = 1000;
 /** Below this pane width the header drops path, model and harness and puts its buttons on a second row, so the name stays readable */
 const NARROW_PANE = 640;
 /** ResizeHandle's net width in the row: 9 px with -4 px margins */
@@ -786,6 +798,24 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     if (el) el.scrollTop = el.scrollHeight;
     // showThreads: a reopened panel mounts a new log, which starts at the top
   }, [threadItems, openThreadId, showThreads]);
+  // a log at its newest message stays there when the pane or the thread input resizes it
+  useEffect(() => {
+    const el = threadListRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let atEnd = true;
+    const onScroll = () => {
+      atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+    };
+    const observer = new ResizeObserver(() => {
+      if (atEnd) el.scrollTop = el.scrollHeight;
+    });
+    el.addEventListener('scroll', onScroll);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      observer.disconnect();
+    };
+  }, [openThreadId, showThreads, threadsFull]);
   useEffect(() => {
     if (quote) inputRef.current?.focus();
   }, [quote]);
@@ -845,13 +875,18 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             {harnessName}
           </span>
         )}
-        {!narrowPane && (
-          <span className="text-gray-500 font-mono truncate min-w-0 hidden lg:inline">
+        {(!rowWidth || rowWidth >= SHOW_PATH_PANE) && (
+          <span
+            className="text-gray-500 font-mono truncate min-w-0 hidden lg:inline"
+            title={pane.cwd}
+          >
             {pane.cwd}
           </span>
         )}
-        {state.model && !narrowPane && (
-          <span className="text-gray-500 truncate min-w-0 hidden sm:inline">{state.model}</span>
+        {state.model && (!rowWidth || rowWidth >= SHOW_MODEL_PANE) && (
+          <span className="text-gray-500 truncate min-w-0 hidden sm:inline" title={state.model}>
+            {state.model}
+          </span>
         )}
         <span
           className={`shrink-0 ${prompting || !connected ? 'text-amber-300' : busy ? 'text-blue-300' : 'text-gray-500'}`}
@@ -1189,6 +1224,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 suggestionCut={suggestion?.truncated}
                 takeSuggestion={() => takePaneSuggestion(pane.id)}
                 inputRef={inputRef}
+                pinMax={mainInputMax}
               />
               <button
                 type="button"

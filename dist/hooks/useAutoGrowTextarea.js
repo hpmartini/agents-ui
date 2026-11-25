@@ -46,14 +46,15 @@ export function useAutoGrowTextarea(ref, value, { min, max, storageKey, pinMax, 
         const el = ref.current;
         if (!el || !el.clientWidth)
             return; // hidden: the ResizeObserver fits it once it shows
+        const cap = capOf(el); // before 'auto': a cap read from the layout needs the current height
         el.style.height = 'auto';
         // border-box: scrollHeight excludes the border, so add it or the text scrolls by 2px
         const content = el.scrollHeight + el.offsetHeight - el.clientHeight;
         // a stored height above the cap (smaller pane or window since) shows capped, stays stored
         const { height, scroll } = fitHeight(content, {
             min,
-            max,
-            pinned: pinned === null ? null : Math.min(pinned, capOf(el)),
+            max: Math.min(max, cap),
+            pinned: pinned === null ? null : Math.min(pinned, cap),
         });
         el.style.height = `${height}px`;
         el.style.overflowY = scroll ? 'auto' : 'hidden';
