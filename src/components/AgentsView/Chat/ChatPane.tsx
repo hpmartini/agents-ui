@@ -786,11 +786,16 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       if ((m.kind === 'user' || m.kind === 'assistant') && m.ts) return m.ts;
     return undefined;
   }, [state.messages]);
+  // a thread merged into the open one may start earlier
+  const openStart = openThread
+    ? Math.min(
+        ...threadList
+          .filter((x) => threadTarget(x.id, threadList, threads.overrides) === openThread.id)
+          .map((x) => x.createdAt)
+      )
+    : 0;
   const needsOlder =
-    !!openThread &&
-    !!state.older?.more &&
-    earliest !== undefined &&
-    earliest > openThread.createdAt;
+    !!openThread && !!state.older?.more && earliest !== undefined && earliest > openStart;
   useEffect(() => {
     if (needsOlder) loadOlder();
   }, [needsOlder, loadOlder]);

@@ -60,8 +60,10 @@ export function useChatThreads(session: string | null | undefined, active = fals
   const keep = useCallback(
     (next: ChatThreadList) =>
       setList((l) => {
-        // a reply without `orchestrator` (undo) must not take the panel away
-        const full = { ...next, orchestrator: next.orchestrator ?? l?.orchestrator ?? null };
+        // a reply without `orchestrator` (undo) must not take the panel away; null does
+        const orchestrator =
+          next.orchestrator === undefined ? (l?.orchestrator ?? null) : next.orchestrator;
+        const full = { ...next, orchestrator };
         return l && JSON.stringify(l) === JSON.stringify(full) ? l : full;
       }),
     []
@@ -817,9 +819,15 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
         )}
         <span className="flex-1" />
         {canUndo && onUndo && (
-          <button type="button" onClick={onUndo} title={t.undoTidyTitle} className={smallBtn}>
+          // icon only: the header keeps its room in a 300 px panel
+          <button
+            type="button"
+            onClick={onUndo}
+            aria-label={t.undoTidy}
+            title={`${t.undoTidy}: ${t.undoTidyTitle}`}
+            className={`${smallBtn} px-1`}
+          >
             <Undo2 size={12} aria-hidden />
-            {t.undoTidy}
           </button>
         )}
         <button

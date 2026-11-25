@@ -293,3 +293,31 @@ describe('live threads poll', () => {
     }
   });
 });
+
+describe('threads list after an orchestrator change', () => {
+  it('a poll saying the session is no orchestrator any more takes the panel away', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let orchestrator: string | null = 'o1';
+      const fetchThreads = vi.fn(async () => ({ orchestrator, threads: [THREAD], tasks: [] }));
+      let enabled: boolean[] = [];
+      const Probe = () => {
+        enabled = [...enabled, useChatThreads('p1', true).enabled];
+        return null;
+      };
+      renderWithAgents(<Probe />, {
+        transport: testTransport({
+          threads: { fetchThreads, createThread: vi.fn(), updateThread: vi.fn() },
+        }),
+      });
+      await waitFor(() => expect(enabled.at(-1)).toBe(true));
+      orchestrator = null;
+      await act(async () => {
+        vi.advanceTimersByTime(3_100);
+      });
+      await waitFor(() => expect(enabled.at(-1)).toBe(false));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
