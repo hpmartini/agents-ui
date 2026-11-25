@@ -34,7 +34,7 @@ export interface ChatThread {
     } | null;
     /**
      * Command marks (`at`: ms, host clock): a command goes out without the tag, so each mark gives
-     * the thread the first turn of that command at or after it
+     * the thread the first prompt at or after it, when that prompt is the command
      */
     commands?: {
         at: number;
@@ -53,10 +53,13 @@ export declare const threadTag: (name: {
     task: string;
 }) => string;
 /**
- * The command a thread message starts with (`/status-report`), else null. The CLI runs a command
- * only as the first word: it goes out without the tag line and its turn finds the thread by a mark
+ * The command a thread message starts with (`/status-report`), else null; only a command of the
+ * chat's list (`/tmp ist voll` is text). The CLI runs a command only as the first word: it goes
+ * out without the tag line and its turn finds the thread by a mark
  */
-export declare const threadCommand: (body: string) => string | null;
+export declare function threadCommand(body: string, commands: {
+    name: string;
+}[]): string | null;
 /** Message text without its thread tag line */
 export declare function stripTag(text: string, tag: string): string;
 export declare const hhmm: (ms: number) => string;
@@ -80,7 +83,9 @@ export declare function threadOf(item: ChatItem, threads: ChatThread[]): string 
  * per thread (after the answer it was opened on, else where its first message was). An answer of
  * tool steps only follows the item before it; a command sent from a thread goes there by its mark
  */
-export declare function routeThreads(items: ChatItem[], threads: ChatThread[]): {
+export declare function routeThreads(items: ChatItem[], threads: ChatThread[], 
+/** The items are the whole history (no older page left to load) */
+complete?: boolean): {
     main: (ChatItem | ChatThreadMarker)[];
     byThread: Map<string, ChatItem[]>;
 };

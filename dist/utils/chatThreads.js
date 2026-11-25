@@ -8,11 +8,21 @@ import { agentMessage } from './chatEvents';
 import { leadingCommand } from './chatComposer';
 const TAG_START = '[Thread: ';
 export const threadTag = (name) => `${TAG_START}${name.project} · ${name.task}]`;
+/** The marked command, also as the CLI logs it with its plugin prefix (`/retro` → `/x:retro`) */
+const sameCommand = (logged, marked) => logged === marked || logged.endsWith(`:${marked.slice(1)}`);
 /**
- * The command a thread message starts with (`/status-report`), else null. The CLI runs a command
- * only as the first word: it goes out without the tag line and its turn finds the thread by a mark
+ * The command a thread message starts with (`/status-report`), else null; only a command of the
+ * chat's list (`/tmp ist voll` is text). The CLI runs a command only as the first word: it goes
+ * out without the tag line and its turn finds the thread by a mark
  */
-export const threadCommand = (body) => leadingCommand(body.trim())?.command ?? null;
+export function threadCommand(body, commands) {
+    const command = leadingCommand(body.trim())?.command;
+    if (!command)
+        return null;
+    return commands.some((c) => sameCommand(command, `/${c.name}`) || sameCommand(`/${c.name}`, command))
+        ? command
+        : null;
+}
 /** Message text without its thread tag line */
 export function stripTag(text, tag) {
     const t = text.trimStart();
@@ -81,24 +91,30 @@ export function threadOf(item, threads) {
         t.agents.some((a) => sameAgent(a, sender)));
     return linked.length === 1 ? linked[0].id : null;
 }
-/** The marked command, also as the CLI logs it with its plugin prefix (`/retro` → `/x:retro`) */
-const sameCommand = (logged, marked) => logged === marked || logged.endsWith(`:${marked.slice(1)}`);
-/** Command prompts the threads' marks claim: each mark takes the first of its command after it */
-function commandTurns(items, threads) {
+/**
+ * Command prompts the threads' marks claim: a mark is one turn, so it takes the first prompt
+ * typed after it, and only when that prompt is its command. Only while the loaded items reach
+ * back to the mark (or are the whole history): with its turn paged out, a later prompt would
+ * look first; the mark claims again once the older pages are in
+ */
+function commandTurns(items, threads, complete) {
     const claimed = new Map();
     const marks = threads
         .flatMap((t) => (t.commands ?? []).map((m) => ({ ...m, id: t.id })))
         .sort((a, b) => a.at - b.at);
+    const oldest = Math.min(...items.map((i) => itemTime(i) ?? Infinity));
     for (const mark of marks) {
-        const hit = items.find((i) => i.kind === 'user' &&
+        if (!complete && !(oldest < mark.at))
+            continue;
+        const first = items.find((i) => i.kind === 'user' &&
             i.ts !== undefined &&
             i.ts >= mark.at &&
             !claimed.has(i) &&
-            !agentMessage(i.text) &&
-            sameCommand(leadingCommand(i.text.trim())?.command ?? '', mark.command) &&
-            !threadOf(i, threads));
-        if (hit)
-            claimed.set(hit, mark.id);
+            !agentMessage(i.text));
+        if (first?.kind === 'user' &&
+            sameCommand(leadingCommand(first.text.trim())?.command ?? '', mark.command) &&
+            !threadOf(first, threads))
+            claimed.set(first, mark.id);
     }
     return claimed;
 }
@@ -107,7 +123,9 @@ function commandTurns(items, threads) {
  * per thread (after the answer it was opened on, else where its first message was). An answer of
  * tool steps only follows the item before it; a command sent from a thread goes there by its mark
  */
-export function routeThreads(items, threads) {
+export function routeThreads(items, threads, 
+/** The items are the whole history (no older page left to load) */
+complete = false) {
     const byThread = new Map();
     const main = [];
     const markers = new Map();
@@ -120,7 +138,7 @@ export function routeThreads(items, threads) {
         return m;
     };
     const parents = new Map(threads.filter((t) => t.parentKey).map((t) => [t.parentKey, t.id]));
-    const commands = commandTurns(items, threads);
+    const commands = commandTurns(items, threads, complete);
     let prev = null;
     for (const item of items) {
         // An answer without a tag (orchestrators started before the tag rule, tool steps only) is the
