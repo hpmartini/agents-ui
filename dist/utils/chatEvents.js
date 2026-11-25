@@ -298,8 +298,13 @@ export function reduceChat(state, event) {
                 : state;
         case 'devorbit_sent_clear':
             return state.sent.length ? { ...state, sent: [] } : state;
-        case 'devorbit_task_ended':
-            return { ...state, endedTasks: [...state.endedTasks, str(event.id)].slice(-500) };
+        case 'devorbit_task_ended': {
+            // One end arrives several times (queue entry, attachment); the tool-use id ends async agents
+            const ids = [str(event.id), str(event.toolUseId)].filter((id) => id && !state.endedTasks.includes(id));
+            return ids.length
+                ? { ...state, endedTasks: [...state.endedTasks, ...ids].slice(-2000) }
+                : state;
+        }
         case 'devorbit_user': {
             // In the transcript now: a queued copy the queue log left behind (a drifted FIFO) goes
             const taken = state.queued.findIndex((t) => t.trim() === str(event.text).trim());

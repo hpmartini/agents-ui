@@ -129,6 +129,7 @@ export const ChatActivity: React.FC<ChatActivityProps> = ({
   const running = agents.filter((a) => !a.done);
   const finished = agents.filter((a) => a.done);
   const chipCount = shells.length + running.length;
+  const chipKey = [...shells.map((s) => s.id), ...running.map((a) => a.toolId)].join();
 
   // One row: chips past its right edge hide (keeping their place) behind "+N more"
   const rowRef = useRef<HTMLDivElement>(null);
@@ -146,7 +147,7 @@ export const ChatActivity: React.FC<ChatActivityProps> = ({
     const observer = new ResizeObserver(measure);
     observer.observe(row);
     return () => observer.disconnect();
-  }, [chipCount, allOpen]);
+  }, [chipKey, allOpen]);
   const hidden = Math.max(0, chipCount - fit);
 
   if (!plan.length && !shells.length && !agents.length && !busy) return null;

@@ -420,9 +420,7 @@ export function reduceChat(state: ChatState, event: unknown): ChatState {
       const ids = [str(event.id), str(event.toolUseId)].filter(
         (id) => id && !state.endedTasks.includes(id)
       );
-      return ids.length
-        ? { ...state, endedTasks: [...state.endedTasks, ...ids].slice(-2000) }
-        : state;
+      return ids.length ? { ...state, endedTasks: [...state.endedTasks, ...ids] } : state;
     }
 
     case 'devorbit_user': {
