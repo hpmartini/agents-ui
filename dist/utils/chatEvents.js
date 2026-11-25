@@ -1,3 +1,8 @@
+const DIVIDERS = {
+    clear: 'clear',
+    compact_boundary: 'compact',
+    session_switch: 'switch',
+};
 /**
  * Group consecutive assistant messages into one answer per turn. A `result` closes the answer
  * before it; a user message, recap or notice starts a new one.
@@ -170,8 +175,20 @@ export function reduceChat(state, event) {
         case 'system':
             if (event.subtype === 'init')
                 return { ...state, model: str(event.model) || state.model };
-            if (event.subtype === 'compact_boundary' || event.subtype === 'clear')
-                return { ...state, boundary: true };
+            if (Object.hasOwn(DIVIDERS, str(event.subtype))) {
+                // none above the first turn; a switch mark right before the /clear record is that clear
+                const last = state.messages.at(-1);
+                if (!last)
+                    return { ...state, boundary: true };
+                const kept = last.kind === 'divider' ? state.messages.slice(0, -1) : state.messages;
+                const divider = {
+                    kind: 'divider',
+                    key: `d${kept.length}`,
+                    reason: DIVIDERS[str(event.subtype)],
+                    ...(typeof event.ts === 'number' ? { ts: event.ts } : {}),
+                };
+                return { ...state, boundary: true, messages: [...kept, divider] };
+            }
             if (event.subtype === 'away_summary' && str(event.content))
                 return {
                     ...state,

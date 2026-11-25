@@ -191,6 +191,8 @@ const PlainItem = React.memo(({ item }) => {
         case 'result':
             // A result without an answer before it (an interrupted turn that wrote nothing)
             return (_jsx("div", { className: "my-2 flex items-center gap-1.5 text-[11px] text-gray-500", children: _jsx(ResultMark, { result: item }) }));
+        case 'divider':
+            return (_jsxs("div", { role: "separator", "aria-label": t.contextDivider(item.reason, item.ts ? hhmm(item.ts) : null), className: "my-4 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-gray-400", children: [_jsx("span", { "aria-hidden": true, className: "h-px flex-1 bg-gray-700" }), _jsx("span", { children: t.contextDivider(item.reason, item.ts ? hhmm(item.ts) : null) }), _jsx("span", { "aria-hidden": true, className: "h-px flex-1 bg-gray-700" })] }));
         case 'notice':
             return (_jsx("div", { className: `my-2 text-xs ${item.tone === 'error' ? 'text-red-300' : 'text-gray-400'}`, children: item.text }));
     }
