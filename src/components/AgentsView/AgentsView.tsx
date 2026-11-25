@@ -1469,7 +1469,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     if (composerImages.length === 0 || !uploads) return [];
     setDispatching(true);
     try {
-      return await Promise.all(composerImages.map(uploads.uploadAttachment));
+      return await Promise.all(composerImages.map((file) => uploads.uploadAttachment(file)));
     } catch (err) {
       showHint(err instanceof Error ? err.message : t.uploadFailed, 'error', 6000);
       return null;

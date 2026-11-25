@@ -412,7 +412,7 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
         setError(null);
         try {
             const stored = uploads
-                ? await Promise.all(files.map((file) => uploads.uploadAttachment(file)))
+                ? await Promise.all(files.map((file) => uploads.uploadAttachment(file, pane.id)))
                 : [];
             const prompt = head + promptWithAttachments(body, stored);
             if (!typeIntoPane(pane.id, prompt)) {
