@@ -320,6 +320,21 @@ describe('thread draft', () => {
   const input = () =>
     screen.getByRole('textbox', { name: 'Reply in thread' }) as HTMLTextAreaElement;
 
+  // a double-click on the open thread's row closes it (first click) and reopens it with the name
+  // field: the composer mounting with it must leave the focus in that field
+  it('mounting takes no focus from a field being typed in', () => {
+    renderWithAgents(<input aria-label="Thread name" autoFocus />);
+    const field = screen.getByRole('textbox', { name: 'Thread name' });
+    expect(document.activeElement).toBe(field);
+    mount('t1');
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('opening a thread puts the cursor in its composer', () => {
+    mount('t1');
+    expect(document.activeElement).toBe(input());
+  });
+
   it('survives hiding the panel (composer unmounted) and stays with its thread', () => {
     const first = mount('t1');
     fireEvent.change(input(), { target: { value: 'unsent reply' } });

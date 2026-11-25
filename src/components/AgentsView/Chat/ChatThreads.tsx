@@ -47,8 +47,8 @@ const focusRing = 'focus-visible:outline-2 focus-visible:outline-blue-400';
 const smallBtn = `inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] text-gray-400 hover:bg-gray-800 hover:text-white ${focusRing}`;
 // Threads made elsewhere (Instruct on a status card) and report changes show up within this
 const POLL_MS = 15_000;
-// On screen: a tidy-up by the orchestrator's CLI regroups the chat within this
-const LIVE_POLL_MS = 3_000;
+// On screen: a thread opened or a tidy-up done by the orchestrator's CLI shows within this (AC-6: 3 s)
+const LIVE_POLL_MS = 2_000;
 
 export type ThreadsStatus = 'loading' | 'ready' | 'error';
 
@@ -441,6 +441,13 @@ export const ThreadComposer: React.FC<{
   const [sending, setSending] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
+    // a field being typed in keeps the cursor: the rename field opens together with the thread
+    const at = document.activeElement;
+    if (
+      at !== input.current &&
+      (at instanceof HTMLInputElement || at instanceof HTMLTextAreaElement)
+    )
+      return;
     input.current?.focus();
   }, [focusKey, quote]);
   const empty = !text.trim() && files.length === 0;

@@ -246,13 +246,14 @@ describe('automatic names, tidy-up overrides and undo', () => {
     expect(screen.queryByRole('button', { name: 'Undo tidy-up' })).toBeNull();
   });
 
-  it('an active pane polls the threads every 3 s', async () => {
+  // `orkumo thread open` must show within 3 s of the CLI call, the CLI itself takes ~0.5 s
+  it('an active pane polls the threads every 2 s', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       const { fetchThreads } = await mount();
       const before = fetchThreads.mock.calls.length;
       await act(async () => {
-        vi.advanceTimersByTime(3_100);
+        vi.advanceTimersByTime(2_100);
       });
       expect(fetchThreads.mock.calls.length).toBeGreaterThan(before);
     } finally {
