@@ -52,7 +52,6 @@ import {
   ChatIdContext,
   ChatItemView,
   ChatRepliesContext,
-  UserMessage,
   type ChatQuote,
   type ChatReplies,
 } from './ChatMessages';
@@ -75,6 +74,7 @@ import {
   parseQuote,
   quoteHeader,
   stripTag,
+  queuedCommands,
   routeThreads,
   threadCommand,
   unreadCount,
@@ -448,16 +448,32 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     return null;
   }, [state.messages]);
   const threadList = threads.enabled ? threads.threads : NO_THREADS;
+  const pending = useMemo(
+    () => [
+      ...pendingPrompts(state),
+      ...queuedCommands(items, threadList, state.queued.filter((q) => !q.trim()).length),
+    ],
+    [state, items, threadList]
+  );
   const routed = useMemo(
     () =>
+      // queued prompts route like logged ones: a thread's goes to its thread (tag or command mark)
       routeThreads(
-        items.filter((item) => item !== recap),
+        [
+          ...items.filter((item) => item !== recap),
+          ...pending.map((text, i) => ({
+            kind: 'user' as const,
+            key: `q${i}`,
+            text,
+            queued: true,
+          })),
+        ],
         threadList,
         !state.older?.more,
         state.older?.olderTs,
         threads.overrides
       ),
-    [items, recap, threadList, state.older, threads.overrides]
+    [items, recap, pending, threadList, state.older, threads.overrides]
   );
   // merged threads of a tidy-up are gone from the list; their items went to the target
   const listed = useMemo(
@@ -472,7 +488,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     [routed, promptsOnly]
   );
   const [quote, setQuote] = useState<ChatQuote | null>(null);
-  const pending = useMemo(() => pendingPrompts(state), [state]);
   const starts = useMemo(() => initialPrompts(state.messages), [state.messages]);
   const [startsOpen, setStartsOpen] = useState(false);
   // Jump to a prompt; letting go of the bottom keeps late layout from pulling the list back down
@@ -1150,9 +1165,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                     );
                   })}
                 </ChatRepliesContext.Provider>
-                {pending.map((p, i) => (
-                  <UserMessage key={`q${i}`} text={p} queued />
-                ))}
                 {workingCard && !promptsOnly && !lastThread && (
                   <ChatItemView
                     item={null}

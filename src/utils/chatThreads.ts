@@ -221,8 +221,8 @@ function commandTurns(
     const own = items.find(
       (i) =>
         i.kind === 'user' &&
-        i.ts !== undefined &&
-        i.ts >= mark.at &&
+        // a queued prompt (no time yet) comes after every logged one
+        (i.queued || (i.ts !== undefined && i.ts >= mark.at)) &&
         !claimed.has(i) &&
         !agentMessage(i.text) &&
         sameCommand(leadingCommand(i.text.trim())?.command ?? '', mark.command) &&
@@ -231,6 +231,33 @@ function commandTurns(
     if (own) claimed.set(own, mark.id);
   }
   return claimed;
+}
+
+/**
+ * Commands threads sent while the agent works: Claude Code logs their enqueue without the text, so
+ * each empty queue entry stands for one of the newest marks no logged prompt has claimed yet
+ */
+export function queuedCommands(
+  items: ChatItem[],
+  threads: ChatThread[],
+  placeholders: number
+): string[] {
+  if (!placeholders) return [];
+  return threads
+    .flatMap((t) => t.commands ?? [])
+    .filter(
+      (m) =>
+        !items.some(
+          (i) =>
+            i.kind === 'user' &&
+            i.ts !== undefined &&
+            i.ts >= m.at &&
+            sameCommand(leadingCommand(i.text.trim())?.command ?? '', m.command)
+        )
+    )
+    .sort((a, b) => a.at - b.at)
+    .slice(-placeholders)
+    .map((m) => m.command);
 }
 
 /**
