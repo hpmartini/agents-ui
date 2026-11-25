@@ -83,8 +83,8 @@ export declare function threadCommand(body: string, commands: {
     name: string;
 }[]): string | null;
 /**
- * Message text without its leading thread tag line, whichever thread's: after a merge or a move
- * a message keeps its source's tag, shown in another thread or the main chat
+ * Message text without its thread tag lines, whichever thread's: after a merge or a move a
+ * message keeps its source's tag, shown in another thread or the main chat
  */
 export declare function stripTag(text: string): string;
 export declare const hhmm: (ms: number) => string;
