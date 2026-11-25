@@ -35,6 +35,7 @@ import {
   unreadCount,
   type ChatThread,
 } from '../../../utils/chatThreads';
+import { clampMenuPosition } from '../../../utils/menuPosition';
 import { isMac } from '../../../utils/platform';
 import { ImageAttachments, imageDropHandlers } from '../../ImageAttachments';
 import type { ChatQuote } from './ChatMessages';
@@ -204,23 +205,31 @@ const RenameField: React.FC<{
   );
 };
 
+const MENU_W = 160;
+
 /** "…" beside a thread name: its actions (Rename) */
 const ThreadMenu: React.FC<{ onRename: () => void; className?: string }> = ({
   onRename,
   className = 'relative',
 }) => {
   const t = useLabels().terminal;
-  const [open, setOpen] = useState(false);
+  // fixed at the button: the list scrolls and would cut a menu that drops below its last row
+  const [open, setOpen] = useState<{ left: number; top: number } | null>(null);
   const box = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     if (!open) return;
     box.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
     const away = (e: MouseEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false);
+      if (!box.current?.contains(e.target as Node)) setOpen(null);
     };
     document.addEventListener('mousedown', away);
     return () => document.removeEventListener('mousedown', away);
   }, [open]);
+  const toggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (open) return setOpen(null);
+    const r = e.currentTarget.getBoundingClientRect();
+    setOpen(clampMenuPosition(r.right - MENU_W, r.bottom + 4, MENU_W, 40, innerWidth, innerHeight));
+  };
   return (
     <span
       ref={box}
@@ -228,15 +237,15 @@ const ThreadMenu: React.FC<{ onRename: () => void; className?: string }> = ({
       onKeyDown={(e) => {
         if (e.key === 'Escape' && open) {
           e.preventDefault();
-          setOpen(false);
+          setOpen(null);
         }
       }}
     >
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         aria-haspopup="menu"
-        aria-expanded={open}
+        aria-expanded={!!open}
         aria-label={t.threadActions}
         title={t.threadActions}
         className={`${smallBtn} bg-gray-950 px-1`}
@@ -247,14 +256,15 @@ const ThreadMenu: React.FC<{ onRename: () => void; className?: string }> = ({
         <div
           role="menu"
           aria-label={t.threadActions}
-          className="absolute right-0 top-full z-30 mt-1 w-40 rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-xl shadow-black/40"
+          style={{ ...open, width: MENU_W }}
+          className="fixed z-50 rounded-lg border border-gray-700 bg-gray-900 py-1 shadow-xl shadow-black/40"
         >
           <button
             role="menuitem"
             type="button"
             tabIndex={-1}
             onClick={() => {
-              setOpen(false);
+              setOpen(null);
               onRename();
             }}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-blue-500/20 focus:bg-blue-500/20 focus:outline-none"
@@ -707,7 +717,11 @@ export const ThreadsPanel: React.FC<ThreadsPanelProps> = ({
   // `list:<id>` or `header:<id>`: where the name field is open
   const [renaming, setRenaming] = useState<string | null>(null);
   const rename = (where: string, id: string) => (name: ThreadNameParts | null | 'start') => {
-    if (name === 'start') return setRenaming(`${where}:${id}`);
+    if (name === 'start') {
+      // the first click of a double-click on the open thread's row closed it
+      if (where === 'list') onOpen(id);
+      return setRenaming(`${where}:${id}`);
+    }
     setRenaming(null);
     if (name) onRename(id, name);
   };
