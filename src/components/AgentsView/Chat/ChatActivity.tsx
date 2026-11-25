@@ -253,7 +253,7 @@ export const ChatActivity: React.FC<ChatActivityProps> = ({
         <div className="flex items-start gap-1.5">
           <div
             ref={rowRef}
-            className={`relative flex min-w-0 flex-1 gap-1.5 ${allOpen ? 'flex-wrap' : 'overflow-hidden'}`}
+            className={`relative flex min-w-0 flex-1 gap-1.5 ${allOpen ? 'max-h-24 flex-wrap overflow-y-auto' : 'overflow-hidden'}`}
           >
             {shells.map((s, i) => (
               <button
