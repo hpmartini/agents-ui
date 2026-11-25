@@ -136,7 +136,9 @@ export function useChatThreads(session: string | null | undefined, active = fals
   const undoApi = api?.undoTidy;
   const undoTidy = useCallback(async () => {
     if (!undoApi || !session) return;
-    keep(await undoApi(session));
+    const l = await undoApi(session);
+    // an undo answered after a tab switch belongs to the session before
+    if (current.current === session) keep(l);
   }, [undoApi, session, keep]);
   // only a known orchestrator chat gets the panel: other panes never flash it while loading
   const enabled = !!list?.orchestrator;
