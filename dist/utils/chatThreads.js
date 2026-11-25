@@ -5,6 +5,31 @@
  * unclear stays in the main chat; nothing is guessed. Pure: the chat pane routes on every render.
  */
 import { agentMessage } from './chatEvents';
+/** Routing key of an item: its transcript key without the history page prefixes `h<before>:` */
+export const entryKey = (item) => item.key.replace(/^(?:h\d+:)+/, '');
+/** Final thread of `id` along the merge chain; an unknown target (or a cycle) keeps `id` */
+export function threadTarget(id, threads, overrides) {
+    const merged = overrides?.merged ?? {};
+    const seen = new Set();
+    let to = id;
+    while (merged[to] && !seen.has(to)) {
+        seen.add(to);
+        to = merged[to];
+    }
+    return to !== id && threads.some((t) => t.id === to) ? to : id;
+}
+/** Threads the panel lists: merged sources are gone */
+export const visibleThreads = (threads, overrides) => overrides ? threads.filter((t) => threadTarget(t.id, threads, overrides) === t.id) : threads;
+/** Markdown left in old stored names (`**`, backticks, leading "- " or "#") */
+const plainName = (s) => s
+    .replace(/\*\*|`/g, '')
+    .replace(/^\s*(?:[-*]\s+|#+\s*)+/, '')
+    .trim();
+/** Shown name: "Project · Task", Markdown stripped, a doubled part once */
+export function threadTitle(name) {
+    const parts = [plainName(name.project), plainName(name.task)].filter(Boolean);
+    return [...new Set(parts)].join(' · ');
+}
 const TAG_START = '[Thread: ';
 export const threadTag = (name) => `${TAG_START}${name.project} · ${name.task}]`;
 /** Message text without its thread tag line */
@@ -80,7 +105,7 @@ export function threadOf(item, threads) {
  * per thread (after the answer it was opened on, else where its first message was). An answer of
  * tool steps only follows the item before it
  */
-export function routeThreads(items, threads) {
+export function routeThreads(items, threads, overrides) {
     const byThread = new Map();
     const main = [];
     const markers = new Map();
@@ -92,7 +117,9 @@ export function routeThreads(items, threads) {
         }
         return m;
     };
-    const parents = new Map(threads.filter((t) => t.parentKey).map((t) => [t.parentKey, t.id]));
+    const parents = new Map(threads.flatMap((t) => (t.parentKey ? [[entryKey({ key: t.parentKey }), t.id]] : [])));
+    const known = new Set(threads.map((t) => t.id));
+    const target = (id) => id && threadTarget(id, threads, overrides);
     let prev = null;
     for (const item of items) {
         // An answer without a tag (orchestrators started before the tag rule, tool steps only) is the
@@ -100,11 +127,17 @@ export function routeThreads(items, threads) {
         const untagged = item.kind === 'answer' && !firstText(item).startsWith(TAG_START);
         // closed threads too: closing must not move their answers back into the main chat
         const turn = prev;
-        const id = !threads.length
+        // a tidy-up move wins; one to a thread this list does not know falls back to the rules
+        const moved = overrides?.entries[entryKey(item)];
+        const id = moved === 'main'
             ? null
-            : untagged
-                ? (threadOf(item, threads) ?? turn)
-                : threadOf(item, threads);
+            : moved && known.has(moved)
+                ? target(moved)
+                : !threads.length
+                    ? null
+                    : untagged
+                        ? (target(threadOf(item, threads)) ?? turn)
+                        : target(threadOf(item, threads));
         prev = id;
         if (id) {
             byThread.set(id, [...(byThread.get(id) ?? []), item]);
@@ -114,8 +147,9 @@ export function routeThreads(items, threads) {
             continue;
         }
         main.push(item);
-        const opened = parents.get(item.key);
-        if (opened)
+        const opened = parents.get(entryKey(item));
+        // a merged thread shows under its target's marker only
+        if (opened && target(opened) === opened && !main.includes(marker(opened)))
             main.push(marker(opened));
     }
     for (const [id, m] of markers)

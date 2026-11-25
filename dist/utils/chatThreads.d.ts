@@ -32,7 +32,29 @@ export interface ChatThread {
         project: string;
         task: string;
     } | null;
+    /** Renamed by the user in the UI: never named automatically again */
+    renamed?: boolean;
 }
+/** The orchestrator's tidy-up layer over the transcript (`orkumo thread move/merge`) */
+export interface ChatThreadOverrides {
+    /** Entry key (`entryKey`) → thread id, or 'main' */
+    entries: Record<string, string>;
+    /** Merged source thread id → target thread id; sources are hidden */
+    merged: Record<string, string>;
+}
+/** Routing key of an item: its transcript key without the history page prefixes `h<before>:` */
+export declare const entryKey: (item: {
+    key: string;
+}) => string;
+/** Final thread of `id` along the merge chain; an unknown target (or a cycle) keeps `id` */
+export declare function threadTarget(id: string, threads: ChatThread[], overrides?: ChatThreadOverrides): string;
+/** Threads the panel lists: merged sources are gone */
+export declare const visibleThreads: (threads: ChatThread[], overrides?: ChatThreadOverrides) => ChatThread[];
+/** Shown name: "Project · Task", Markdown stripped, a doubled part once */
+export declare function threadTitle(name: {
+    project: string;
+    task: string;
+}): string;
 /** Where a thread starts in the main chat: "N replies in thread …" */
 export interface ChatThreadMarker {
     kind: 'thread';
@@ -67,7 +89,7 @@ export declare function threadOf(item: ChatItem, threads: ChatThread[]): string 
  * per thread (after the answer it was opened on, else where its first message was). An answer of
  * tool steps only follows the item before it
  */
-export declare function routeThreads(items: ChatItem[], threads: ChatThread[]): {
+export declare function routeThreads(items: ChatItem[], threads: ChatThread[], overrides?: ChatThreadOverrides): {
     main: (ChatItem | ChatThreadMarker)[];
     byThread: Map<string, ChatItem[]>;
 };

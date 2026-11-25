@@ -178,6 +178,9 @@ export interface TerminalLabels {
     noThreadsHint: string;
     pickThread: string;
     closeThread: string;
+    renameThread: string;
+    threadActions: string;
+    threadNameField: string;
     closedThreads: (count: number) => string;
     reopenThread: string;
     replyInThread: string;
@@ -190,7 +193,8 @@ export interface TerminalLabels {
     threadsSidebar: string;
     firstThreadMessage: (tag: string) => string;
     boundTo: (repo: string | null) => string;
-    notBound: string;
+    undoTidy: string;
+    undoTidyTitle: string;
     resizeThreads: string;
     threadLog: (name: string) => string;
     loadingThreadHistory: string;

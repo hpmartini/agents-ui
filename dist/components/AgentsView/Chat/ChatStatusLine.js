@@ -56,7 +56,7 @@ export const ChatStatusLine = ({ chatId, turns, visible, picker }) => {
     const { git, cache, context, limits } = status;
     const cold = cache && cacheCountdown(cache, Date.now()).expired;
     const fill = context ? Math.min(100, (context.tokens / context.window) * 100) : 0;
-    return (_jsxs("div", { ref: boxRef, className: `mt-2 grid ${width && width < 400
+    return (_jsxs("div", { ref: boxRef, "data-chat-status": true, className: `mt-2 grid ${width && width < 400
             ? 'grid-cols-1'
             : width && width < 640
                 ? 'grid-cols-[auto_minmax(0,1fr)]'

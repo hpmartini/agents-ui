@@ -5,11 +5,15 @@ import { type ChatThread } from '../../../utils/chatThreads';
 import type { ChatQuote } from './ChatMessages';
 export type ThreadsStatus = 'loading' | 'ready' | 'error';
 /** Threads of the pane's session from the host; `orchestrator` null: no threads for it */
-export declare function useChatThreads(session: string | null | undefined): {
+export declare function useChatThreads(session: string | null | undefined, active?: boolean): {
     enabled: boolean;
     status: ThreadsStatus;
     threads: ChatThread[];
     tasks: ChatThreadTask[];
+    overrides: import("../../../utils/chatThreads").ChatThreadOverrides | undefined;
+    canUndo: boolean;
+    /** undefined: the host cannot undo a tidy-up */
+    undoTidy: (() => Promise<void>) | undefined;
     reload: (quiet?: boolean) => void;
     create: (body: Parameters<NonNullable<{
         fetchThreads: (session: string) => Promise<ChatThreadList>;
@@ -18,6 +22,9 @@ export declare function useChatThreads(session: string | null | undefined): {
                 project: string;
                 task: string;
             };
+        } | {
+            parentKey: string;
+            answerText: string;
         } | {
             name: {
                 project: string;
@@ -28,15 +35,47 @@ export declare function useChatThreads(session: string | null | undefined): {
         updateThread: (session: string, id: string, patch: {
             closed?: boolean;
             readAt?: number;
+            name?: {
+                project: string;
+                task: string;
+            };
         }) => Promise<ChatThread>;
+        undoTidy?: (session: string) => Promise<ChatThreadList>;
     } | undefined>["createThread"]>[1]) => Promise<ChatThread>;
-    update: (id: string, patch: {
-        closed?: boolean;
-        readAt?: number;
-    }) => Promise<void>;
+    update: (id: string, patch: Parameters<NonNullable<{
+        fetchThreads: (session: string) => Promise<ChatThreadList>;
+        createThread: (session: string, body: {
+            task: {
+                project: string;
+                task: string;
+            };
+        } | {
+            parentKey: string;
+            answerText: string;
+        } | {
+            name: {
+                project: string;
+                task: string;
+            };
+            parentKey?: string;
+        }) => Promise<ChatThread>;
+        updateThread: (session: string, id: string, patch: {
+            closed?: boolean;
+            readAt?: number;
+            name?: {
+                project: string;
+                task: string;
+            };
+        }) => Promise<ChatThread>;
+        undoTidy?: (session: string) => Promise<ChatThreadList>;
+    } | undefined>["updateThread"]>[2]) => Promise<void>;
 };
-/** First words of a text, for a thread named after an answer or its first message */
-export declare function firstWords(text: string, words?: number): string;
+type ThreadNameParts = ChatThread['name'];
+/**
+ * A typed thread name: "Project · Task" sets both parts, a name without " · " is the task and
+ * keeps the project. null for an empty name (cancel)
+ */
+export declare function parseThreadName(text: string, was: ThreadNameParts): ThreadNameParts | null;
 /** The quote a reply will carry, above a composer */
 export declare const QuoteChip: React.FC<{
     quote: ChatQuote;
@@ -87,6 +126,8 @@ export interface ThreadsPanelProps {
     }) => void;
     onNewFree: () => void;
     onClose: (id: string, closed: boolean) => void;
+    /** New display name of a thread (its tag, and so its routing, stays) */
+    onRename: (id: string, name: ThreadNameParts) => void;
     /** Messages and composer of the open thread (null: the draft) */
     renderThread: (thread: ChatThread | null) => React.ReactNode;
     /** Over the whole pane, the main chat hidden */
@@ -94,6 +135,10 @@ export interface ThreadsPanelProps {
     onMaximize: (maximized: boolean) => void;
     /** Hide the whole panel (the pane header's threads button shows it again) */
     onHide: () => void;
+    /** A tidy-up of the orchestrator can be undone */
+    canUndo?: boolean;
+    /** Undo the last tidy-up; absent when the host cannot */
+    onUndo?: () => void;
 }
 export declare const THREADS_SIDEBAR_KEY = "agents-ui:threads-sidebar";
 /** Mod+Shift+M: maximise or restore the threads panel of the active pane */
@@ -108,3 +153,4 @@ export declare const THREADS_MAX_SHORTCUT: string;
 export declare const DRAFT_THREAD = "draft";
 /** Right panel of an orchestrator chat: its threads, below them the open one */
 export declare const ThreadsPanel: React.FC<ThreadsPanelProps>;
+export {};
