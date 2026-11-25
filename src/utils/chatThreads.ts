@@ -29,10 +29,10 @@ export interface ChatThread {
   /** Bound status task, null for a thread opened on an answer */
   binding?: { project: string; task: string } | null;
   /**
-   * Command marks (ms, host clock): a command goes out without the tag, so each mark gives the
-   * thread the first command turn at or after it
+   * Command marks (`at`: ms, host clock): a command goes out without the tag, so each mark gives
+   * the thread the first turn of that command at or after it
    */
-  commands?: number[];
+  commands?: { at: number; command: string }[];
 }
 
 /** Where a thread starts in the main chat: "N replies in thread …" */
@@ -49,11 +49,11 @@ export const threadTag = (name: { project: string; task: string }) =>
   `${TAG_START}${name.project} · ${name.task}]`;
 
 /**
- * What goes in front of a thread message: its tag line (and quote). null for a command: the CLI
- * runs it only as the first word, so it goes out unchanged and its turn finds the thread by a mark
+ * The command a thread message starts with (`/status-report`), else null. The CLI runs a command
+ * only as the first word: it goes out without the tag line and its turn finds the thread by a mark
  */
-export const threadHead = (tag: string, quoted: string, body: string): string | null =>
-  leadingCommand(body.trim()) ? null : `${tag}\n${quoted}`;
+export const threadCommand = (body: string): string | null =>
+  leadingCommand(body.trim())?.command ?? null;
 
 /** Message text without its thread tag line */
 export function stripTag(text: string, tag: string): string {
@@ -135,11 +135,15 @@ export function threadOf(item: ChatItem, threads: ChatThread[]): string | null {
   return linked.length === 1 ? linked[0].id : null;
 }
 
-/** Command prompts the threads' marks claim: each mark takes the first one at or after it */
+/** The marked command, also as the CLI logs it with its plugin prefix (`/retro` → `/x:retro`) */
+const sameCommand = (logged: string, marked: string) =>
+  logged === marked || logged.endsWith(`:${marked.slice(1)}`);
+
+/** Command prompts the threads' marks claim: each mark takes the first of its command after it */
 function commandTurns(items: ChatItem[], threads: ChatThread[]): Map<ChatItem, string> {
   const claimed = new Map<ChatItem, string>();
   const marks = threads
-    .flatMap((t) => (t.commands ?? []).map((at) => ({ at, id: t.id })))
+    .flatMap((t) => (t.commands ?? []).map((m) => ({ ...m, id: t.id })))
     .sort((a, b) => a.at - b.at);
   for (const mark of marks) {
     const hit = items.find(
@@ -149,7 +153,7 @@ function commandTurns(items: ChatItem[], threads: ChatThread[]): Map<ChatItem, s
         i.ts >= mark.at &&
         !claimed.has(i) &&
         !agentMessage(i.text) &&
-        !!leadingCommand(i.text.trim()) &&
+        sameCommand(leadingCommand(i.text.trim())?.command ?? '', mark.command) &&
         !threadOf(i, threads)
     );
     if (hit) claimed.set(hit, mark.id);

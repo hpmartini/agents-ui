@@ -102,7 +102,7 @@ export function useChatThreads(session: string | null | undefined) {
   const update = useCallback(
     async (
       id: string,
-      patch: { closed?: boolean; readAt?: number; command?: 'start' | 'cancel' }
+      patch: { closed?: boolean; readAt?: number; command?: string; cancelCommand?: boolean }
     ) => {
       if (!api || !session) return;
       put(await api.updateThread(session, id, patch));

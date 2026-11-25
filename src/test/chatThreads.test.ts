@@ -4,7 +4,7 @@ import {
   quoteHeader,
   parseQuote,
   routeThreads,
-  threadHead,
+  threadCommand,
   threadTag,
   unreadCount,
   type ChatThread,
@@ -278,14 +278,13 @@ describe('answer time', () => {
 });
 
 describe('a command sent from a thread (no tag: the CLI runs a command only as the first word)', () => {
-  it('goes out unchanged; a normal message keeps its tag and quote', () => {
-    const quoted = 'Re your reply: "x"\n\n';
-    expect(threadHead(shop.tag, quoted, '/status-report')).toBeNull();
-    expect(threadHead(shop.tag, quoted, '/skill:ping now')).toBeNull();
-    expect(threadHead(shop.tag, '', '/mattpocock-skills:retro Dann …')).toBeNull();
-    expect(threadHead(shop.tag, quoted, 'how far?')).toBe(`${shop.tag}\n${quoted}`);
+  it('a message that starts with a command goes out unchanged; any other keeps its tag', () => {
+    expect(threadCommand('/status-report')).toBe('/status-report');
+    expect(threadCommand('/skill:ping now')).toBe('/skill:ping');
+    expect(threadCommand(' /mattpocock-skills:retro Dann …')).toBe('/mattpocock-skills:retro');
+    expect(threadCommand('how far? /status-report')).toBeNull();
     // a path is text, not a command
-    expect(threadHead(shop.tag, '', '/Users/someone/file.ts broken')).toBe(`${shop.tag}\n`);
+    expect(threadCommand('/Users/someone/file.ts broken')).toBeNull();
   });
 
   // the transcript as the host serves it: `/status-report` is the user turn (Claude), then a
@@ -308,7 +307,7 @@ describe('a command sent from a thread (no tag: the CLI runs a command only as t
     );
 
   it('its turn (prompt and answer) goes to the thread whose command mark is before it', () => {
-    const marked = { ...shop, commands: [min(1)] };
+    const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
     const items = [
       ...groupAnswers([user('main question', min(0)), answer('main answer', min(0))]),
       ...commandTurn(min(1) + 500),
@@ -319,22 +318,37 @@ describe('a command sent from a thread (no tag: the CLI runs a command only as t
   });
 
   it('after reload too: the mark is part of the stored thread, routing is the same', () => {
-    const marked = { ...shop, commands: [min(1)] };
+    const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
     const items = commandTurn(min(1) + 500);
     const again = routeThreads(items, JSON.parse(JSON.stringify([marked, weather])));
     expect(again.byThread.get('t1')).toHaveLength(2);
   });
 
   it('one mark claims one command turn; a command from the main chat stays there', () => {
-    const marked = { ...shop, commands: [min(1)] };
+    const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
     const items = [...commandTurn(min(2)), ...commandTurn(min(3))];
     const r = routeThreads(items, [marked, weather]);
     expect(r.byThread.get('t1')).toHaveLength(2);
     expect(r.main.filter((i) => i.kind === 'user')).toHaveLength(1);
   });
 
+  it('a mark claims only its own command: a /compact from the thread (no turn) never takes a later one', () => {
+    const marked = { ...shop, commands: [{ at: min(1), command: '/compact' }] };
+    const r = routeThreads(commandTurn(min(30)), [marked, weather]);
+    expect(r.byThread.size).toBe(0);
+  });
+
+  it('the CLI may log a skill with its plugin prefix', () => {
+    const marked = { ...shop, commands: [{ at: min(1), command: '/retro' }] };
+    const items = groupAnswers([
+      user('/demo-skills:retro what went wrong?', min(2)),
+      answer('This.', min(3)),
+    ]);
+    expect(routeThreads(items, [marked, weather]).byThread.get('t1')).toHaveLength(2);
+  });
+
   it('a command before the mark, a prompt that is no command, a worker message: not claimed', () => {
-    const marked = { ...shop, commands: [min(5)] };
+    const marked = { ...shop, commands: [{ at: min(5), command: '/status-report' }] };
     const r = routeThreads(
       [
         ...commandTurn(min(1)),

@@ -354,8 +354,11 @@ export interface AgentsTransport {
     updateThread: (
       session: string,
       id: string,
-      /** `command`: `start` marks a command sent from the thread (host time), `cancel` drops the latest */
-      patch: { closed?: boolean; readAt?: number; command?: 'start' | 'cancel' }
+      /**
+       * `command` (`/name`): marks that command sent from the thread (host time);
+       * `cancelCommand` drops the latest mark
+       */
+      patch: { closed?: boolean; readAt?: number; command?: string; cancelCommand?: boolean }
     ) => Promise<ChatThread>;
   };
   /** Opening a clicked file path on the agents' machine; resolves with what the server did */

@@ -91,6 +91,22 @@ describe('reply on an answer', () => {
     expect(screen.queryByText(tag, { exact: false })).toBeNull();
     expect(screen.getByText('Form is done.')).toBeTruthy();
   });
+
+  it('a command sent from a thread shows there as a chip with its text', () => {
+    const tag = threadTag({ project: 'Shop', task: 'Checkout' });
+    renderWithAgents(
+      <ChatRepliesContext.Provider value={{ reply: vi.fn(), tag }}>
+        <ChatItemView
+          item={{ kind: 'user', key: 'u1', ts: at, text: '/status-report only open tasks' }}
+          showSteps={false}
+          harness="claude"
+          model={null}
+        />
+      </ChatRepliesContext.Provider>
+    );
+    expect(document.querySelector('[data-command]')?.textContent).toBe('/status-report');
+    expect(screen.getByText('only open tasks', { exact: false })).toBeTruthy();
+  });
 });
 
 const thread = (id: string, extra: Partial<ChatThread> = {}): ChatThread => ({

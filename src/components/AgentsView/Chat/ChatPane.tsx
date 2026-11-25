@@ -74,7 +74,7 @@ import {
   quoteHeader,
   stripTag,
   routeThreads,
-  threadHead,
+  threadCommand,
   unreadCount,
 } from '../../../utils/chatThreads';
 import { clampWidth, ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
@@ -737,22 +737,22 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       setOpenThreadId(thread.id);
     }
     const quoted = threadQuote ? quoteHeader(threadQuote.ts, threadQuote.text) : '';
-    const head = threadHead(thread.tag, quoted, body);
-    if (head !== null) {
-      const sent = await sendPrompt(head, body, files);
+    const command = threadCommand(body);
+    if (!command) {
+      const sent = await sendPrompt(`${thread.tag}\n${quoted}`, body, files);
       if (sent) setThreadQuote(null);
       return sent;
     }
     // A command: marked first (host time, before it is typed), so its turn lands in the thread
     try {
-      await threads.update(thread.id, { command: 'start' });
+      await threads.update(thread.id, { command });
     } catch (e) {
       setError(e instanceof Error ? e.message : t.threadsFailed);
       return false;
     }
     const sent = await sendPrompt('', body, files);
-    // a mark left behind would take the next command of the main chat
-    if (!sent) void threads.update(thread.id, { command: 'cancel' }).catch(() => {});
+    // a mark left behind would take the next same command of the main chat
+    if (!sent) void threads.update(thread.id, { cancelCommand: true }).catch(() => {});
     return sent;
   };
   const unreadTotal = threadList.reduce(
