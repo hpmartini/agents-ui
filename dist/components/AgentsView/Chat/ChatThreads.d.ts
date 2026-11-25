@@ -100,7 +100,22 @@ export interface ThreadsPanelProps {
     onMaximize: (maximized: boolean) => void;
     /** Hide the whole panel (the pane header's threads button shows it again) */
     onHide: () => void;
+    /**
+     * Details of a report task from the host (its Status view); without it no Status list and no
+     * "Show in Status" in a bound thread
+     */
+    onShowStatus?: (task: StatusTask) => void;
+    /** The task whose details `statusView` shows (null: the host's whole status) */
+    statusTask?: StatusTask | null;
+    /** Host view in the main area in place of the open thread (maximised panel) */
+    statusView?: React.ReactNode;
+    /** Back from `statusView` to the thread (Esc, Back) */
+    onCloseStatus?: () => void;
 }
+export type StatusTask = {
+    project: string;
+    task: string;
+};
 export declare const THREADS_SIDEBAR_KEY = "agents-ui:threads-sidebar";
 /** Mod+Shift+M: maximise or restore the threads panel of the active pane */
 export declare const isThreadsMaxKey: (e: {

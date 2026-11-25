@@ -3278,7 +3278,9 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                           ((pane) => host.renderPaneActions?.(paneInfo(pane)))
                         }
                         renderPaneView={
-                          host.renderPaneView && ((pane) => host.renderPaneView?.(paneInfo(pane)))
+                          host.renderPaneView &&
+                          ((pane, status) =>
+                            host.renderPaneView?.({ ...paneInfo(pane), ...status }))
                         }
                       />
                     </div>

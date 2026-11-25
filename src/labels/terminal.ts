@@ -207,6 +207,12 @@ export interface TerminalLabels {
   maximizeThreadsTitle: (shortcut: string) => string;
   restoreThreadsTitle: (shortcut: string) => string;
   threadsSidebar: string;
+  /** H-6: the report tasks under the thread list of the maximised panel, and their details */
+  statusList: string;
+  statusOf: (title: string) => string;
+  taskState: (state: string) => string;
+  showInStatus: string;
+  backToThread: string;
   firstThreadMessage: (tag: string) => string;
   boundTo: (repo: string | null) => string;
   notBound: string;
@@ -518,6 +524,11 @@ export const terminalEn: TerminalLabels = {
   maximizeThreadsTitle: (shortcut) => `Threads over the whole pane (${shortcut})`,
   restoreThreadsTitle: (shortcut) => `Show the main chat again (Esc or ${shortcut})`,
   threadsSidebar: 'Thread list on the left',
+  statusList: 'Status',
+  statusOf: (title) => `Status · ${title}`,
+  taskState: (state) => (state === 'waiting' ? 'waiting for you' : state),
+  showInStatus: 'Show in Status',
+  backToThread: 'Back to the thread (Esc)',
   firstThreadMessage: (tag) =>
     `Write the first message. It goes to the orchestrator tagged ${tag}.`,
   boundTo: (repo) => `Bound to status task${repo ? ` · ${repo}` : ''}`,
@@ -839,6 +850,18 @@ export const terminalDe: TerminalLabels = {
   maximizeThreadsTitle: (shortcut) => `Threads über die ganze Pane (${shortcut})`,
   restoreThreadsTitle: (shortcut) => `Haupt-Chat wieder zeigen (Esc oder ${shortcut})`,
   threadsSidebar: 'Thread-Liste links',
+  statusList: 'Status',
+  statusOf: (title) => `Status · ${title}`,
+  taskState: (state) =>
+    ({
+      waiting: 'wartet auf dich',
+      running: 'läuft',
+      planned: 'geplant',
+      done: 'erledigt',
+      cancelled: 'abgebrochen',
+    })[state] ?? state,
+  showInStatus: 'Im Status zeigen',
+  backToThread: 'Zurück zum Thread (Esc)',
   firstThreadMessage: (tag) =>
     `Erste Nachricht schreiben. Sie geht mit der Kennung ${tag} an den Orchestrator.`,
   boundTo: (repo) => `An Status-Aufgabe gebunden${repo ? ` · ${repo}` : ''}`,

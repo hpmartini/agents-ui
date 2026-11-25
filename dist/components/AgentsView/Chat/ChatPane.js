@@ -179,7 +179,7 @@ const keepFocus = (e) => {
  * UI view of an agent pane (#189): renders the agent's transcript and types into the pane's
  * terminal. The terminal process is the agent; this view never starts or stops a process.
  */
-export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, showSteps, onToggleSteps, onFocus, onClose, onMaximize, onShowTerminal, headerProps, hostActions, paneView = null, meta, }) => {
+export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, showSteps, onToggleSteps, onFocus, onClose, onMaximize, onShowTerminal, headerProps, hostActions, paneView = null, renderStatus, meta, }) => {
     const [state, dispatch] = useReducer(reducer, initialChatState);
     const { chat, uploads } = useTransport();
     const t = useLabels().terminal;
@@ -452,8 +452,10 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
     const [threadsMaxed, setThreadsMaxed] = useState(false);
     const showThreadsPanel = (open) => {
         setThreadsOpen(open);
-        if (!open)
+        if (!open) {
             setThreadsMaxed(false);
+            setStatusTask(null);
+        }
         try {
             localStorage.setItem(THREADS_OPEN_KEY, open ? '1' : '0');
         }
@@ -485,11 +487,34 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
     const showThreads = threads.enabled && threadsOpen;
     // A question of the agent needs the main chat: it shows again until answered
     const threadsFull = showThreads && threadsMaxed && !dialog && prompt === null;
+    // H-6: a report task's details in the maximised panel; the header-toggled host view shows
+    // there too, until a thread or an entry is picked (the host keeps its toggle)
+    const [statusTask, setStatusTask] = useState(null);
+    const hostView = paneView !== null && paneView !== false && paneView !== undefined;
+    const [hostViewOff, setHostViewOff] = useState(false);
+    useEffect(() => setHostViewOff(false), [hostView]);
     const maximizeThreads = (on) => {
         if (on)
             showThreadsPanel(true);
+        else
+            setStatusTask(null);
         setThreadsMaxed(on);
     };
+    const closeStatus = () => {
+        setStatusTask(null);
+        setHostViewOff(true);
+    };
+    const statusView = !threadsFull
+        ? null
+        : statusTask
+            ? (renderStatus?.(statusTask, closeStatus) ?? null)
+            : hostView && !hostViewOff
+                ? paneView
+                : null;
+    // the host renders a Status view at all (Orkumo with the Status module): list and buttons
+    const firstTask = threads.tasks[0];
+    const statusAvailable = !!firstTask &&
+        !!renderStatus?.({ project: firstTask.project, task: firstTask.task }, closeStatus);
     // On the window: maximising hides the focused main input and focus falls to <body>, where a
     // handler on the pane never hears the key. Keys inside this pane, or on <body> for the active pane on screen.
     const paneRef = useRef(null);
@@ -544,6 +569,8 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
         setThreadQuote(null);
         if (id)
             showThreadsPanel(true);
+        if (statusView)
+            closeStatus();
     };
     const openThread = threads.threads.find((x) => x.id === openThreadId) ?? null;
     const openFromAnswer = async (answer) => {
@@ -692,7 +719,7 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
                             setError(null);
                             if (!reattachPane(pane.id))
                                 setError(t.noTerminalToReattach);
-                        }, className: "shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] text-amber-100 bg-amber-500/15 border border-amber-400/40 hover:bg-amber-500/25 focus-visible:outline-2 focus-visible:outline-blue-400", title: t.reattachTitle, children: [_jsx(RefreshCw, { size: 11, "aria-hidden": true }), t.reattach] })), meta && (_jsx("div", { className: "flex items-center gap-x-2 min-w-0 overflow-hidden text-[11px] text-gray-400", children: meta })), _jsx("span", { className: "flex-1" }), hostActions, _jsx("button", { type: "button", onClick: onToggleSteps, onMouseDown: keepFocus, className: `${iconBtn} ${showSteps ? 'text-blue-300' : ''}`, title: showSteps ? t.hideStepsTitle : t.showStepsTitle, "aria-label": t.showSteps, "aria-pressed": showSteps, children: _jsx(ListTree, { size: 13 }) }), _jsx("button", { type: "button", onClick: togglePromptsOnly, onMouseDown: keepFocus, disabled: !sessionId, className: `${iconBtn} ${promptsOnly ? 'text-blue-300' : ''}`, title: promptsOnly ? t.showAnswersTitle : t.promptsOnlyTitle, "aria-label": t.promptsOnly, "aria-pressed": promptsOnly, children: _jsx(MessagesSquare, { size: 13 }) }), threads.enabled && (_jsxs("button", { type: "button", onClick: () => showThreadsPanel(!threadsOpen), onMouseDown: keepFocus, className: `${iconBtn} relative ${threadsOpen ? 'text-blue-300' : ''}`, title: threadsOpen ? t.hideThreads : t.showThreads, "aria-label": t.threads, "aria-pressed": threadsOpen, children: [_jsx(PanelRight, { size: 13 }), unreadTotal > 0 && !threadsOpen && (_jsx("span", { className: "absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-blue-400" }))] })), busy && connected && (_jsx("button", { type: "button", onClick: stopTurn, onMouseDown: keepFocus, className: iconBtn, title: t.stopTurnTitle, "aria-label": t.stopTurn, children: _jsx(Square, { size: 13 }) })), _jsx("button", { type: "button", onClick: onShowTerminal, onMouseDown: keepFocus, className: iconBtn, title: t.terminalViewTitle, "aria-label": t.terminalView, children: _jsx(SquareTerminal, { size: 14 }) }), onMaximize && (_jsx("button", { type: "button", onClick: onMaximize, onMouseDown: keepFocus, className: iconBtn, title: t.ownTab, "aria-label": t.moveToItsOwnTab, children: _jsx(Maximize2, { size: 13 }) })), _jsx("button", { type: "button", onClick: onClose, onMouseDown: keepFocus, className: iconBtn, title: t.closeAgentTitle, "aria-label": t.closeNamed(pane.name), children: _jsx(X, { size: 14 }) })] }), _jsxs("div", { ref: rowRef, className: "relative flex-1 min-h-0 flex", children: [_jsxs("div", { className: `relative flex-1 min-w-0 min-h-0 flex flex-col ${threadsFull ? 'hidden' : ''}`, children: [paneView !== null && paneView !== false && (_jsx("div", { "data-pane-view": true, className: "absolute inset-0 z-20 flex flex-col bg-gray-950", children: paneView })), starts.length > 0 && (_jsxs("div", { className: "shrink-0 border-b border-gray-800 bg-gray-900/60 text-xs", children: [_jsxs("button", { type: "button", onClick: () => setStartsOpen((o) => !o), className: "flex w-full items-center gap-1 px-3 py-1 text-gray-400 hover:text-gray-200", "aria-expanded": startsOpen, "data-chat-starts": true, children: [_jsx(ChevronRight, { size: 12, "aria-hidden": true, className: `transition-transform ${startsOpen ? 'rotate-90' : ''}` }), t.startPrompts(starts.length), _jsx("span", { className: "text-gray-600", children: t.startPromptsHint })] }), startsOpen && (_jsx("ol", { className: "max-h-40 overflow-y-auto pb-1", children: starts.map((m, i) => (_jsx("li", { children: _jsxs("button", { type: "button", onClick: () => jumpTo(m.key), className: "block w-full truncate px-3 py-0.5 pl-7 text-left text-gray-300 hover:bg-gray-800 hover:text-white", title: m.text, children: [_jsxs("span", { className: "mr-1.5 text-gray-600", children: [i + 1, "."] }), splitImages(m.text).text || m.text] }) }, m.key))) }))] })), _jsx("div", { ref: listRef, role: "log", "aria-label": t.chatLog(pane.name), className: "flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2", onScroll: (e) => {
+                        }, className: "shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] text-amber-100 bg-amber-500/15 border border-amber-400/40 hover:bg-amber-500/25 focus-visible:outline-2 focus-visible:outline-blue-400", title: t.reattachTitle, children: [_jsx(RefreshCw, { size: 11, "aria-hidden": true }), t.reattach] })), meta && (_jsx("div", { className: "flex items-center gap-x-2 min-w-0 overflow-hidden text-[11px] text-gray-400", children: meta })), _jsx("span", { className: "flex-1" }), hostActions, _jsx("button", { type: "button", onClick: onToggleSteps, onMouseDown: keepFocus, className: `${iconBtn} ${showSteps ? 'text-blue-300' : ''}`, title: showSteps ? t.hideStepsTitle : t.showStepsTitle, "aria-label": t.showSteps, "aria-pressed": showSteps, children: _jsx(ListTree, { size: 13 }) }), _jsx("button", { type: "button", onClick: togglePromptsOnly, onMouseDown: keepFocus, disabled: !sessionId, className: `${iconBtn} ${promptsOnly ? 'text-blue-300' : ''}`, title: promptsOnly ? t.showAnswersTitle : t.promptsOnlyTitle, "aria-label": t.promptsOnly, "aria-pressed": promptsOnly, children: _jsx(MessagesSquare, { size: 13 }) }), threads.enabled && (_jsxs("button", { type: "button", onClick: () => showThreadsPanel(!threadsOpen), onMouseDown: keepFocus, className: `${iconBtn} relative ${threadsOpen ? 'text-blue-300' : ''}`, title: threadsOpen ? t.hideThreads : t.showThreads, "aria-label": t.threads, "aria-pressed": threadsOpen, children: [_jsx(PanelRight, { size: 13 }), unreadTotal > 0 && !threadsOpen && (_jsx("span", { className: "absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-blue-400" }))] })), busy && connected && (_jsx("button", { type: "button", onClick: stopTurn, onMouseDown: keepFocus, className: iconBtn, title: t.stopTurnTitle, "aria-label": t.stopTurn, children: _jsx(Square, { size: 13 }) })), _jsx("button", { type: "button", onClick: onShowTerminal, onMouseDown: keepFocus, className: iconBtn, title: t.terminalViewTitle, "aria-label": t.terminalView, children: _jsx(SquareTerminal, { size: 14 }) }), onMaximize && (_jsx("button", { type: "button", onClick: onMaximize, onMouseDown: keepFocus, className: iconBtn, title: t.ownTab, "aria-label": t.moveToItsOwnTab, children: _jsx(Maximize2, { size: 13 }) })), _jsx("button", { type: "button", onClick: onClose, onMouseDown: keepFocus, className: iconBtn, title: t.closeAgentTitle, "aria-label": t.closeNamed(pane.name), children: _jsx(X, { size: 14 }) })] }), _jsxs("div", { ref: rowRef, className: "relative flex-1 min-h-0 flex", children: [_jsxs("div", { className: `relative flex-1 min-w-0 min-h-0 flex flex-col ${threadsFull ? 'hidden' : ''}`, children: [hostView && !threadsFull && (_jsx("div", { "data-pane-view": true, className: "absolute inset-0 z-40 flex flex-col bg-gray-950", children: paneView })), starts.length > 0 && (_jsxs("div", { className: "shrink-0 border-b border-gray-800 bg-gray-900/60 text-xs", children: [_jsxs("button", { type: "button", onClick: () => setStartsOpen((o) => !o), className: "flex w-full items-center gap-1 px-3 py-1 text-gray-400 hover:text-gray-200", "aria-expanded": startsOpen, "data-chat-starts": true, children: [_jsx(ChevronRight, { size: 12, "aria-hidden": true, className: `transition-transform ${startsOpen ? 'rotate-90' : ''}` }), t.startPrompts(starts.length), _jsx("span", { className: "text-gray-600", children: t.startPromptsHint })] }), startsOpen && (_jsx("ol", { className: "max-h-40 overflow-y-auto pb-1", children: starts.map((m, i) => (_jsx("li", { children: _jsxs("button", { type: "button", onClick: () => jumpTo(m.key), className: "block w-full truncate px-3 py-0.5 pl-7 text-left text-gray-300 hover:bg-gray-800 hover:text-white", title: m.text, children: [_jsxs("span", { className: "mr-1.5 text-gray-600", children: [i + 1, "."] }), splitImages(m.text).text || m.text] }) }, m.key))) }))] })), _jsx("div", { ref: listRef, role: "log", "aria-label": t.chatLog(pane.name), className: "flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2", onScroll: (e) => {
                                     const el = e.currentTarget;
                                     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
                                     // Only a scroll up by the user lets go; layout shifts never do
@@ -726,7 +753,12 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
                                     : 'min-h-0 max-w-full shrink-0 border-l border-gray-800 bg-gray-950', children: _jsx(ThreadsPanel, { status: threads.status, threads: threadList, tasks: threads.tasks, byThread: routed.byThread, openId: openThreadId, onOpen: openThreadIn, onRetry: () => threads.reload(), onNewTask: (task) => threads
                                         .create({ task })
                                         .then((made) => openThreadIn(made.id))
-                                        .catch((e) => setError(e.message)), onNewFree: () => openThreadIn(DRAFT_THREAD), onClose: (id, closed) => threads.update(id, { closed }).catch((e) => setError(e.message)), maximized: threadsFull, onMaximize: maximizeThreads, onHide: () => showThreadsPanel(false), renderThread: (thread) => {
+                                        .catch((e) => setError(e.message)), onNewFree: () => openThreadIn(DRAFT_THREAD), onClose: (id, closed) => threads.update(id, { closed }).catch((e) => setError(e.message)), maximized: threadsFull, onMaximize: maximizeThreads, onHide: () => showThreadsPanel(false), onShowStatus: statusAvailable
+                                        ? (task) => {
+                                            maximizeThreads(true);
+                                            setStatusTask(task);
+                                        }
+                                        : undefined, statusTask: statusTask, statusView: statusView, onCloseStatus: closeStatus, renderThread: (thread) => {
                                         const parent = thread?.parentKey
                                             ? items.find((i) => i.key === thread.parentKey)
                                             : undefined;
