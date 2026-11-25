@@ -10,3 +10,4 @@ export { configureLinks, type LinkPlatform } from './utils/links';
 export { ResizeHandle, clampWidth, useStoredWidth, type ResizeHandleProps } from './ResizeHandle';
 export type { AgentDisplayState, AgentHarness, AgentSession, AgentViewSettings } from './types';
 export type { ChatThread, ChatThreadMarker } from './utils/chatThreads';
+export { CHOICE_PILL_MAX, CHOICE_SEARCH_THRESHOLD, Choice, choiceMode, type ChoiceMode, type ChoiceOption, type ChoiceProps, } from './components/Choice';

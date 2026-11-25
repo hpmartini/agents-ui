@@ -13,8 +13,6 @@ export interface PanelsLabels {
   settingsTaskCwd: string;
   settingsTaskCwdPlaceholder: string;
   settingsGroupBy: string;
-  settingsGroupState: string;
-  settingsGroupDirectory: string;
   settingsCardDensity: string;
   settingsDensityComfortable: string;
   settingsDensityCompact: string;
@@ -233,8 +231,6 @@ export const panelsEn: PanelsLabels = {
   settingsTaskCwd: 'New tasks start in',
   settingsTaskCwdPlaceholder: 'Selected project or last pick, e.g. ~/MAPLE',
   settingsGroupBy: 'Group by',
-  settingsGroupState: 'State (pinned · review · needs input · working · completed)',
-  settingsGroupDirectory: 'Directory',
   settingsCardDensity: 'Card density',
   settingsDensityComfortable: 'Comfortable (metrics on their own line)',
   settingsDensityCompact: 'Compact',
@@ -323,7 +319,7 @@ export const panelsEn: PanelsLabels = {
     {
       title: 'Manage',
       rows: [
-        ['Ctrl+S', 'Toggle grouping: state ↔ directory'],
+        ['Ctrl+S', 'Cycle grouping: Project → Status → Directory → None'],
         ['Ctrl+T (Alt+P)', 'Pin / unpin the selected session'],
         ['Ctrl+R', 'Rename the selected session'],
         ['Shift+↑ / Shift+↓', 'Reorder the selected session or group'],
@@ -528,8 +524,6 @@ export const panelsDe: PanelsLabels = {
   settingsTaskCwd: 'Neue Aufgaben starten in',
   settingsTaskCwdPlaceholder: 'Gewähltes Projekt oder letzte Wahl, z. B. ~/MAPLE',
   settingsGroupBy: 'Gruppieren nach',
-  settingsGroupState: 'Status (angeheftet · Review · wartet auf Eingabe · arbeitet · fertig)',
-  settingsGroupDirectory: 'Verzeichnis',
   settingsCardDensity: 'Kartendichte',
   settingsDensityComfortable: 'Großzügig (Kennzahlen in eigener Zeile)',
   settingsDensityCompact: 'Kompakt',
@@ -622,7 +616,7 @@ export const panelsDe: PanelsLabels = {
     {
       title: 'Verwalten',
       rows: [
-        ['Ctrl+S', 'Gruppierung umschalten: Status ↔ Verzeichnis'],
+        ['Ctrl+S', 'Gruppierung durchschalten: Projekt → Status → Verzeichnis → Keine'],
         ['Ctrl+T (Alt+P)', 'Gewählte Session anheften / lösen'],
         ['Ctrl+R', 'Gewählte Session umbenennen'],
         ['Shift+↑ / Shift+↓', 'Gewählte Session oder Gruppe verschieben'],

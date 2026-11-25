@@ -1,8 +1,9 @@
 import { jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Check, CircleDot, GitPullRequest, ListFilter, Search, X, } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CircleDot, GitPullRequest, ListFilter, Search, X, } from 'lucide-react';
 import { QUICK_FILTERS, SORT_OPTIONS, } from '../../utils/agentSessions';
 import { useLabels } from '../../labels';
+import { Choice } from '../Choice';
 import { usePopover } from './PullRequestsPanel';
 import { SEARCH_SHORTCUT, isMac } from '../../utils/platform';
 /**
@@ -50,7 +51,6 @@ const SearchPanel = ({ query, onQuery, entries, selected, onToggle, onClose }) =
  */
 export const AgentFilterBar = ({ sort, onSort, active, onToggle, chipCounts, shown, total, filtered, onClear, linkEntries, linkSelected, onToggleLink, query, onQuery, leading, trailing, }) => {
     const t = useLabels().shell;
-    const [open, setOpen] = useState(false);
     const [chipsOpen, setChipsOpenState] = useState(() => {
         try {
             return localStorage.getItem(CHIPS_OPEN_KEY) === '1';
@@ -69,7 +69,6 @@ export const AgentFilterBar = ({ sort, onSort, active, onToggle, chipCounts, sho
         }
     };
     const [searchOpen, setSearchOpen] = useState(false);
-    const rootRef = useRef(null);
     const barRef = useRef(null);
     const current = SORT_OPTIONS.find((o) => o.key === sort.key) || SORT_OPTIONS[0];
     // Cmd/Ctrl+K toggles the search; in a terminal off macOS Ctrl+K is readline's kill-line, so
@@ -93,29 +92,11 @@ export const AgentFilterBar = ({ sort, onSort, active, onToggle, chipCounts, sho
         document.addEventListener('keydown', onKey, true);
         return () => document.removeEventListener('keydown', onKey, true);
     }, []);
-    useEffect(() => {
-        if (!open)
-            return;
-        const onDown = (e) => {
-            if (!rootRef.current?.contains(e.target))
-                setOpen(false);
-        };
-        const onKey = (e) => {
-            if (e.key === 'Escape')
-                setOpen(false);
-        };
-        document.addEventListener('mousedown', onDown);
-        document.addEventListener('keydown', onKey);
-        return () => {
-            document.removeEventListener('mousedown', onDown);
-            document.removeEventListener('keydown', onKey);
-        };
-    }, [open]);
     const searching = query.trim() !== '' || linkSelected.size > 0;
-    return (_jsxs("div", { ref: barRef, className: "px-3 py-2 border-b border-gray-800 space-y-1.5 shrink-0", children: [_jsxs("div", { className: "relative flex items-center gap-1 text-xs", children: [leading, _jsxs("div", { className: "relative min-w-0", ref: rootRef, children: [_jsxs("button", { onClick: () => setOpen((v) => !v), "aria-haspopup": "menu", "aria-expanded": open, "aria-label": t.sortAgentsBy(t.sortOptions[current.key]), title: t.sortAgents, className: "w-full flex items-center gap-1 px-1.5 py-1 rounded text-gray-300 hover:bg-gray-800 border border-gray-800", children: [_jsx(ArrowUpDown, { size: 12, className: "shrink-0" }), _jsx("span", { className: "truncate", children: t.sortOptions[current.key] })] }), open && (_jsx("div", { role: "menu", className: "absolute left-0 top-full mt-1 z-30 min-w-[180px] bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1", children: SORT_OPTIONS.map((option) => (_jsxs("button", { role: "menuitemradio", "aria-checked": option.key === sort.key, onClick: () => {
-                                        onSort({ key: option.key, dir: option.dir });
-                                        setOpen(false);
-                                    }, className: "w-full flex items-center gap-2 text-left px-3 py-1.5 text-gray-200 hover:bg-gray-700 hover:text-white", children: [_jsx("span", { className: "w-3", children: option.key === sort.key && _jsx(Check, { size: 12 }) }), t.sortOptions[option.key]] }, option.key))) }))] }), _jsx("button", { onClick: () => onSort({ ...sort, dir: sort.dir === 'asc' ? 'desc' : 'asc' }), disabled: !current.directional, title: current.directional ? t.sortDirection(sort.dir === 'asc') : t.fixedDirection, "aria-label": t.reverseSort, className: "shrink-0 p-1 rounded text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed", children: sort.dir === 'asc' ? _jsx(ArrowUp, { size: 13 }) : _jsx(ArrowDown, { size: 13 }) }), _jsxs("button", { onClick: () => setChipsOpen(!chipsOpen), "aria-expanded": chipsOpen, "aria-controls": "agent-filter-chips", title: chipsOpen ? t.hideFilters : t.showFilters, "aria-label": chipsOpen ? t.hideFilters : t.showFilters, className: `shrink-0 flex items-center gap-1 px-1.5 py-1 rounded hover:bg-gray-800 ${active.size > 0 ? 'text-blue-300' : 'text-gray-400 hover:text-white'}`, children: [_jsx(ListFilter, { size: 13 }), active.size > 0 && _jsx("span", { className: "tabular-nums", children: active.size })] }), _jsxs("div", { className: "min-w-0", children: [_jsxs("button", { onClick: () => setSearchOpen((v) => !v), "data-popover-trigger": true, "aria-haspopup": "dialog", "aria-expanded": searchOpen, title: t.searchTitle(SEARCH_SHORTCUT), "aria-label": t.searchTitle(SEARCH_SHORTCUT), className: `max-w-full flex items-center gap-1 px-1.5 py-1 rounded hover:bg-gray-800 ${searching ? 'text-blue-300' : 'text-gray-400 hover:text-white'} ${searchOpen ? 'bg-gray-800' : ''}`, children: [_jsx(Search, { size: 13, className: "shrink-0" }), query.trim() && _jsx("span", { className: "truncate", children: query.trim() }), linkSelected.size > 0 && (_jsxs("span", { className: "shrink-0 flex items-center gap-0.5 tabular-nums", children: [_jsx(GitPullRequest, { size: 11, "aria-hidden": true }), linkSelected.size] }))] }), searchOpen && (_jsx(SearchPanel, { query: query, onQuery: onQuery, entries: linkEntries, selected: linkSelected, onToggle: onToggleLink, onClose: () => setSearchOpen(false) }))] }), trailing, _jsx("span", { className: "flex-1" }), _jsx("span", { className: "shrink-0 text-gray-500 tabular-nums whitespace-nowrap", "aria-live": "polite", children: filtered ? t.shownOf(shown, total) : t.agentCount(total) }), filtered && (_jsx("button", { onClick: onClear, className: "shrink-0 p-1 rounded text-blue-300 hover:text-white hover:bg-gray-800", title: t.clearFilters, "aria-label": t.clearFilters, children: _jsx(X, { size: 12 }) }))] }), chipsOpen && (_jsx("div", { id: "agent-filter-chips", className: "flex flex-wrap gap-1", role: "group", "aria-label": t.filterAgents, children: QUICK_FILTERS.map((chip) => {
+    return (_jsxs("div", { ref: barRef, className: "px-3 py-2 border-b border-gray-800 space-y-1.5 shrink-0", children: [_jsxs("div", { className: "relative flex items-center gap-1 text-xs", children: [leading, _jsx(Choice, { label: t.sortAgents, value: current.key, onChange: (key) => {
+                            const option = SORT_OPTIONS.find((o) => o.key === key);
+                            onSort({ key, dir: option.dir });
+                        }, options: SORT_OPTIONS.map((o) => ({ value: o.key, label: t.sortOptions[o.key] })), icon: _jsx(ArrowUpDown, { size: 12, "aria-hidden": true, className: "shrink-0" }), className: "bg-transparent border-gray-800 text-gray-300 hover:bg-gray-800" }), _jsx("button", { onClick: () => onSort({ ...sort, dir: sort.dir === 'asc' ? 'desc' : 'asc' }), disabled: !current.directional, title: current.directional ? t.sortDirection(sort.dir === 'asc') : t.fixedDirection, "aria-label": t.reverseSort, className: "shrink-0 p-1 rounded text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed", children: sort.dir === 'asc' ? _jsx(ArrowUp, { size: 13 }) : _jsx(ArrowDown, { size: 13 }) }), _jsxs("button", { onClick: () => setChipsOpen(!chipsOpen), "aria-expanded": chipsOpen, "aria-controls": "agent-filter-chips", title: chipsOpen ? t.hideFilters : t.showFilters, "aria-label": chipsOpen ? t.hideFilters : t.showFilters, className: `shrink-0 flex items-center gap-1 px-1.5 py-1 rounded hover:bg-gray-800 ${active.size > 0 ? 'text-blue-300' : 'text-gray-400 hover:text-white'}`, children: [_jsx(ListFilter, { size: 13 }), active.size > 0 && _jsx("span", { className: "tabular-nums", children: active.size })] }), _jsxs("div", { className: "min-w-0", children: [_jsxs("button", { onClick: () => setSearchOpen((v) => !v), "data-popover-trigger": true, "aria-haspopup": "dialog", "aria-expanded": searchOpen, title: t.searchTitle(SEARCH_SHORTCUT), "aria-label": t.searchTitle(SEARCH_SHORTCUT), className: `max-w-full flex items-center gap-1 px-1.5 py-1 rounded hover:bg-gray-800 ${searching ? 'text-blue-300' : 'text-gray-400 hover:text-white'} ${searchOpen ? 'bg-gray-800' : ''}`, children: [_jsx(Search, { size: 13, className: "shrink-0" }), query.trim() && _jsx("span", { className: "truncate", children: query.trim() }), linkSelected.size > 0 && (_jsxs("span", { className: "shrink-0 flex items-center gap-0.5 tabular-nums", children: [_jsx(GitPullRequest, { size: 11, "aria-hidden": true }), linkSelected.size] }))] }), searchOpen && (_jsx(SearchPanel, { query: query, onQuery: onQuery, entries: linkEntries, selected: linkSelected, onToggle: onToggleLink, onClose: () => setSearchOpen(false) }))] }), trailing, _jsx("span", { className: "flex-1" }), _jsx("span", { className: "shrink-0 text-gray-500 tabular-nums whitespace-nowrap", "aria-live": "polite", children: filtered ? t.shownOf(shown, total) : t.agentCount(total) }), filtered && (_jsx("button", { onClick: onClear, className: "shrink-0 p-1 rounded text-blue-300 hover:text-white hover:bg-gray-800", title: t.clearFilters, "aria-label": t.clearFilters, children: _jsx(X, { size: 12 }) }))] }), chipsOpen && (_jsx("div", { id: "agent-filter-chips", className: "flex flex-wrap gap-1", role: "group", "aria-label": t.filterAgents, children: QUICK_FILTERS.map((chip) => {
                     const on = active.has(chip.key);
                     const count = chipCounts[chip.key];
                     return (_jsxs("button", { onClick: () => onToggle(chip.key), "aria-pressed": on, title: t.quickFilters[chip.key].title, className: `px-2 py-0.5 rounded-full text-[11px] border tabular-nums ${on

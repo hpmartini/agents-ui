@@ -1,11 +1,97 @@
-html, body, #root { height: 100%; margin: 0; }
-body { background: #243562; color: #d6dff1; font-family: Inter, system-ui, sans-serif; }
-.demo { height: 100%; display: flex; flex-direction: column; }
-.demo-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; font-size: 13px; border-bottom: 1px solid #4f67a0; }
-.demo-bar span { color: #adbde0; }
-.demo-bar button { margin-left: auto; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid #4f67a0; background: transparent; color: inherit; cursor: pointer; }
-.demo-main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.demo-toasts { position: fixed; bottom: 16px; right: 16px; z-index: 100; display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.demo-toast { padding: 8px 12px; border-radius: 6px; font-size: 13px; background: #1a274b; border: 1px solid #4f67a0; cursor: pointer; }
-.demo-toast-success { border-color: #34d399; }
-.demo-toast-error { border-color: #f87171; }
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: #243562;
+  color: #d6dff1;
+  font-family: Inter, system-ui, sans-serif;
+}
+.demo {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.demo-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid #4f67a0;
+}
+.demo-bar span {
+  color: #adbde0;
+}
+.demo-bar button {
+  margin-left: auto;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #4f67a0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.demo-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.demo-toasts {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.demo-toast {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #1a274b;
+  border: 1px solid #4f67a0;
+  cursor: pointer;
+}
+.demo-toast-success {
+  border-color: #34d399;
+}
+.demo-toast-error {
+  border-color: #f87171;
+}
+/* ?theme=light: the theming variables of styles.css, pointed at a light scale */
+.demo-light body {
+  background: #f6f8fd;
+  color: #1a274b;
+}
+.demo-light .demo-bar span {
+  color: #4f67a0;
+}
+.demo-light .agents-ui {
+  --agents-gray-50: #0f1830;
+  --agents-gray-100: #16213f;
+  --agents-gray-200: #1f2c4f;
+  --agents-gray-300: #2c3b62;
+  --agents-gray-400: #3b4c78;
+  --agents-gray-500: #4f6190;
+  --agents-gray-600: #6a7ba6;
+  --agents-gray-700: #b7c3de;
+  --agents-gray-750: #cbd5ea;
+  --agents-gray-800: #dbe3f3;
+  --agents-gray-850: #e8eef9;
+  --agents-gray-900: #f6f8fd;
+  --agents-gray-950: #ffffff;
+  --agents-white: #0b1226;
+  --agents-cursor: #2563eb;
+  --agents-sel: #c9d8f5;
+  --agents-blue-text: #1d4ed8;
+}

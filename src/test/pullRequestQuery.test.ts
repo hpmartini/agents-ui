@@ -18,7 +18,7 @@ const pr = (n: number, over: Partial<AgentPullRequest> = {}): AgentPullRequest =
   number: n,
   title: `PR ${n}`,
   url: `https://github.com/o/r/pull/${n}`,
-  author: 'hape',
+  author: 'dev',
   isDraft: false,
   headRef: `feat/${n}`,
   baseRef: 'main',
@@ -110,7 +110,7 @@ describe('filterPulls (AC-2)', () => {
 
   it('filters combine with AND', () => {
     expect(filter({ agent: 'yes', merge: 'ready' })).toEqual([1]);
-    expect(filter({ agent: 'yes', merge: 'ready', author: 'hape' })).toEqual([]);
+    expect(filter({ agent: 'yes', merge: 'ready', author: 'dev' })).toEqual([]);
     expect(filter({ repo: 'o/r', draft: 'no', ci: 'success' })).toEqual([1, 5]);
   });
 });
@@ -155,7 +155,7 @@ describe('groupPulls (AC-3)', () => {
   it('author, missing author last', () =>
     expect(groups('author')).toEqual([
       ['alice', [1]],
-      ['hape', [2, 3, 4, 6]],
+      ['dev', [2, 3, 4, 6]],
       ['No author', [5]],
     ]));
 
@@ -210,6 +210,7 @@ describe('URL state (AC-6)', () => {
     const full: PullQuery = {
       q: 'fix',
       repo: 'o/r',
+      folder: 'apps',
       ci: 'failure',
       merge: 'blocked',
       review: 'changes',
@@ -250,7 +251,7 @@ describe('pullOptions', () => {
   it('lists distinct repos, authors and bases, sorted', () =>
     expect(pullOptions(ROWS)).toEqual({
       repos: ['o/other', 'o/r'],
-      authors: ['alice', 'hape'],
+      authors: ['alice', 'dev'],
       bases: ['develop', 'main'],
     }));
 });

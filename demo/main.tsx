@@ -7,6 +7,7 @@ import { createMockTransport } from '../src/transports/mock';
 import type { AgentSession } from '../src/types';
 import '../src/styles.css';
 import './demo.css';
+import { ChoiceShowcase, PullsShowcase } from './showcase';
 
 const now = Date.now();
 const session = (
@@ -49,6 +50,10 @@ const transport = createMockTransport(
 
 // ?fail=503 opens the demo straight in the error state (screenshots)
 const initialFail = Number(new URLSearchParams(location.search).get('fail')) || null;
+// ?view=choice|pulls shows one component alone, ?theme=light the light variables, ?state= the PR tree states
+const demoParams = new URLSearchParams(location.search);
+const view = demoParams.get('view');
+if (demoParams.get('theme') === 'light') document.documentElement.classList.add('demo-light');
 if (initialFail)
   transport.fail({ status: initialFail, message: `HTTP ${initialFail} from /api/agents/stream` });
 
@@ -104,7 +109,13 @@ function Demo() {
       </header>
       <main className="demo-main agents-ui">
         <AgentsProvider transport={transport} host={host} locale={locale}>
-          <AgentsView active />
+          {view === 'choice' ? (
+            <ChoiceShowcase />
+          ) : view === 'pulls' ? (
+            <PullsShowcase state={demoParams.get('state')} />
+          ) : (
+            <AgentsView active />
+          )}
         </AgentsProvider>
       </main>
       <ul className="demo-toasts" aria-live="polite">

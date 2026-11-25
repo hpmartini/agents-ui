@@ -22,7 +22,9 @@ export interface RailNavProps {
     onOpenSettings: () => void;
     onOpenProject: (appId: string) => void;
 }
-/** Grouping of the agent list: shows only the current grouping; hovering (or clicking) opens the others */
+/** Every value `AgentGrouping` accepts, in the order the picker, the settings and Ctrl+S use */
+export declare const GROUP_MODES: AgentGrouping[];
+/** Grouping of the agent list: a Choice menu with the four groupings */
 export declare const GroupingPicker: React.FC<{
     grouping: AgentGrouping;
     onGrouping: (grouping: AgentGrouping) => void;

@@ -23,6 +23,6 @@ describe('shell labels', () => {
     );
     expect(screen.getByRole('button', { name: /Neue Aufgabe/ })).toBeTruthy();
     expect(screen.getByLabelText('Mehr: neuer Agent, Chat, Issue oder Orchestrator')).toBeTruthy();
-    expect(screen.getByLabelText('Agents gruppieren nach: Status (Ctrl+S)')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Agents gruppieren nach Status' })).toBeTruthy();
   });
 });

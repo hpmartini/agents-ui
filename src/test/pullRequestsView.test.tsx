@@ -64,7 +64,7 @@ const pr = (number: number, repoSlug = 'o/r'): AgentPullRequest => ({
   number,
   title: `PR ${number}`,
   url: `https://github.com/${repoSlug}/pull/${number}`,
-  author: 'hape',
+  author: 'dev',
   isDraft: false,
   headRef: `feat/${number}`,
   baseRef: 'main',
@@ -109,6 +109,7 @@ const renderPage = (ui: React.ReactElement, route = '/pulls') =>
   });
 
 afterEach(() => {
+  localStorage.clear();
   electron(false);
   vi.restoreAllMocks();
 });
@@ -260,22 +261,29 @@ describe('/pulls filters, clusters and sorting (#191)', () => {
       route
     );
   const titles = () => screen.queryAllByRole('button', { name: /^#\d+/ }).map((b) => b.textContent);
-  const select = (label: string, value: string) =>
-    fireEvent.change(screen.getByRole('combobox', { name: label }), { target: { value } });
+  /** Picks the option named `text` of the Choice `label` (pills or menu) */
+  const select = (label: string, text: string) => {
+    const group = screen.queryByRole('radiogroup', { name: label });
+    if (group) return fireEvent.click(within(group).getByRole('radio', { name: text }));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${label} `) }));
+    fireEvent.click(screen.getByRole('option', { name: text }));
+  };
+  const shownValue = (label: string) =>
+    screen.getByRole('button', { name: new RegExp(`^${label} `) }).textContent;
   const location = () => screen.getByTestId('location').textContent;
 
   it('AC-5: filters narrow the list and the count, reset restores everything', () => {
     page();
     expect(titles()).toHaveLength(3);
-    select('CI', 'failure');
+    select('CI', 'Failing');
     expect(titles()).toEqual(['#2PR 2']);
     expect(screen.getByTestId('pulls-count')).toHaveTextContent('1 of 3');
-    select('CI', '');
+    select('CI', 'CI: any');
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search pull requests' }), {
       target: { value: 'alice' },
     });
     expect(titles()).toEqual(['#1Fix login']);
-    select('Has agent', 'no');
+    select('Has agent', 'No');
     expect(screen.getByText('No pull requests match the filters.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Reset filters/ }));
     expect(titles()).toHaveLength(3);
@@ -286,19 +294,19 @@ describe('/pulls filters, clusters and sorting (#191)', () => {
 
   it('AC-5: clustering shows a header with the count per group', () => {
     page();
-    select('Group by', 'repo');
+    select('Group by', 'Group: Repository');
     const other = screen.getByRole('region', { name: 'o/other (1)' });
     const main = screen.getByRole('region', { name: 'o/r (2)' });
     expect(within(other).getByText('PR 3')).toBeInTheDocument();
     expect(within(main).getByText('Fix login')).toBeInTheDocument();
-    select('Group by', 'agent');
+    select('Group by', 'Group: Agent');
     expect(screen.getByRole('region', { name: 'Agent One (1)' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'No agent (2)' })).toBeInTheDocument();
   });
 
   it('AC-5: sort select and direction button reorder the list', () => {
     page();
-    select('Sort by', 'number');
+    select('Sort by', 'Sort: Number');
     expect(titles()).toEqual(['#3PR 3', '#2PR 2', '#1Fix login']);
     fireEvent.click(screen.getByRole('button', { name: 'Sort descending' }));
     expect(titles()).toEqual(['#1Fix login', '#2PR 2', '#3PR 3']);
@@ -307,27 +315,103 @@ describe('/pulls filters, clusters and sorting (#191)', () => {
 
   it('AC-6: the state is written to the URL and restored from it', () => {
     const { unmount } = page();
-    select('Merge', 'blocked');
-    select('Group by', 'repo');
-    select('Sort by', 'title');
+    select('Merge', 'Blocked');
+    select('Group by', 'Group: Repository');
+    select('Sort by', 'Sort: Title');
     fireEvent.click(screen.getByRole('button', { name: 'Sort descending' }));
     const url = location()!;
     expect(url).toBe('/pulls?merge=blocked&group=repo&sort=title&dir=asc');
     unmount();
     page(url);
-    expect(screen.getByRole('combobox', { name: 'Merge' })).toHaveValue('blocked');
-    expect(screen.getByRole('combobox', { name: 'Group by' })).toHaveValue('repo');
-    expect(screen.getByRole('combobox', { name: 'Sort by' })).toHaveValue('title');
+    expect(shownValue('Merge')).toBe('Blocked');
+    expect(shownValue('Group by')).toBe('Group: Repository');
+    expect(shownValue('Sort by')).toBe('Sort: Title');
     expect(screen.getByRole('region', { name: 'o/r (1)' })).toBeInTheDocument();
     expect(titles()).toEqual(['#2PR 2']);
   });
 
   it('AC-6: the repo filter of the popover arrives as ?repo= and is clearable', () => {
     page('/pulls?repo=o%2Fother');
-    expect(screen.getByRole('combobox', { name: 'Repo' })).toHaveValue('o/other');
+    expect(screen.getByRole('treeitem', { name: /^other/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
     expect(titles()).toEqual(['#3PR 3']);
-    select('Repo', '');
+    fireEvent.click(screen.getByRole('treeitem', { name: /^All repositories/ }));
     expect(location()).toBe('/pulls');
     expect(titles()).toHaveLength(3);
+  });
+});
+
+describe('/pulls repo tree', () => {
+  // Fake checkouts: two repos in one folder, one elsewhere
+  const treeRows: PullRequestRow[] = [
+    { pr: pr(1, 'acme/web'), agents: [] },
+    { pr: { ...pr(2, 'acme/web'), ci: 'failure' }, agents: [] },
+    { pr: pr(3, 'acme/api'), agents: [] },
+    { pr: { ...pr(4, 'globex/tools'), ci: 'failure' }, agents: [] },
+  ];
+  const ctx = (slug: string, root: string) => ({ repo: { slug, root }, pulls: null });
+  const contexts = {
+    a: ctx('acme/web', '/home/dev/code/apps/web'),
+    b: ctx('acme/api', '/home/dev/code/services/api'),
+    c: ctx('globex/tools', '/home/dev/code/apps/tools'),
+  } as never;
+  const page = (route = '/pulls') =>
+    renderPage(
+      <PullRequestsDataContext.Provider value={{ ...listProps, rows: treeRows, contexts }}>
+        <Connected />
+      </PullRequestsDataContext.Provider>,
+      route
+    );
+  const titles = () => screen.queryAllByRole('button', { name: /^#\d+/ }).map((b) => b.textContent);
+  const location = () => screen.getByTestId('location').textContent;
+
+  it('groups repos by local folder, filters by folder or repo, counts follow the other filters', () => {
+    page();
+    expect(screen.queryByRole('button', { name: /^Repo / })).toBeNull();
+    fireEvent.click(screen.getByRole('treeitem', { name: /^apps/ }));
+    expect(location()).toMatch(/^\/pulls\?folder=apps-[0-9a-z]+$/);
+    expect(titles().sort()).toEqual(['#1PR 1', '#2PR 2', '#4PR 4']);
+    fireEvent.click(screen.getByRole('treeitem', { name: /^api/ }));
+    expect(location()).toBe('/pulls?repo=acme%2Fapi');
+    expect(titles()).toEqual(['#3PR 3']);
+    fireEvent.click(screen.getByRole('button', { name: /^CI / }));
+    fireEvent.click(screen.getByRole('option', { name: 'Failing' }));
+    expect(screen.getByRole('treeitem', { name: /^apps/ })).toHaveTextContent(/2$/);
+    expect(screen.getByRole('treeitem', { name: /^services/ })).toHaveTextContent(/0$/);
+  });
+
+  it('restores the last selection on a visit without one; reset forgets it', () => {
+    const { unmount } = page();
+    fireEvent.click(screen.getByRole('treeitem', { name: /^web/ }));
+    unmount();
+    const again = page();
+    expect(location()).toBe('/pulls?repo=acme%2Fweb');
+    fireEvent.click(screen.getByRole('button', { name: /Reset filters/ }));
+    again.unmount();
+    page();
+    expect(location()).toBe('/pulls');
+  });
+
+  it('a selection that arrives via the URL is remembered for the next visit', () => {
+    const first = page();
+    fireEvent.click(screen.getByRole('treeitem', { name: /^web/ }));
+    first.unmount();
+    const linked = page('/pulls?repo=acme%2Fapi');
+    linked.unmount();
+    page();
+    expect(location()).toBe('/pulls?repo=acme%2Fapi');
+  });
+
+  it('a stored folder key that no longer exists falls back to all repositories', () => {
+    // Key format of 0.4.36 before the fix: relative folder name
+    localStorage.setItem('agentsUi.pullsTreeSelection', JSON.stringify({ folder: 'apps' }));
+    page();
+    expect(titles()).toHaveLength(4);
+    expect(screen.getByRole('treeitem', { name: /^All repositories/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
   });
 });
