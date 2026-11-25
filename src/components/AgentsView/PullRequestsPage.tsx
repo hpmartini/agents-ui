@@ -182,10 +182,6 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
       ),
     [props.rows, roots]
   );
-  const { shown, groups } = useMemo(
-    () => queryPulls(props.rows, query, t.pulls, folders),
-    [props.rows, query, t.pulls, folders]
-  );
   // Tree counts follow every filter except the tree's own
   const tree = useMemo(
     () =>
@@ -196,16 +192,23 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
       ),
     [props.rows, query, roots]
   );
-  const selection: RepoSelection = query.repo
-    ? { kind: 'repo', slug: query.repo }
-    : query.folder
-      ? { kind: 'folder', key: query.folder }
+  // A folder key the tree does not know (older key format, folder gone) means all repositories
+  const known = !query.folder || tree.folders.some((f) => f.key === query.folder);
+  const view = useMemo(() => (known ? query : { ...query, folder: null }), [query, known]);
+  const { shown, groups } = useMemo(
+    () => queryPulls(props.rows, view, t.pulls, folders),
+    [props.rows, view, t.pulls, folders]
+  );
+  const selection: RepoSelection = view.repo
+    ? { kind: 'repo', slug: view.repo }
+    : view.folder
+      ? { kind: 'folder', key: view.folder }
       : { kind: 'all' };
   const listRef = useRef<HTMLDivElement>(null);
   const narrow = useNarrow(listRef);
   const [treeOpen, setTreeOpen] = useState(false);
   const options = useMemo(() => pullOptions(props.rows), [props.rows]);
-  const filtered = hasFilters(query);
+  const filtered = hasFilters(view);
   // Typing replaces the history entry; every other change is one Back step
   const update = (patch: Partial<PullQuery>, replace = false) =>
     setParams((prev) => patchPullParams(prev, patch), { replace });
@@ -220,14 +223,22 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
     if (stored) update(stored, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
   }, []);
-  const selectRepos = (s: RepoSelection) => {
-    const patch = {
+  // Every later selection, also one from a link or Back, is the one the next visit restores
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (!arrived.current) {
+      arrived.current = true;
+      // an empty arrival is about to be restored above, not cleared
+      if (!query.repo && !query.folder) return;
+    }
+    // an unknown folder may still be loading its checkouts: keep what is stored
+    if (known) writeSelection({ repo: query.repo, folder: query.folder });
+  }, [query.repo, query.folder, known]);
+  const selectRepos = (s: RepoSelection) =>
+    update({
       repo: s.kind === 'repo' ? s.slug : null,
       folder: s.kind === 'folder' ? s.key : null,
-    };
-    writeSelection(patch);
-    update(patch);
-  };
+    });
   const selectionLabel =
     selection.kind === 'repo'
       ? selection.slug
@@ -280,7 +291,6 @@ export const PullRequestsPage: React.FC<PullRequestsPageProps & PullRequestsQuer
                 {filtered && (
                   <button
                     onClick={() => {
-                      writeSelection(null);
                       update(FILTER_RESET);
                       // the button unmounts once no filter is left; keep focus in the toolbar
                       searchRef.current?.focus();

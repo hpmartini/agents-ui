@@ -64,7 +64,7 @@ const pr = (number: number, repoSlug = 'o/r'): AgentPullRequest => ({
   number,
   title: `PR ${number}`,
   url: `https://github.com/${repoSlug}/pull/${number}`,
-  author: 'hape',
+  author: 'dev',
   isDraft: false,
   headRef: `feat/${number}`,
   baseRef: 'main',
@@ -371,7 +371,7 @@ describe('/pulls repo tree', () => {
     page();
     expect(screen.queryByRole('button', { name: /^Repo / })).toBeNull();
     fireEvent.click(screen.getByRole('treeitem', { name: /^apps/ }));
-    expect(location()).toBe('/pulls?folder=apps');
+    expect(location()).toMatch(/^\/pulls\?folder=apps-[0-9a-z]+$/);
     expect(titles().sort()).toEqual(['#1PR 1', '#2PR 2', '#4PR 4']);
     fireEvent.click(screen.getByRole('treeitem', { name: /^api/ }));
     expect(location()).toBe('/pulls?repo=acme%2Fapi');
@@ -392,5 +392,26 @@ describe('/pulls repo tree', () => {
     again.unmount();
     page();
     expect(location()).toBe('/pulls');
+  });
+
+  it('a selection that arrives via the URL is remembered for the next visit', () => {
+    const first = page();
+    fireEvent.click(screen.getByRole('treeitem', { name: /^web/ }));
+    first.unmount();
+    const linked = page('/pulls?repo=acme%2Fapi');
+    linked.unmount();
+    page();
+    expect(location()).toBe('/pulls?repo=acme%2Fapi');
+  });
+
+  it('a stored folder key that no longer exists falls back to all repositories', () => {
+    // Key format of 0.4.36 before the fix: relative folder name
+    localStorage.setItem('agentsUi.pullsTreeSelection', JSON.stringify({ folder: 'apps' }));
+    page();
+    expect(titles()).toHaveLength(4);
+    expect(screen.getByRole('treeitem', { name: /^All repositories/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
   });
 });

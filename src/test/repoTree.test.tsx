@@ -55,42 +55,74 @@ const roots = {
 };
 
 describe('folderKeys', () => {
-  it('names folders relative to the common parent; slugs without a checkout fall back to their owner', () => {
-    const keys = folderKeys(
-      rows.map((r) => r.pr.repoSlug),
-      roots
-    );
-    expect(keys.get('acme/web')).toBe('apps');
-    expect(keys.get('globex/tools')).toBe('apps');
-    expect(keys.get('acme/api')).toBe('services');
+  const slugs = rows.map((r) => r.pr.repoSlug);
+  const keys = folderKeys(slugs, roots);
+
+  it('one key per checkout folder; slugs without a checkout fall back to their owner', () => {
+    expect(keys.get('acme/web')).toBe(keys.get('globex/tools'));
+    expect(keys.get('acme/api')).not.toBe(keys.get('acme/web'));
     expect(keys.get('initech/lonely')).toBe('@initech');
   });
 
-  it('one folder only: its own name', () => {
-    const keys = folderKeys(['acme/web'], { 'acme/web': '/home/dev/code/apps/web' });
-    expect(keys.get('acme/web')).toBe('apps');
+  it('keys stay the same when another repo with a checkout elsewhere comes and goes', () => {
+    // A checkout outside /home/dev/code moves the common parent up: labels change, keys must not
+    const more = folderKeys([...slugs, 'umbrella/x'], {
+      ...roots,
+      'umbrella/x': '/home/dev/other/x',
+    });
+    for (const slug of slugs)
+      expect(more.get(slug.toLowerCase())).toBe(keys.get(slug.toLowerCase()));
+    const fewer = folderKeys(['acme/web'], roots);
+    expect(fewer.get('acme/web')).toBe(keys.get('acme/web'));
+  });
+
+  it('keys carry no path; two folders with the same name differ', () => {
+    const twins = folderKeys(['a/x', 'b/y'], {
+      'a/x': '/home/dev/one/apps/x',
+      'b/y': '/home/dev/two/apps/y',
+    });
+    expect(twins.get('a/x')).not.toBe(twins.get('b/y'));
+    for (const k of [...keys.values(), ...twins.values()]) {
+      expect(k).not.toContain('/');
+      expect(k).not.toContain('dev');
+    }
+    expect(keys.get('acme/web')).toMatch(/^apps-[0-9a-z]+$/);
   });
 
   it('no local checkouts: owner → repo', () => {
-    const keys = folderKeys(['acme/web', 'globex/tools'], {});
-    expect([...keys.values()]).toEqual(['@acme', '@globex']);
+    const owners = folderKeys(['acme/web', 'globex/tools'], {});
+    expect([...owners.values()]).toEqual(['@acme', '@globex']);
   });
 });
 
 describe('buildRepoTree', () => {
+  const keys = folderKeys(
+    rows.map((r) => r.pr.repoSlug),
+    roots
+  );
+  const apps = keys.get('acme/web');
+  const services = keys.get('acme/api');
+
   it('lists every repo of the rows with the counts of the counted rows', () => {
     const counted = rows.filter((r) => r.pr.ci === 'failure');
     const tree = buildRepoTree(rows, counted, roots);
     expect(tree.total).toBe(2);
     expect(tree.folders.map((f) => [f.key, f.label, f.count])).toEqual([
-      ['apps', 'apps', 2],
-      ['services', 'services', 0],
+      [apps, 'apps', 2],
+      [services, 'services', 0],
       ['@initech', 'initech', 0],
     ]);
     expect(tree.folders[0].repos.map((r) => [r.slug, r.name, r.count])).toEqual([
       ['globex/tools', 'tools', 1],
       ['acme/web', 'web', 1],
     ]);
+  });
+
+  it('labels are relative to the common parent; one folder only keeps its own name', () => {
+    const extra = [...rows, row(pr(6, 'umbrella/x'))];
+    const tree = buildRepoTree(extra, extra, { ...roots, 'umbrella/x': '/home/dev/other/x' });
+    expect(tree.folders.find((f) => f.key === apps)?.label).toBe('code/apps');
+    expect(buildRepoTree([rows[0]], [rows[0]], roots).folders[0].label).toBe('apps');
   });
 });
 
@@ -107,7 +139,7 @@ describe('folder filter in the PR query', () => {
       rows.map((r) => r.pr.repoSlug),
       roots
     );
-    const shown = filterPulls(rows, { ...DEFAULT_QUERY, folder: 'apps' }, keys);
+    const shown = filterPulls(rows, { ...DEFAULT_QUERY, folder: keys.get('acme/web')! }, keys);
     expect(shown.map((r) => r.pr.number)).toEqual([1, 2, 4]);
   });
 });
@@ -155,7 +187,10 @@ describe('RepoTree', () => {
     const spy = vi.fn();
     render(<Host spy={spy} />);
     await user.click(screen.getByText('services'));
-    expect(spy).toHaveBeenLastCalledWith({ kind: 'folder', key: 'services' });
+    expect(spy).toHaveBeenLastCalledWith({
+      kind: 'folder',
+      key: folderKeys(['acme/api'], roots).get('acme/api'),
+    });
     await user.click(screen.getByText('api'));
     expect(spy).toHaveBeenLastCalledWith({ kind: 'repo', slug: 'acme/api' });
     expect(item(/^api/)).toHaveAttribute('aria-selected', 'true');
@@ -193,7 +228,9 @@ describe('RepoTree', () => {
     const user = userEvent.setup();
     const { unmount } = render(<Host />);
     await user.click(screen.getByTitle('Collapse apps'));
-    expect(JSON.parse(localStorage.getItem(REPO_TREE_COLLAPSED_KEY)!)).toEqual(['apps']);
+    expect(JSON.parse(localStorage.getItem(REPO_TREE_COLLAPSED_KEY)!)).toEqual([
+      folderKeys(['acme/web'], roots).get('acme/web'),
+    ]);
     unmount();
     render(<Host />);
     expect(item(/^apps/)).toHaveAttribute('aria-expanded', 'false');
