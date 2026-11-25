@@ -328,7 +328,7 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
         return null;
     }, [state.messages]);
     const threadList = threads.enabled ? threads.threads : NO_THREADS;
-    const routed = useMemo(() => routeThreads(items.filter((item) => item !== recap), threadList, !state.older?.more), [items, recap, threadList, state.older]);
+    const routed = useMemo(() => routeThreads(items.filter((item) => item !== recap), threadList, !state.older?.more, state.older?.olderTs), [items, recap, threadList, state.older]);
     const shown = useMemo(() => promptsOnly
         ? routed.main.filter((item) => item.kind === 'user' && !agentMessage(item.text))
         : routed.main, [routed, promptsOnly]);

@@ -120,6 +120,7 @@ export interface ChatState {
     older: {
         before: number;
         more: boolean;
+        olderTs?: number;
     } | null;
 }
 export declare const initialChatState: ChatState;

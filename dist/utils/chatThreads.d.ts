@@ -34,7 +34,7 @@ export interface ChatThread {
     } | null;
     /**
      * Command marks (`at`: ms, host clock): a command goes out without the tag, so each mark gives
-     * the thread the first prompt at or after it, when that prompt is the command
+     * the thread the first prompt at or after it that is the command
      */
     commands?: {
         at: number;
@@ -85,7 +85,9 @@ export declare function threadOf(item: ChatItem, threads: ChatThread[]): string 
  */
 export declare function routeThreads(items: ChatItem[], threads: ChatThread[], 
 /** The items are the whole history (no older page left to load) */
-complete?: boolean): {
+complete?: boolean, 
+/** ms of the newest prompt before the loaded items (host's `devorbit_page`), if known */
+olderTs?: number): {
     main: (ChatItem | ChatThreadMarker)[];
     byThread: Map<string, ChatItem[]>;
 };
