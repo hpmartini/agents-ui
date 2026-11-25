@@ -91,7 +91,7 @@ function Pills({ value, onChange, options, label, disabled, className = '', size
         pick(next);
     };
     const pad = size === 'md' ? 'px-3 py-1 text-sm' : 'px-2 py-0.5 text-xs';
-    return (_jsx("div", { ref: root, role: "radiogroup", "aria-label": labelledBy ? undefined : label, "aria-labelledby": labelledBy, "aria-disabled": disabled || undefined, "aria-invalid": invalid || undefined, title: title, "data-choice": "pills", className: `flex flex-wrap gap-1 shrink-0 min-w-0 max-w-full ${className}`, children: options.map((o, i) => {
+    return (_jsx("div", { ref: root, role: "radiogroup", "aria-label": labelledBy ? undefined : label, "aria-labelledby": labelledBy, "aria-disabled": disabled || undefined, "aria-invalid": invalid || undefined, title: title, "data-choice": "pills", className: `flex flex-wrap gap-1 min-w-0 ${className}`, children: options.map((o, i) => {
             const on = i === selected;
             return (_jsx("button", { ref: (el) => {
                     refs.current[i] = el;
