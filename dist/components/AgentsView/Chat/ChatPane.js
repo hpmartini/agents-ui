@@ -226,18 +226,25 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
         // the name only labels the view
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [chat, pane.id, pane.cwd, harness, sessionId, generation]);
+    // the session the log last opened on: a reopen of the same one replays its history
+    const openedFor = useRef(null);
     useEffect(() => {
         if (!chatId || !chat)
             return;
         return chat.subscribeToChat(chatId, {
             onOpen: () => {
-                mainLog.toEnd();
+                // a reconnect keeps a scrolled-up place; another session starts at its end
+                if (openedFor.current === sessionId)
+                    mainLog.replay();
+                else
+                    mainLog.toEnd();
+                openedFor.current = sessionId ?? null;
                 dispatch({ type: 'reset' });
             },
             onEvent: (event) => dispatch({ type: 'event', event }),
             onGone: () => setGeneration((g) => g + 1),
         });
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- toEnd only reads refs
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- toEnd/replay only read refs; sessionId changes chatId
     }, [chat, chatId]);
     // Older turns load page by page near the top; the view keeps its place while they go in front
     const [loadingOlder, setLoadingOlder] = useState(false);
@@ -266,15 +273,16 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
             loadOlder();
     }, [state.older, loadOlder]);
     useLayoutEffect(mainLog.keep, [state.messages, showSteps, mainLog.keep]);
-    // Back on a hidden tab: jump to the newest messages
+    // Back on a hidden tab: at its end the log shows the newest, scrolled up it stays where it was
     useEffect(() => {
         if (active)
-            mainLog.toEnd();
-    }, [active, mainLog.toEnd]);
+            mainLog.keep();
+    }, [active, mainLog.keep]);
     const history = useMemo(() => state.messages
         .filter((m) => m.kind === 'user')
         .filter((m) => !agentMessage(m.text))
-        .map((m) => splitImages(m.text).text)
+        // a message moved here from a thread: recalled without its tag (it would route back)
+        .map((m) => splitImages(stripTag(m.text)).text)
         .filter(Boolean), [state.messages]);
     const turns = useMemo(() => state.messages.filter((m) => m.kind === 'result').length, [state.messages]);
     // One card per answer; regrouped per event, cards memoize on their messages
@@ -292,8 +300,8 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
     const threadList = threads.enabled ? threads.threads : NO_THREADS;
     const pending = useMemo(() => [
         ...pendingPrompts(state),
-        ...queuedCommands(items, threadList, state.queued.filter((q) => !q.trim()).length),
-    ], [state, items, threadList]);
+        ...queuedCommands(items, threadList, state.queued.filter((q) => !q.trim()).length, t.queuedCommand),
+    ], [state, items, threadList, t.queuedCommand]);
     const routed = useMemo(() => 
     // queued prompts route like logged ones: a thread's goes to its thread (tag or command mark)
     routeThreads([
@@ -609,10 +617,10 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
     const threadHistory = useMemo(() => threadItems
         .filter((i) => i.kind === 'user')
         .map((i) => {
-        const text = openThread ? stripTag(i.text, openThread.tag) : i.text;
+        const text = stripTag(i.text);
         return splitImages(parseQuote(text)?.body ?? text).text;
     })
-        .filter(Boolean), [threadItems, openThread]);
+        .filter(Boolean), [threadItems]);
     // The running turn: its answer (or the working card) shows where its last item went
     const lastItem = items.at(-1);
     const lastThread = lastItem
@@ -651,7 +659,7 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
     // openFromAnswer reads only stable setters and the create call
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [threads.enabled, threads.create]);
-    const threadReplies = useMemo(() => ({ reply: setThreadQuote, tag: openThread?.tag ?? null }), [openThread?.tag]);
+    const threadReplies = useMemo(() => ({ reply: setThreadQuote }), []);
     const threadListRef = useRef(null);
     const threadContentRef = useRef(null);
     // another thread, a reopened panel or back from the Status view (a new log element) starts at its end

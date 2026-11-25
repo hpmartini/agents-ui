@@ -99,7 +99,8 @@ export declare function extractNumberedChoices(output: string): {
  * Lines [start, end) of the dialog an agent's screen waits on, or null. Claude Code draws its input
  * line as `❯` right under a rule, with its prompt suggestion (ghost text) and echoed prompts as
  * `❯ …` as well, so a `❯ 1.` alone is no dialog: it needs a key-hint footer below the last `❯`, or
- * (the review step has no footer) a cursor on a numbered option, not under a rule, with more below.
+ * (the review step has no footer) a cursor on a numbered option with more below; never when the
+ * last `❯` is the input line (under a rule), whose typed text may hold a hint as well.
  */
 export declare function dialogRange(lines: string[]): {
     start: number;

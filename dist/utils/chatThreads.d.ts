@@ -82,8 +82,11 @@ export declare const threadTag: (name: {
 export declare function threadCommand(body: string, commands: {
     name: string;
 }[]): string | null;
-/** Message text without its thread tag line */
-export declare function stripTag(text: string, tag: string): string;
+/**
+ * Message text without its leading thread tag line, whichever thread's: after a merge or a move
+ * a message keeps its source's tag, shown in another thread or the main chat
+ */
+export declare function stripTag(text: string): string;
 export declare const hhmm: (ms: number) => string;
 /** First lines of a quoted text, cut with an ellipsis */
 export declare function quoteExcerpt(text: string): string;
@@ -102,9 +105,12 @@ export declare const itemTime: (item: ChatItem) => number | undefined;
 export declare function threadOf(item: ChatItem, threads: ChatThread[]): string | null;
 /**
  * Commands threads sent while the agent works: Claude Code logs their enqueue without the text, so
- * each empty queue entry stands for one of the newest marks no logged prompt has claimed yet
+ * each empty queue entry stands for one of the newest marks no logged prompt has claimed yet; the
+ * rest are main-chat commands, shown as `command` so nothing typed disappears
  */
-export declare function queuedCommands(items: ChatItem[], threads: ChatThread[], placeholders: number): string[];
+export declare function queuedCommands(items: ChatItem[], threads: ChatThread[], placeholders: number, 
+/** What a placeholder no mark claims shows in the main chat: a main `/command` waiting */
+command: string): string[];
 /**
  * Splits the chat: thread items go to their thread, the main chat keeps the rest plus one marker
  * per thread (after the answer it was opened on, else where its first message was). An answer of

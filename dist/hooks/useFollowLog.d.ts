@@ -8,7 +8,8 @@ export declare const FOLLOW_PX = 40;
  * `unseen`: content arrived below while scrolled up (the "New messages" button), `toEnd` goes
  * back and follows again.
  * `keep` must run after every content change (layout effect); size changes are observed here.
- * `mount` changes when a new log element mounts: it starts at its end.
+ * `mount` changes when a new log element mounts: it starts at its end. A hidden log (another tab)
+ * comes back where it was; `replay` before a reset whose history comes again keeps the place too.
  */
 export declare function useFollowLog(listRef: React.RefObject<HTMLElement | null>, contentRef: React.RefObject<HTMLElement | null>, mount?: unknown): {
     keep: () => void;
@@ -16,5 +17,6 @@ export declare function useFollowLog(listRef: React.RefObject<HTMLElement | null
     onWheel: (e: React.WheelEvent) => void;
     toEnd: () => void;
     release: () => void;
+    replay: () => void;
     unseen: boolean;
 };

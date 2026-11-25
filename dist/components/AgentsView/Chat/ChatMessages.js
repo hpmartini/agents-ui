@@ -63,10 +63,9 @@ export const AssistantBlock = ({ block }) => {
 /** Message another agent sent with `orkumo send`: not the user's bubble, the sender links to it */
 const AgentMessage = ({ id, name, body, }) => {
     const actions = React.useContext(ViewActionsContext);
-    const tag = React.useContext(ChatRepliesContext)?.tag;
     const t = useLabels().terminal;
     const label = name || id || t.unknownAgent;
-    const text = tag ? stripTag(body, tag) : body;
+    const text = stripTag(body);
     return (_jsx("div", { className: "flex flex-col items-start my-3", "data-agent-message": true, children: _jsxs("div", { className: "max-w-[85%] rounded-lg border border-violet-800/60 bg-violet-950/40 px-3 py-2 text-sm text-gray-100", children: [_jsxs("div", { className: "mb-1 flex items-center gap-1.5 text-xs text-violet-300", children: [_jsx(Bot, { size: 12, "aria-hidden": true }), _jsx("span", { children: t.messageFrom }), id && actions ? (_jsx("button", { type: "button", onClick: () => actions.openAgent(id), title: t.openAgent(id), className: "font-medium text-violet-200 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-blue-400", children: label })) : (_jsx("span", { className: "font-medium text-violet-200", children: label }))] }), _jsx("div", { className: "whitespace-pre-wrap break-words", children: text })] }) }));
 };
 export const UserMessage = ({ text, queued }) => {
@@ -76,8 +75,7 @@ export const UserMessage = ({ text, queued }) => {
     return _jsx(OwnMessage, { text: text, queued: queued });
 };
 const OwnMessage = ({ text, queued }) => {
-    const tag = React.useContext(ChatRepliesContext)?.tag;
-    const { text: typed, images } = splitImages(tag ? stripTag(text, tag) : text);
+    const { text: typed, images } = splitImages(stripTag(text));
     // a reply: its quote as a box, the user's text below
     const quote = parseQuote(typed);
     const body = quote ? quote.body : typed;
@@ -124,17 +122,16 @@ const AnswerCard = ({ answer, showSteps, live, harness, model }) => {
     const card = React.useRef(null);
     const [selected, setSelected] = React.useState('');
     const parts = answer?.parts ?? [];
-    const tag = replies?.tag;
     let tagged = false;
-    // inside a thread the tag line of the first text is not shown
+    // the tag line of the first text is never shown (any thread's: merged or moved ones too)
     const blocks = parts
         .flatMap((m) => m.blocks)
         .filter(Boolean)
         .map((b) => {
-        if (!tag || tagged || b.type !== 'text' || !b.text.trim())
+        if (tagged || b.type !== 'text' || !b.text.trim())
             return b;
         tagged = true;
-        return { ...b, text: stripTag(b.text, tag) };
+        return { ...b, text: stripTag(b.text) };
     });
     const visible = showSteps ? blocks : blocks.filter((b) => b.type === 'text');
     const hasBody = visible.some((b) => b.type !== 'text' || b.text);

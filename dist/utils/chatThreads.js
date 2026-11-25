@@ -48,10 +48,14 @@ export function threadCommand(body, commands) {
         ? command
         : null;
 }
-/** Message text without its thread tag line */
-export function stripTag(text, tag) {
-    const t = text.trimStart();
-    return t.startsWith(tag) ? t.slice(tag.length).replace(/^[ \t]*\n?/, '') : text;
+/** A leading thread tag: names never hold `[` or `]` (the server cleans them) */
+const LEADING_TAG_RE = /^\s*\[Thread: [^[\]\n]*\][ \t]*\n?/;
+/**
+ * Message text without its leading thread tag line, whichever thread's: after a merge or a move
+ * a message keeps its source's tag, shown in another thread or the main chat
+ */
+export function stripTag(text) {
+    return text.replace(LEADING_TAG_RE, '');
 }
 export const hhmm = (ms) => {
     const d = new Date(ms);
@@ -151,12 +155,15 @@ function commandTurns(items, threads, complete, olderTs) {
 }
 /**
  * Commands threads sent while the agent works: Claude Code logs their enqueue without the text, so
- * each empty queue entry stands for one of the newest marks no logged prompt has claimed yet
+ * each empty queue entry stands for one of the newest marks no logged prompt has claimed yet; the
+ * rest are main-chat commands, shown as `command` so nothing typed disappears
  */
-export function queuedCommands(items, threads, placeholders) {
+export function queuedCommands(items, threads, placeholders, 
+/** What a placeholder no mark claims shows in the main chat: a main `/command` waiting */
+command) {
     if (!placeholders)
         return [];
-    return threads
+    const marked = threads
         .flatMap((t) => t.commands ?? [])
         .filter((m) => !items.some((i) => i.kind === 'user' &&
         i.ts !== undefined &&
@@ -165,6 +172,7 @@ export function queuedCommands(items, threads, placeholders) {
         .sort((a, b) => a.at - b.at)
         .slice(-placeholders)
         .map((m) => m.command);
+    return [...marked, ...Array(placeholders - marked.length).fill(command)];
 }
 /**
  * Splits the chat: thread items go to their thread, the main chat keeps the rest plus one marker

@@ -5,14 +5,10 @@ export interface ChatQuote {
     ts?: number;
     text: string;
 }
-/**
- * Reply and thread actions of a message list; without a provider answers have no actions.
- * `tag`: the thread whose list this is (its tag line is hidden in front of each message)
- */
+/** Reply and thread actions of a message list; without a provider answers have no actions */
 export interface ChatReplies {
     reply: (quote: ChatQuote) => void;
     openThread?: (answer: ChatAnswer) => void;
-    tag?: string | null;
 }
 export declare const ChatRepliesContext: React.Context<ChatReplies | null>;
 /** The quote of a sent reply, above its text */
