@@ -192,6 +192,11 @@ describe('New chat without a project (#19)', () => {
   it('AK-2: Codex gets --model before its first message, in the chats folder', async () => {
     openNewChat();
     const composer = await dialog();
+    // Escape in the harness menu closes the menu, not the composer
+    fireEvent.click(within(composer).getByRole('button', { name: /^Harness/ }));
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('listbox', { name: 'Harness' })).toBeNull();
+    expect(composer).toBeInTheDocument();
     fireEvent.click(within(composer).getByRole('button', { name: /^Harness/ }));
     fireEvent.click(within(composer).getByRole('option', { name: 'Codex' }));
     const model = within(composer).getByRole('textbox', { name: 'Model' });
