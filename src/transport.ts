@@ -53,6 +53,11 @@ export interface AgentsHandlers {
    */
   onError?: (message: string, status?: number) => void;
   onConnectionChange?: (connected: boolean) => void;
+  /**
+   * The server changed the view settings on its own (it moved an orchestrator mark or role along
+   * with its pane to a new session id): refetch them, a copy kept open is stale
+   */
+  onSettingsChanged?: () => void;
 }
 
 /** Terminal of a session the server runs: `claude attach <id>` */

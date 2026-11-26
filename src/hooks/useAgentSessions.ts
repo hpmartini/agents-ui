@@ -208,9 +208,17 @@ export function useAgentSessions({ active = true }: UseAgentSessionsOptions = {}
         setErrorStatus(status ?? null);
       },
       onConnectionChange: setConnected,
+      onSettingsChanged: () => {
+        settingsApi
+          .fetchAgentViewSettings()
+          .then((loaded) => setSettings(withDefaults(loaded)))
+          .catch(() => {
+            /* keep what is shown */
+          });
+      },
     });
     return unsubscribe;
-  }, [active, target, agents, targets]);
+  }, [active, target, agents, targets, settingsApi]);
 
   const counts = summarizeSessions(sessions);
 
