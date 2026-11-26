@@ -54,6 +54,8 @@ export interface HandoffResetControl {
   phase: HandoffResetJob['phase'] | 'idle';
   /** Message to show with Retry / Dismiss; null when there is none */
   error: string | null;
+  /** The notice opens with "Handoff + Reset failed." (not for an unknown state) */
+  failedHeading: boolean;
   /** The notice offers Retry (not while the server is unreachable) */
   canRetry: boolean;
   confirming: boolean;
@@ -104,6 +106,8 @@ export function useHandoffReset(
   const startingRef = useRef(false);
   // what the user should know: a refused start, a failed cancel, a job the server lost
   const [problem, setProblem] = useState<string | null>(null);
+  // the problem is a failed Handoff + Reset (a refused start), not just an unknown state (lost, unreachable, cancel)
+  const [problemFailed, setProblemFailed] = useState(false);
   const [unreachable, setUnreachable] = useState(false);
   const failures = useRef(0);
   const [confirming, setConfirming] = useState(false);
@@ -199,6 +203,7 @@ export function useHandoffReset(
     startingRef.current = true;
     setStarting(true);
     setProblem(null);
+    setProblemFailed(false);
     epoch.current += 1;
     start(paneId)
       .then((next) => {
@@ -206,13 +211,27 @@ export function useHandoffReset(
         accept(next);
       })
       .catch((e: unknown) => {
-        if (alive.current) setProblem(messageOf(e, t.handoffResetStartFailed));
+        if (!alive.current) return;
+        setProblem(messageOf(e, t.handoffResetStartFailed));
+        setProblemFailed(true);
+        // another tab or the CLI may have a job running (409): show its phase and Cancel
+        const issued = epoch.current;
+        fetchJob?.(paneId)
+          .then((job) => {
+            if (!job || !isActive(job)) return;
+            accept(job, issued);
+            if (alive.current) {
+              setProblem(null);
+              setProblemFailed(false);
+            }
+          })
+          .catch(() => {});
       })
       .finally(() => {
         startingRef.current = false;
         if (alive.current) setStarting(false);
       });
-  }, [start, paneId, accept, t.handoffResetStartFailed]);
+  }, [start, fetchJob, paneId, accept, t.handoffResetStartFailed]);
 
   const jobError =
     job?.phase === 'error' && job.error !== CANCELLED && job.updatedAt > dismissed
@@ -225,6 +244,8 @@ export function useHandoffReset(
   const over = typeof tokens === 'number' && tokens > threshold;
   const showsJob = job && (active || doneLeft > 0);
   const failed = error !== null;
+  // a failed job or start says "failed"; an unknown state, a lost job or a failed cancel does not
+  const failedHeading = failed && (problem === null ? jobError !== null : problemFailed);
   const showButton = enabled && supported && (over || busy || doneLeft > 0 || failed);
   const phase = busy
     ? active
@@ -241,13 +262,15 @@ export function useHandoffReset(
           (showsJob ? job.phase : 'writing') as keyof typeof t.handoffResetPhases
         ]
       : failed
-        ? t.handoffResetFailed
+        ? failedHeading
+          ? t.handoffResetFailed
+          : t.handoffReset
         : null;
   const title =
     busy || doneLeft > 0
       ? `${t.handoffReset}: ${phaseLabel}`
       : failed
-        ? `${t.handoffResetFailed}: ${error}`
+        ? `${failedHeading ? t.handoffResetFailed : t.handoffReset}: ${error}`
         : typeof tokens === 'number'
           ? t.handoffResetContext(tokens, threshold)
           : t.handoffResetMenuTitle;
@@ -262,6 +285,7 @@ export function useHandoffReset(
     title,
     phase,
     error,
+    failedHeading,
     // an unreachable server says nothing about the job: starting another one would be a guess
     canRetry: error !== null && !active && error !== t.handoffResetUnreachable,
     confirming,
@@ -274,6 +298,7 @@ export function useHandoffReset(
     retry: run,
     dismiss: () => {
       setProblem(null);
+      setProblemFailed(false);
       setUnreachable(false);
       failures.current = 0;
       if (job && job.phase === 'error') {
@@ -387,7 +412,8 @@ export const HandoffResetNotice: React.FC<{ control: HandoffResetControl }> = ({
     >
       <AlertTriangle size={13} aria-hidden className="mt-0.5 shrink-0 text-red-300" />
       <span className="min-w-0 flex-1 break-words">
-        <span className="font-medium">{t.handoffResetFailed}.</span> {control.error}
+        {control.failedHeading && <span className="font-medium">{t.handoffResetFailed}. </span>}
+        {control.error}
       </span>
       {control.canRetry && (
         <button
