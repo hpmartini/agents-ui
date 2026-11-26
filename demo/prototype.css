@@ -298,7 +298,7 @@
   margin-bottom: 4px;
 }
 .p-answer p {
-  max-width: 72ch;
+  max-width: 60ch;
   margin: 0;
 }
 .p-wide {
@@ -339,7 +339,7 @@
 }
 .p-failed {
   margin-top: 14px;
-  max-width: 72ch;
+  max-width: 60ch;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -375,7 +375,7 @@
   background: var(--surface);
   display: grid;
   gap: 8px;
-  max-width: 72ch;
+  max-width: 60ch;
 }
 .p-ask-head {
   display: flex;
@@ -438,7 +438,7 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
-  max-width: 72ch;
+  max-width: 60ch;
 }
 .p-pill-detail header {
   display: flex;
@@ -507,4 +507,12 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+.p-activity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px 8px;
+  font-size: 12px;
+  color: var(--s-working);
 }

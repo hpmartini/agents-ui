@@ -180,6 +180,10 @@ const AGENTS: Agent[] = [
         kind: 'main',
         msgs: [
           { from: 'you', text: 'Move the tax rounding into one place and update the call sites.' },
+          {
+            from: 'agent',
+            text: 'Moved the rounding into pricing/round.ts and updated the three call sites. Running the pricing tests now.',
+          },
         ],
       },
     ],
@@ -623,6 +627,12 @@ function Pane({
             <button className="p-btn">Send answer</button>
           </div>
           <p className="p-muted">{agent.question.options.find((o) => o.value === answer)?.hint}</p>
+        </div>
+      )}
+      {agent.state === 'working' && (
+        <div className="p-activity" role="status">
+          <Loader2 size={13} className="p-spin" aria-hidden /> Step 3 of this turn · npm test --
+          pricing · 41 s
         </div>
       )}
       {agent.pills && <PillBar pills={agent.pills} open={pill} onOpen={onPill} />}
