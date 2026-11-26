@@ -8,6 +8,7 @@ import type { AgentSession } from '../src/types';
 import '../src/styles.css';
 import './demo.css';
 import { ChoiceShowcase, DividerShowcase, PullsShowcase } from './showcase';
+import { Prototype } from './prototype';
 
 const now = Date.now();
 const session = (
@@ -50,7 +51,7 @@ const transport = createMockTransport(
 
 // ?fail=503 opens the demo straight in the error state (screenshots)
 const initialFail = Number(new URLSearchParams(location.search).get('fail')) || null;
-// ?view=choice|pulls|divider shows one component alone, ?theme=light the light variables, ?state= the PR tree states
+// ?view=prototype is the threads/status redesign prototype; ?view=choice|pulls|divider shows one component alone, ?theme=light the light variables, ?state= the PR tree states
 const demoParams = new URLSearchParams(location.search);
 const view = demoParams.get('view');
 if (demoParams.get('theme') === 'light') document.documentElement.classList.add('demo-light');
@@ -115,6 +116,8 @@ function Demo() {
             <PullsShowcase state={demoParams.get('state')} />
           ) : view === 'divider' ? (
             <DividerShowcase />
+          ) : view === 'prototype' ? (
+            <Prototype />
           ) : (
             <AgentsView active />
           )}
