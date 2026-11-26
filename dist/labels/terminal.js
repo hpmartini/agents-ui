@@ -1,5 +1,7 @@
 /** Texts of the terminal components; `en` is Orkumo's wording verbatim, `de` the German one */
 import { createElement, Fragment } from 'react';
+/** 182000 -> "182k"; below 1000 as is */
+const tokenCount = (n) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
 export const terminalEn = {
     // shared
     close: 'Close',
@@ -36,6 +38,25 @@ export const terminalEn = {
     typingHere: 'Typing here',
     active: 'Active',
     paneActions: 'Pane actions',
+    handoffReset: 'Handoff + Reset',
+    handoffResetMenuTitle: 'The agent writes a handoff, then the pane is reset and continues',
+    handoffResetContext: (tokens, limit) => `Context ${tokenCount(tokens)} tokens > ${tokenCount(limit)}`,
+    handoffResetPhases: {
+        writing: 'Writing handoff…',
+        resetting: 'Resetting…',
+        continuing: 'Continuing…',
+        done: 'Done',
+    },
+    handoffResetFailed: 'Handoff + Reset failed',
+    handoffResetStartFailed: 'Handoff + Reset could not start',
+    handoffResetCancelFailed: 'Handoff + Reset could not be cancelled',
+    handoffResetLost: 'The server no longer knows this Handoff + Reset (restarted?). The pane may be stuck between the reset and "weiter": look at it, and if the new session is waiting, type "weiter" yourself.',
+    handoffResetUnreachable: 'The server does not answer, so the state of the Handoff + Reset is unknown.',
+    handoffResetRetry: 'Retry',
+    handoffResetDismiss: 'Dismiss',
+    handoffResetCancel: 'Cancel Handoff + Reset',
+    handoffResetConfirmTitle: (name) => `Handoff + Reset for ${name}?`,
+    handoffResetConfirmBody: 'The agent first writes a handoff of its work. Then the pane is reset (/clear in Claude Code, /new in omp and pi) and continues with "weiter", picking the handoff up. The current conversation ends; nothing else in the pane is closed.',
     closeShellTitle: 'Close (ends the shell)',
     detachedNotice: 'Detached. The session keeps running in the background.',
     // AgentWorkspace
@@ -327,6 +348,25 @@ export const terminalDe = {
     typingHere: 'Eingabe hier',
     active: 'Aktiv',
     paneActions: 'Aktionen des Bereichs',
+    handoffReset: 'Handoff + Reset',
+    handoffResetMenuTitle: 'Der Agent schreibt eine Übergabe, danach wird der Bereich zurückgesetzt und macht weiter',
+    handoffResetContext: (tokens, limit) => `Kontext ${tokenCount(tokens)} Tokens > ${tokenCount(limit)}`,
+    handoffResetPhases: {
+        writing: 'Übergabe wird geschrieben…',
+        resetting: 'Zurücksetzen…',
+        continuing: 'Macht weiter…',
+        done: 'Fertig',
+    },
+    handoffResetFailed: 'Handoff + Reset fehlgeschlagen',
+    handoffResetStartFailed: 'Handoff + Reset konnte nicht starten',
+    handoffResetCancelFailed: 'Handoff + Reset ließ sich nicht abbrechen',
+    handoffResetLost: 'Der Server kennt dieses Handoff + Reset nicht mehr (neu gestartet?). Der Bereich kann zwischen Reset und „weiter“ hängen: Bereich ansehen und, wenn die neue Session wartet, selbst „weiter“ eingeben.',
+    handoffResetUnreachable: 'Der Server antwortet nicht, der Stand des Handoff + Reset ist unbekannt.',
+    handoffResetRetry: 'Erneut versuchen',
+    handoffResetDismiss: 'Schließen',
+    handoffResetCancel: 'Handoff + Reset abbrechen',
+    handoffResetConfirmTitle: (name) => `Handoff + Reset für ${name}?`,
+    handoffResetConfirmBody: 'Der Agent schreibt zuerst eine Übergabe seiner Arbeit. Dann wird der Bereich zurückgesetzt (/clear in Claude Code, /new in omp und pi) und macht mit „weiter“ an der Übergabe weiter. Das aktuelle Gespräch endet; sonst wird nichts im Bereich geschlossen.',
     closeShellTitle: 'Schließen (beendet die Shell)',
     detachedNotice: 'Getrennt. Die Session läuft im Hintergrund weiter.',
     // AgentWorkspace

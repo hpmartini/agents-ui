@@ -485,13 +485,17 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const paneStandIns = useMemo(() => {
     const known = new Set(cloudSessions.map((s) => s.id));
     return sessions.flatMap((s): AgentSession[] => {
-      if (s.kind !== 'interactive' || !s.paneId || known.has(s.paneId)) return [];
+      if ((s.kind !== 'interactive' && s.kind !== 'app') || !s.paneId || known.has(s.paneId))
+        return [];
       targets.pinTarget(s.paneId, targets.targetOf(s.id));
       return [
         {
           ...s,
           id: s.paneId,
           paneId: null,
+          // an app session in a pane stands in as the pane's terminal
+          kind: 'interactive',
+          app: undefined,
           // only used if the agent ended meanwhile: the pane then resumes its session
           ptyArgs: s.ptyArgs ?? (s.sessionId ? ['--resume', s.sessionId] : []),
         },
@@ -991,12 +995,14 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       showHint(t.startingOrchestrator(role), 'info');
       try {
         const agent = await orchestrator.startOrchestrator(role);
-        await updateSettings({
-          orchestrators: [...settings.orchestrators, agent.sessionId],
+        // from the settings as they are now: the server marked the pane meanwhile and the page
+        // refetched them (the start awaited above)
+        await updateSettings((latest) => ({
+          orchestrators: [...latest.orchestrators, agent.sessionId],
           ...(role
-            ? { orchestratorRoles: { ...settings.orchestratorRoles, [agent.sessionId]: role } }
+            ? { orchestratorRoles: { ...latest.orchestratorRoles, [agent.sessionId]: role } }
             : {}),
-        });
+        }));
         setOrchestratorPane(agent.paneId);
         refresh();
       } catch (err) {
@@ -1062,7 +1068,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     const pending = awaiting.current;
     if (pending) {
       const row = sessions.find((s) => s.id === pending);
-      if (row && !row.app && pending !== activeSessionId) return;
+      if (row && (!row.app || row.paneId) && pending !== activeSessionId) return;
       // not listed (or a claude.ai session): it never becomes active, stop waiting for it
       awaiting.current = null;
       if (!row) showHint(t.agentNotFound(pending), 'error');
@@ -1214,7 +1220,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     const target = sessions.find((s) => s.id === selectedId);
     if (!target) return;
     appliedSelection.current = selectedId;
-    if (target.app) openInSystemBrowser(target.app.url);
+    if (target.app && !target.paneId) openInSystemBrowser(target.app.url);
     else if (selectedId !== activeSessionId) attachIn(selectedId, preferredView(target));
   }, [selectedId, loading, sessions, activeSessionId, attachIn, preferredView]);
 
@@ -1379,7 +1385,9 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
         });
         // marked like "New orchestrator": rail group, badge, and its resume keeps Remote Control
         if (extra.profile === 'orchestrator')
-          await updateSettings({ orchestrators: [...settings.orchestrators, result.id] });
+          await updateSettings((latest) => ({
+            orchestrators: [...latest.orchestrators, result.id],
+          }));
         setInput('');
         setComposerImages([]);
         setComposerOpen(false);
@@ -1570,7 +1578,9 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
           }
           if (orchestrator) {
             const sessionId = crypto.randomUUID();
-            await updateSettings({ orchestrators: [...settings.orchestrators, sessionId] });
+            await updateSettings((latest) => ({
+              orchestrators: [...latest.orchestrators, sessionId],
+            }));
             openInteractiveClaude(
               homeDir,
               'home-orchestrator',
@@ -2123,15 +2133,16 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   const toggleOrchestrator = useCallback(
     async (session: AgentSession) => {
       if (!orchestrator) return;
-      const ids = settings.orchestrators;
-      if (isOrchestrator(session, ids)) {
-        await updateSettings({
-          orchestrators: withoutOrchestrator(ids, session),
-          orchestratorRoles: withoutOrchestratorRole(settings.orchestratorRoles, session),
-        });
+      if (isOrchestrator(session, settings.orchestrators)) {
+        await updateSettings((latest) => ({
+          orchestrators: withoutOrchestrator(latest.orchestrators, session),
+          orchestratorRoles: withoutOrchestratorRole(latest.orchestratorRoles, session),
+        }));
         return;
       }
-      await updateSettings({ orchestrators: [...ids, orchestratorKey(session)] });
+      await updateSettings((latest) => ({
+        orchestrators: [...latest.orchestrators, orchestratorKey(session)],
+      }));
       try {
         const { briefing, dir } = await orchestrator.fetchOrchestratorWorkspace();
         if (!(await briefSession(messaging, session, briefing))) {
@@ -2159,12 +2170,12 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
   // Same delivery as the mark: the role briefing is typed into the pane or replied to the job
   const assignRole = useCallback(
     async (session: AgentSession, role: OrchestratorRole) => {
-      await updateSettings({
+      await updateSettings((latest) => ({
         orchestratorRoles: {
-          ...withoutOrchestratorRole(settings.orchestratorRoles, session),
+          ...withoutOrchestratorRole(latest.orchestratorRoles, session),
           [orchestratorKey(session)]: role.id,
         },
-      });
+      }));
       try {
         if (await briefSession(messaging, session, role.briefing))
           toast.success(t.roleAssigned(role.id));
@@ -2190,8 +2201,11 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
       const omp = isOmpStoreSession(session);
       // An agent running in a pane of ours, maybe detached (pane closed): Stop ends that pane's PTY
       const heldPane =
-        !omp && session.kind === 'interactive'
-          ? session.paneId || (sessionHarness(session) !== 'claude' ? session.id : null)
+        !omp && (session.kind === 'interactive' || session.kind === 'app')
+          ? session.paneId ||
+            (session.kind === 'interactive' && sessionHarness(session) !== 'claude'
+              ? session.id
+              : null)
           : null;
       const appUrl = session.app?.url;
       const stop = () => {
@@ -2326,7 +2340,7 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                 label: isOrchestrator(session, settings.orchestrators)
                   ? t.unmarkOrchestrator
                   : t.markOrchestrator,
-                disabled: session.kind === 'app',
+                disabled: session.kind === 'app' && !session.paneId,
                 onSelect: () => void toggleOrchestrator(session),
               },
             ]
@@ -3253,6 +3267,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                         onFocusPane={live ? workspaceActions.focusPane : noop}
                         onClosePane={live ? closePane : noop}
                         onCloseTab={live ? workspaceActions.closeTab : noop}
+                        contexts={contexts}
+                        handoffResetTokens={settings.handoffResetTokens}
                         chatSubmitKey={settings.chatSubmitKey}
                         chatShowSteps={settings.chatShowSteps}
                         onToggleChatSteps={() =>

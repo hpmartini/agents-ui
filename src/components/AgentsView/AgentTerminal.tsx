@@ -23,19 +23,28 @@ import {
   X,
   Maximize2,
   SquareTerminal,
-  MoreHorizontal,
   Keyboard,
   MessageSquare,
 } from 'lucide-react';
 import { useHost, useTransport } from '../../host';
 import { useLabels } from '../../labels';
-import type { AgentSession } from '../../types';
+import { DEFAULT_AGENT_VIEW_SETTINGS, type AgentSession } from '../../types';
+import { PaneMenu } from './PaneMenu';
+import {
+  canHandoffReset,
+  HandoffResetButton,
+  HandoffResetDialog,
+  HandoffResetNotice,
+  useHandoffReset,
+} from './HandoffResetControl';
 import { attachTerminalKeys } from '../../utils/terminalKeys';
 import { stateGlyph } from '../../utils/agentSessions';
 import { shellCwd } from '../../utils/agentWorkspace';
 
 /** Below this pane width the header actions fold into an overflow menu */
 const NARROW_PX = 360;
+/** Below this pane width the Handoff + Reset chip shows its icon only (the narrowest pane is 420 px) */
+const COMPACT_PX = 640;
 const paneBtnFocus = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400';
 
 interface AgentTerminalProps {
@@ -64,6 +73,10 @@ interface AgentTerminalProps {
   onShowChat?: () => void;
   /** Host buttons before the pane's own actions (`host.renderPaneActions`) */
   hostActions?: React.ReactNode;
+  /** Tokens in the agent's context (`AgentContext.contextTokens`); Handoff + Reset shows above the threshold */
+  contextTokens?: number | null;
+  /** Context size above which the header offers Handoff + Reset */
+  handoffResetTokens?: number;
   /** Host view over the terminal body (`host.renderPaneView`); the terminal keeps no focus meanwhile */
   paneView?: React.ReactNode;
 }
@@ -458,6 +471,8 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
   onOpenLink,
   onShowChat,
   hostActions,
+  contextTokens,
+  handoffResetTokens = DEFAULT_AGENT_VIEW_SETTINGS.handoffResetTokens,
   paneView = null,
 }) => {
   const transport = useTransport();
@@ -477,9 +492,18 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
     pane.openFile = openFile;
   }
   const [narrow, setNarrow] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [generation, setGeneration] = useState(0);
+  // below this the header has no room for words next to the actions: the chip keeps its icon only
+  const [compact, setCompact] = useState(false);
   const shell = shellCwd(session.id) !== null;
+  const handoff = useHandoffReset(
+    session.id,
+    session.name,
+    contextTokens,
+    handoffResetTokens,
+    visible && !shell,
+    canHandoffReset(session)
+  );
+  const [generation, setGeneration] = useState(0);
   const terminalOptions = host.terminalOptions;
   const optionsRef = useRef(terminalOptions);
   optionsRef.current = terminalOptions;
@@ -670,6 +694,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
     let timer: ReturnType<typeof setTimeout> | null = null;
     const fit = () => {
       setNarrow(container.clientWidth < NARROW_PX);
+      setCompact(container.clientWidth < COMPACT_PX);
       if (timer) clearTimeout(timer);
       timer = setTimeout(syncSize, 50);
     };
@@ -777,6 +802,11 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
     run: () => void;
     showLabel?: boolean;
   }[];
+  // The ⋯ menu: what a narrow pane has no room for as buttons, and Handoff + Reset in every width
+  const menuItems = [
+    ...(narrow ? actions : []),
+    ...(!shell && handoff.supported ? [handoff.menuItem] : []),
+  ];
 
   return (
     <div
@@ -834,60 +864,27 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
             </span>
           )
         )}
+        <HandoffResetButton control={handoff} compact={compact} />
         {hostActions}
-        {narrow ? (
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setMenuOpen((o) => !o)}
-              onBlur={(e) => {
-                if (!e.currentTarget.parentElement?.contains(e.relatedTarget)) setMenuOpen(false);
-              }}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              className={`p-1.5 rounded text-gray-300 hover:text-white hover:bg-gray-800 ${paneBtnFocus}`}
-              title={t.paneActions}
-              aria-label={t.paneActions}
-            >
-              <MoreHorizontal size={14} />
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 top-full mt-1 z-30 min-w-40 py-1 rounded-md border border-gray-700 bg-gray-900 shadow-lg"
-                onKeyDown={(e) => e.key === 'Escape' && setMenuOpen(false)}
-                onBlur={(e) => {
-                  if (!e.currentTarget.parentElement?.contains(e.relatedTarget)) setMenuOpen(false);
-                }}
+        {narrow
+          ? null
+          : actions.map((a) => (
+              <button
+                key={a.label}
+                onClick={a.run}
+                className={`flex items-center gap-1 p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 shrink-0 ${paneBtnFocus}`}
+                title={a.title}
+                aria-label={a.label}
               >
-                {actions.map((a) => (
-                  <button
-                    key={a.label}
-                    role="menuitem"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      a.run();
-                    }}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-gray-200 hover:bg-gray-800 ${paneBtnFocus}`}
-                  >
-                    {a.icon} {a.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          actions.map((a) => (
-            <button
-              key={a.label}
-              onClick={a.run}
-              className={`flex items-center gap-1 p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 shrink-0 ${paneBtnFocus}`}
-              title={a.title}
-              aria-label={a.label}
-            >
-              {a.icon}
-              {a.showLabel && <span>{a.label}</span>}
-            </button>
-          ))
+                {a.icon}
+                {a.showLabel && <span>{a.label}</span>}
+              </button>
+            ))}
+        {menuItems.length > 0 && (
+          <PaneMenu
+            items={menuItems}
+            buttonClassName={`p-1.5 rounded text-gray-300 hover:text-white hover:bg-gray-800 ${paneBtnFocus}`}
+          />
         )}
         <button
           onClick={onClose}
@@ -898,6 +895,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
           <X size={12} />
         </button>
       </div>
+      <HandoffResetNotice control={handoff} />
       <div
         className={`relative flex-1 min-h-0 transition-opacity motion-reduce:transition-none ${
           focused || viewShown ? '' : active ? 'opacity-80' : 'opacity-60'
@@ -925,6 +923,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
           </div>
         )}
       </div>
+      <HandoffResetDialog control={handoff} />
     </div>
   );
 };

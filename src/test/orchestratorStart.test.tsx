@@ -25,6 +25,12 @@ const hoisted = vi.hoisted(() => ({
   updateSettings: vi.fn(),
 }));
 
+/** What the last `updateSettings(...)` changes: a function is applied to the current settings */
+const change = () => {
+  const arg = hoisted.updateSettings.mock.calls.at(-1)?.[0];
+  return typeof arg === 'function' ? arg(hoisted.settings) : arg;
+};
+
 vi.mock('../hooks/useAgentSessions', () => ({
   useAgentSessions: () => {
     hoisted.settings ??= {
@@ -171,9 +177,7 @@ describe('New agent: Orchestrator option (Remote Control)', () => {
       profile: 'orchestrator',
       name: 'app-orchestrator',
     });
-    await waitFor(() =>
-      expect(hoisted.updateSettings).toHaveBeenCalledWith({ orchestrators: ['job-1'] })
-    );
+    await waitFor(() => expect(change()).toEqual({ orchestrators: ['job-1'] }));
   });
 
   it('in ~ the interactive pane starts with --remote-control and is marked by its session id', async () => {
@@ -193,6 +197,6 @@ describe('New agent: Orchestrator option (Remote Control)', () => {
       'home-orchestrator',
     ]);
     expect(dispatched).toHaveLength(0);
-    expect(hoisted.updateSettings).toHaveBeenCalledWith({ orchestrators: [args[1]] });
+    expect(change()).toEqual({ orchestrators: [args[1]] });
   });
 });

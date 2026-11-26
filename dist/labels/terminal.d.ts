@@ -37,6 +37,26 @@ export interface TerminalLabels {
     typingHere: string;
     active: string;
     paneActions: string;
+    handoffReset: string;
+    handoffResetMenuTitle: string;
+    /** Title of the button above the threshold: the context and the limit, both in tokens */
+    handoffResetContext: (tokens: number, limit: number) => string;
+    handoffResetPhases: {
+        writing: string;
+        resetting: string;
+        continuing: string;
+        done: string;
+    };
+    handoffResetFailed: string;
+    handoffResetStartFailed: string;
+    handoffResetCancelFailed: string;
+    handoffResetLost: string;
+    handoffResetUnreachable: string;
+    handoffResetRetry: string;
+    handoffResetDismiss: string;
+    handoffResetCancel: string;
+    handoffResetConfirmTitle: (name: string) => string;
+    handoffResetConfirmBody: string;
     closeShellTitle: string;
     detachedNotice: string;
     layout: (layout: Layout) => string;

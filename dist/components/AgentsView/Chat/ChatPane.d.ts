@@ -1,5 +1,5 @@
 import React from 'react';
-import type { AgentSession } from '../../../types';
+import { type AgentSession } from '../../../types';
 import { type ChatSubmitKey } from '../../../utils/chatEvents';
 import { type StatusTask } from './ChatThreads';
 /** Main chat beside the panel: answer footers, model chip and the host's usage bars fit uncut */
@@ -21,6 +21,8 @@ interface ChatPaneProps {
     /** Transcript the view reads; null until the server lists the pane's session */
     sessionId: string | null;
     active: boolean;
+    /** The pane's tab is on screen; a hidden UI view fetches nothing */
+    visible?: boolean;
     focused: boolean;
     submitKey: ChatSubmitKey;
     /** Thinking and tool calls inline in the transcript (else only in the work panel) */
@@ -35,6 +37,10 @@ interface ChatPaneProps {
     headerProps?: React.HTMLAttributes<HTMLDivElement>;
     /** Host buttons before the pane's own actions (`host.renderPaneActions`) */
     hostActions?: React.ReactNode;
+    /** Tokens in the agent's context (`AgentContext.contextTokens`); Handoff + Reset shows above the threshold */
+    contextTokens?: number | null;
+    /** Context size above which the header offers Handoff + Reset */
+    handoffResetTokens?: number;
     /** Host view over the chat body (`host.renderPaneView`) */
     paneView?: React.ReactNode;
     /**

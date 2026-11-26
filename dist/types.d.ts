@@ -93,6 +93,8 @@ export interface AgentContext {
     model: string | null;
     /** Prompt-cache stats from the session transcript; null when there is no local transcript */
     cache?: AgentCacheInfo | null;
+    /** Tokens in the model context of the session's latest turn (any harness); null/absent: unknown */
+    contextTokens?: number | null;
     /** null when gh is unavailable/unauthenticated or not a github repo */
     issues: {
         open: number;
@@ -254,6 +256,14 @@ export interface AgentViewSettings {
     orchestrators: string[];
     /** Orchestrator session key -> role id (`<workspace>/roles/<id>.md`) */
     orchestratorRoles: Record<string, string>;
+    /**
+     * Revision of the server's copy this one was read at (Orkumo server): sent back with an update,
+     * so the server can tell a page that missed its own changes (it moved a mark with a pane) from
+     * one that saw them. Never stored; absent on stores without it
+     */
+    revision?: string;
+    /** Context size (tokens) above which a pane offers "Handoff + Reset"; at least 1000 */
+    handoffResetTokens: number;
     dispatch: AgentDispatchDefaults;
     version: number;
 }

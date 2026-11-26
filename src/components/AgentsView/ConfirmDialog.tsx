@@ -12,9 +12,11 @@ export const ConfirmDialog: React.FC<{
   title: string;
   body: string;
   confirm: string;
+  /** Colour of the confirm button: red for something that cannot be undone (default), blue otherwise */
+  tone?: 'danger' | 'primary';
   onConfirm: () => void;
   onCancel: () => void;
-}> = ({ title, body, confirm, onConfirm, onCancel }) => {
+}> = ({ title, body, confirm, tone = 'danger', onConfirm, onCancel }) => {
   const t = useLabels().shell;
   const dialogRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -60,7 +62,9 @@ export const ConfirmDialog: React.FC<{
           <button
             type="button"
             onClick={onConfirm}
-            className={`px-3 py-1.5 rounded-md font-medium text-white bg-red-600 hover:bg-red-500 ${FOCUS}`}
+            className={`px-3 py-1.5 rounded-md font-medium text-white ${
+              tone === 'danger' ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'
+            } ${FOCUS}`}
           >
             {confirm}
           </button>

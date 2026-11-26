@@ -55,7 +55,8 @@ export function resumeMakesCopy(session) {
 export function openPlan(session, panes, openIds, 
 /** The transport's instances (#220); local only without */
 targets) {
-    if (session.kind === 'app')
+    // An app session in a pane of ours (remote control started here) is a pane like any other
+    if (session.kind === 'app' && !session.paneId)
         return { type: 'app', url: session.app?.url ?? null };
     // The server matched the session to a pane of ours whose PTY still runs it
     if (session.paneId)

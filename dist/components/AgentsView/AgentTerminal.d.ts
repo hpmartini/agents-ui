@@ -1,7 +1,7 @@
 import React from 'react';
 import { promptSuggestion } from '../../utils/terminalScreen';
 import '@xterm/xterm/css/xterm.css';
-import type { AgentSession } from '../../types';
+import { type AgentSession } from '../../types';
 interface AgentTerminalProps {
     session: AgentSession;
     /** Whether the pane is currently visible (tabs layout hides inactive panes) */
@@ -28,6 +28,10 @@ interface AgentTerminalProps {
     onShowChat?: () => void;
     /** Host buttons before the pane's own actions (`host.renderPaneActions`) */
     hostActions?: React.ReactNode;
+    /** Tokens in the agent's context (`AgentContext.contextTokens`); Handoff + Reset shows above the threshold */
+    contextTokens?: number | null;
+    /** Context size above which the header offers Handoff + Reset */
+    handoffResetTokens?: number;
     /** Host view over the terminal body (`host.renderPaneView`); the terminal keeps no focus meanwhile */
     paneView?: React.ReactNode;
 }

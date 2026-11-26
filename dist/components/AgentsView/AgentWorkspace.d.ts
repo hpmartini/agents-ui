@@ -1,5 +1,5 @@
 import React from 'react';
-import type { AgentSession } from '../../types';
+import type { AgentContext, AgentSession } from '../../types';
 import type { PaneView } from '../../hooks/useAgentWorkspace';
 import { type DropZone, type InsertPosition, type PaneLayout, type Workspace } from '../../utils/agentWorkspace';
 import type { ChatSubmitKey } from '../../utils/chatEvents';
@@ -25,6 +25,10 @@ interface AgentWorkspaceProps {
     renderPaneMeta?: (session: AgentSession) => React.ReactNode;
     /** Host buttons in a pane's header (`host.renderPaneActions`) */
     renderPaneActions?: (session: AgentSession) => React.ReactNode;
+    /** Context per listed session id: its `contextTokens` gate Handoff + Reset in the pane headers */
+    contexts?: Record<string, AgentContext>;
+    /** Context size above which a pane offers Handoff + Reset (`AgentViewSettings.handoffResetTokens`) */
+    handoffResetTokens?: number;
     /**
      * Host view in place of a pane's body (`host.renderPaneView`); null: the pane as usual. With
      * `status`: one report task's details for the maximised threads panel of a UI view

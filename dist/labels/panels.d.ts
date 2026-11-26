@@ -9,6 +9,8 @@ export interface PanelsLabels {
     settingsAllSessions: string;
     settingsTaskCwd: string;
     settingsTaskCwdPlaceholder: string;
+    settingsHandoffTokens: string;
+    settingsHandoffTokensHint: string;
     settingsGroupBy: string;
     settingsCardDensity: string;
     settingsDensityComfortable: string;

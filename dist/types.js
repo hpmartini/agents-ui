@@ -47,6 +47,7 @@ export const DEFAULT_AGENT_VIEW_SETTINGS = {
     mainAgent: { name: 'main-orchestrator', keepAlive: true },
     orchestrators: [],
     orchestratorRoles: {},
+    handoffResetTokens: 150_000,
     dispatch: DEFAULT_AGENT_DISPATCH_DEFAULTS,
     version: 1,
 };

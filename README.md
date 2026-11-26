@@ -17,7 +17,7 @@ How it was cut out of Orkumo, and what maps to what: [`docs/orkumo-inventory.md`
 ## Install
 
 ```sh
-bun add github:hpmartini/agents-ui#v0.4.62  # tagged release; dist/ is committed, no build on install
+bun add github:hpmartini/agents-ui#v0.4.63  # tagged release; dist/ is committed, no build on install
 bun add file:../agents-ui                   # local checkout
 ```
 
@@ -85,7 +85,7 @@ optional, and its presence is the capability flag:
 | `artifacts` | files and pages a chat produced |
 | `uploads` | images and files attached to prompts |
 | `manage` | rename, pin, order, delete, respawn, raw JSON |
-| `messaging` | reply to background jobs, type into panes, end panes |
+| `messaging` | reply to background jobs, type into panes, end panes; optional `startHandoffReset` / `fetchHandoffReset` / `cancelHandoffReset` (all three: "Handoff + Reset" in every pane header and pane menu, shown above `settings.handoffResetTokens` context tokens, which `contexts` reports as `contextTokens`) |
 | `contexts` | repo, PR, issue and server chips; PR panel and page |
 | `discovery` | repos, subagents, slash commands, harnesses, models |
 | `history` / `cloud` / `logs` | `/resume` picker / cloud sessions / peek panel and main agent dialog |
