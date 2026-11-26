@@ -256,6 +256,12 @@ export interface AgentViewSettings {
     orchestrators: string[];
     /** Orchestrator session key -> role id (`<workspace>/roles/<id>.md`) */
     orchestratorRoles: Record<string, string>;
+    /**
+     * Revision of the server's copy this one was read at (Orkumo server): sent back with an update,
+     * so the server can tell a page that missed its own changes (it moved a mark with a pane) from
+     * one that saw them. Never stored; absent on stores without it
+     */
+    revision?: string;
     /** Context size (tokens) above which a pane offers "Handoff + Reset"; at least 1000 */
     handoffResetTokens: number;
     dispatch: AgentDispatchDefaults;

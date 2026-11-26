@@ -79,9 +79,9 @@ Line numbers refer to Orkumo `server/index.js`, unless another file is named.
 
 | Capability | Orkumo calls | Orkumo route | Transport group | MAPLE server today |
 | --- | --- | --- | --- | --- |
-| Agent list | `fetchAgents`, `subscribeToAgents` (SSE `sessions`, `notify`, `agent-error`) | `GET /agents` :1487, `GET /agents/stream` :1535 | `agents` | `GET /api/agents/stream` (SSE `sessions`) |
+| Agent list | `fetchAgents`, `subscribeToAgents` (SSE `sessions`, `notify`, `agent-error`, `settings` → `onSettingsChanged`) | `GET /agents` :1487, `GET /agents/stream` :1535 | `agents` | `GET /api/agents/stream` (SSE `sessions`) |
 | Start, stop | `dispatchAgent`, `stopAgent` | `POST /agents/dispatch` :1577, `POST /agents/:id/stop` :2039 | `agents` | yes (`panel-*` guard, cwd = vault) |
-| View settings | `fetchAgentViewSettings`, `updateAgentViewSettings` | `GET/PUT /settings/agent-view` :3004/:3012 | `settings` | — (host keeps them locally) |
+| View settings | `fetchAgentViewSettings`, `updateAgentViewSettings` (carries the `revision` it was read at) | `GET/PUT /settings/agent-view` :3004/:3012 | `settings` | — (host keeps them locally) |
 | Terminal | PTY WebSocket: attach, harness start, resume, cloud args, shell | `WS /api/pty` :3294 | `pty` | `WS /api/pty` (`claude attach <id>` only) |
 | Manage sessions | `renameAgent`, `pinAgent`, `reorderAgents`, `removeAgent`, `respawnAgent`, `fetchAgentsRawJson` | :2328, :2341, :1840, :2313, :2300, :1522 | `manage` | — |
 | Daemon | `respawnAllAgents`, `stopAgentDaemon` | :1832, :1870 | `daemon` | — |

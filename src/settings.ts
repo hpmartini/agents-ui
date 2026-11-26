@@ -18,7 +18,9 @@ export function createLocalSettings(storageKey: string | null): AgentsTransport[
   return {
     fetchAgentViewSettings: async () => current,
     updateAgentViewSettings: async (partial) => {
-      current = { ...current, ...partial };
+      // `revision` belongs to a server store
+      const { revision: _revision, ...change } = partial;
+      current = { ...current, ...change };
       if (storageKey) {
         try {
           localStorage.setItem(storageKey, JSON.stringify(current));

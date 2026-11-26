@@ -653,12 +653,14 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         showHint(t.startingOrchestrator(role), 'info');
         try {
             const agent = await orchestrator.startOrchestrator(role);
-            await updateSettings({
-                orchestrators: [...settings.orchestrators, agent.sessionId],
+            // from the settings as they are now: the server marked the pane meanwhile and the page
+            // refetched them (the start awaited above)
+            await updateSettings((latest) => ({
+                orchestrators: [...latest.orchestrators, agent.sessionId],
                 ...(role
-                    ? { orchestratorRoles: { ...settings.orchestratorRoles, [agent.sessionId]: role } }
+                    ? { orchestratorRoles: { ...latest.orchestratorRoles, [agent.sessionId]: role } }
                     : {}),
-            });
+            }));
             setOrchestratorPane(agent.paneId);
             refresh();
         }
@@ -963,7 +965,9 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
             });
             // marked like "New orchestrator": rail group, badge, and its resume keeps Remote Control
             if (extra.profile === 'orchestrator')
-                await updateSettings({ orchestrators: [...settings.orchestrators, result.id] });
+                await updateSettings((latest) => ({
+                    orchestrators: [...latest.orchestrators, result.id],
+                }));
             setInput('');
             setComposerImages([]);
             setComposerOpen(false);
@@ -1144,7 +1148,9 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                 }
                 if (orchestrator) {
                     const sessionId = crypto.randomUUID();
-                    await updateSettings({ orchestrators: [...settings.orchestrators, sessionId] });
+                    await updateSettings((latest) => ({
+                        orchestrators: [...latest.orchestrators, sessionId],
+                    }));
                     openInteractiveClaude(homeDir, 'home-orchestrator', ['--session-id', sessionId, '--remote-control', 'home-orchestrator'], 'claude', undefined, view);
                 }
                 else
@@ -1645,15 +1651,16 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     const toggleOrchestrator = useCallback(async (session) => {
         if (!orchestrator)
             return;
-        const ids = settings.orchestrators;
-        if (isOrchestrator(session, ids)) {
-            await updateSettings({
-                orchestrators: withoutOrchestrator(ids, session),
-                orchestratorRoles: withoutOrchestratorRole(settings.orchestratorRoles, session),
-            });
+        if (isOrchestrator(session, settings.orchestrators)) {
+            await updateSettings((latest) => ({
+                orchestrators: withoutOrchestrator(latest.orchestrators, session),
+                orchestratorRoles: withoutOrchestratorRole(latest.orchestratorRoles, session),
+            }));
             return;
         }
-        await updateSettings({ orchestrators: [...ids, orchestratorKey(session)] });
+        await updateSettings((latest) => ({
+            orchestrators: [...latest.orchestrators, orchestratorKey(session)],
+        }));
         try {
             const { briefing, dir } = await orchestrator.fetchOrchestratorWorkspace();
             if (!(await briefSession(messaging, session, briefing))) {
@@ -1678,12 +1685,12 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     ]);
     // Same delivery as the mark: the role briefing is typed into the pane or replied to the job
     const assignRole = useCallback(async (session, role) => {
-        await updateSettings({
+        await updateSettings((latest) => ({
             orchestratorRoles: {
-                ...withoutOrchestratorRole(settings.orchestratorRoles, session),
+                ...withoutOrchestratorRole(latest.orchestratorRoles, session),
                 [orchestratorKey(session)]: role.id,
             },
-        });
+        }));
         try {
             if (await briefSession(messaging, session, role.briefing))
                 toast.success(t.roleAssigned(role.id));

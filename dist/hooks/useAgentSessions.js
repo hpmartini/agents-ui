@@ -96,22 +96,73 @@ export function useAgentSessions({ active = true } = {}) {
             mounted = false;
         };
     }, [settingsApi]);
-    const updateSettings = useCallback(async (partial) => {
+    // Bumped when an update starts and when it ends: a settings read issued before is outdated
+    const settingsEpoch = useRef(0);
+    const settingsRead = useRef({ running: false, again: false });
+    const readSettingsRef = useRef(() => { });
+    /**
+     * Reads the settings again (the server changed them on its own). One read at a time, the newest
+     * answer wins: a burst of events costs one more read, an answer that an update or an instance
+     * switch overtook is dropped and asked again.
+     */
+    const readSettings = useCallback(() => {
+        const state = settingsRead.current;
+        if (state.running) {
+            state.again = true;
+            return;
+        }
+        state.running = true;
+        const epoch = settingsEpoch.current;
+        const asked = targets.getAgentTarget();
+        settingsApi
+            .fetchAgentViewSettings()
+            .then((loaded) => {
+            if (asked === targets.getAgentTarget() && epoch === settingsEpoch.current)
+                setSettings(withDefaults(loaded));
+            else
+                state.again = true;
+        })
+            .catch(() => {
+            /* keep what is shown */
+        })
+            .finally(() => {
+            state.running = false;
+            if (state.again) {
+                state.again = false;
+                readSettingsRef.current();
+            }
+        });
+    }, [settingsApi, targets]);
+    readSettingsRef.current = readSettings;
+    const updateSettings = useCallback(
+    /**
+     * `change` as a function gets the latest settings when it runs: use it where the new value is
+     * built from the current one (marks, roles) and an `await` came before
+     */
+    async (change) => {
         const previous = settingsRef.current;
+        const partial = typeof change === 'function' ? change(previous) : change;
         const optimistic = {
             ...previous,
             ...partial,
             dispatch: { ...previous.dispatch, ...(partial.dispatch || {}) },
             cardFields: { ...previous.cardFields, ...(partial.cardFields || {}) },
         };
+        settingsEpoch.current += 1;
         setSettings(optimistic);
         try {
-            const saved = await settingsApi.updateAgentViewSettings(partial);
+            const saved = await settingsApi.updateAgentViewSettings({
+                ...partial,
+                revision: previous.revision,
+            });
             setSettings(withDefaults(saved));
         }
         catch (err) {
             setSettings(previous);
             toastRef.current.error(err instanceof Error ? err.message : labelsRef.current.saveSettingsFailed);
+        }
+        finally {
+            settingsEpoch.current += 1;
         }
     }, [settingsApi]);
     // Initial fetch and refetch when scope changes
@@ -171,6 +222,7 @@ export function useAgentSessions({ active = true } = {}) {
                 }
             }
         };
+        let droppedOnce = false;
         const unsubscribe = agents.subscribeToAgents({
             onSessions: (next) => {
                 if (targets.getAgentTarget() !== target)
@@ -185,18 +237,18 @@ export function useAgentSessions({ active = true } = {}) {
                 setError(message);
                 setErrorStatus(status ?? null);
             },
-            onConnectionChange: setConnected,
-            onSettingsChanged: () => {
-                settingsApi
-                    .fetchAgentViewSettings()
-                    .then((loaded) => setSettings(withDefaults(loaded)))
-                    .catch(() => {
-                    /* keep what is shown */
-                });
+            onConnectionChange: (up) => {
+                setConnected(up);
+                // events sent while the stream was down are lost: catch up with the server's settings
+                if (!up)
+                    droppedOnce = true;
+                else if (droppedOnce)
+                    readSettingsRef.current();
             },
+            onSettingsChanged: () => readSettingsRef.current(),
         });
         return unsubscribe;
-    }, [active, target, agents, targets, settingsApi]);
+    }, [active, target, agents, targets]);
     const counts = summarizeSessions(sessions);
     return {
         sessions,

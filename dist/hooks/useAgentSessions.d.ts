@@ -15,7 +15,7 @@ export declare function useAgentSessions({ active }?: UseAgentSessionsOptions): 
     cliInstalled: boolean | null;
     capabilities: AgentCapabilities | null;
     settings: AgentViewSettings;
-    updateSettings: (partial: Partial<AgentViewSettings>) => Promise<void>;
+    updateSettings: (change: Partial<AgentViewSettings> | ((latest: AgentViewSettings) => Partial<AgentViewSettings>)) => Promise<void>;
     loading: boolean;
     error: string | null;
     errorStatus: number | null;
