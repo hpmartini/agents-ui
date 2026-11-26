@@ -586,7 +586,7 @@ describe('Handoff + Reset: failures that were silent', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2100);
     });
-    expect(await within(terminal('s1')).findByRole('alert')).toHaveTextContent(/no longer knows/);
+    expect(await within(terminal('s1')).findByRole('alert')).toHaveTextContent(/no longer knows.*type "weiter" yourself/);
   });
 });
 

@@ -387,7 +387,7 @@ export const terminalEn: TerminalLabels = {
   handoffResetStartFailed: 'Handoff + Reset could not start',
   handoffResetCancelFailed: 'Handoff + Reset could not be cancelled',
   handoffResetLost:
-    'The server no longer knows this Handoff + Reset (restarted?). Check the pane before trying again.',
+    'The server no longer knows this Handoff + Reset (restarted?). The pane may be stuck between the reset and "weiter": look at it, and if the new session is waiting, type "weiter" yourself.',
   handoffResetUnreachable:
     'The server does not answer, so the state of the Handoff + Reset is unknown.',
   handoffResetRetry: 'Retry',
@@ -739,7 +739,7 @@ export const terminalDe: TerminalLabels = {
   handoffResetStartFailed: 'Handoff + Reset konnte nicht starten',
   handoffResetCancelFailed: 'Handoff + Reset ließ sich nicht abbrechen',
   handoffResetLost:
-    'Der Server kennt dieses Handoff + Reset nicht mehr (neu gestartet?). Bereich prüfen, bevor es erneut startet.',
+    'Der Server kennt dieses Handoff + Reset nicht mehr (neu gestartet?). Der Bereich kann zwischen Reset und „weiter“ hängen: Bereich ansehen und, wenn die neue Session wartet, selbst „weiter“ eingeben.',
   handoffResetUnreachable:
     'Der Server antwortet nicht, der Stand des Handoff + Reset ist unbekannt.',
   handoffResetRetry: 'Erneut versuchen',
