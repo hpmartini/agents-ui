@@ -56,6 +56,8 @@ export function useHandoffReset(paneId, paneName, tokens, threshold, enabled = t
     const startingRef = useRef(false);
     // what the user should know: a refused start, a failed cancel, a job the server lost
     const [problem, setProblem] = useState(null);
+    // the problem is a failed Handoff + Reset (a refused start), not just an unknown state (lost, unreachable, cancel)
+    const [problemFailed, setProblemFailed] = useState(false);
     const [unreachable, setUnreachable] = useState(false);
     const failures = useRef(0);
     const [confirming, setConfirming] = useState(false);
@@ -148,6 +150,7 @@ export function useHandoffReset(paneId, paneName, tokens, threshold, enabled = t
         startingRef.current = true;
         setStarting(true);
         setProblem(null);
+        setProblemFailed(false);
         epoch.current += 1;
         start(paneId)
             .then((next) => {
@@ -155,15 +158,30 @@ export function useHandoffReset(paneId, paneName, tokens, threshold, enabled = t
             accept(next);
         })
             .catch((e) => {
-            if (alive.current)
-                setProblem(messageOf(e, t.handoffResetStartFailed));
+            if (!alive.current)
+                return;
+            setProblem(messageOf(e, t.handoffResetStartFailed));
+            setProblemFailed(true);
+            // another tab or the CLI may have a job running (409): show its phase and Cancel
+            const issued = epoch.current;
+            fetchJob?.(paneId)
+                .then((job) => {
+                if (!job || !isActive(job))
+                    return;
+                accept(job, issued);
+                if (alive.current) {
+                    setProblem(null);
+                    setProblemFailed(false);
+                }
+            })
+                .catch(() => { });
         })
             .finally(() => {
             startingRef.current = false;
             if (alive.current)
                 setStarting(false);
         });
-    }, [start, paneId, accept, t.handoffResetStartFailed]);
+    }, [start, fetchJob, paneId, accept, t.handoffResetStartFailed]);
     const jobError = job?.phase === 'error' && job.error !== CANCELLED && job.updatedAt > dismissed
         ? job.error || t.handoffResetFailed
         : null;
@@ -174,6 +192,8 @@ export function useHandoffReset(paneId, paneName, tokens, threshold, enabled = t
     const over = typeof tokens === 'number' && tokens > threshold;
     const showsJob = job && (active || doneLeft > 0);
     const failed = error !== null;
+    // a failed job or start says "failed"; an unknown state, a lost job or a failed cancel does not
+    const failedHeading = failed && (problem === null ? jobError !== null : problemFailed);
     const showButton = enabled && supported && (over || busy || doneLeft > 0 || failed);
     const phase = busy
         ? active
@@ -187,12 +207,14 @@ export function useHandoffReset(paneId, paneName, tokens, threshold, enabled = t
     const phaseLabel = busy || doneLeft > 0
         ? t.handoffResetPhases[(showsJob ? job.phase : 'writing')]
         : failed
-            ? t.handoffResetFailed
+            ? failedHeading
+                ? t.handoffResetFailed
+                : t.handoffReset
             : null;
     const title = busy || doneLeft > 0
         ? `${t.handoffReset}: ${phaseLabel}`
         : failed
-            ? `${t.handoffResetFailed}: ${error}`
+            ? `${failedHeading ? t.handoffResetFailed : t.handoffReset}: ${error}`
             : typeof tokens === 'number'
                 ? t.handoffResetContext(tokens, threshold)
                 : t.handoffResetMenuTitle;
@@ -206,6 +228,7 @@ export function useHandoffReset(paneId, paneName, tokens, threshold, enabled = t
         title,
         phase,
         error,
+        failedHeading,
         // an unreachable server says nothing about the job: starting another one would be a guess
         canRetry: error !== null && !active && error !== t.handoffResetUnreachable,
         confirming,
@@ -218,6 +241,7 @@ export function useHandoffReset(paneId, paneName, tokens, threshold, enabled = t
         retry: run,
         dismiss: () => {
             setProblem(null);
+            setProblemFailed(false);
             setUnreachable(false);
             failures.current = 0;
             if (job && job.phase === 'error') {
@@ -278,7 +302,7 @@ export const HandoffResetNotice = ({ control }) => {
     if (!control.error)
         return null;
     const btn = 'px-2 py-0.5 rounded border text-[11px] focus-visible:outline-2 focus-visible:outline-blue-400';
-    return (_jsxs("div", { role: "alert", className: "flex items-start gap-2 shrink-0 px-3 py-1.5 border-b border-red-400/30 bg-red-500/10 text-xs text-red-100", children: [_jsx(AlertTriangle, { size: 13, "aria-hidden": true, className: "mt-0.5 shrink-0 text-red-300" }), _jsxs("span", { className: "min-w-0 flex-1 break-words", children: [_jsxs("span", { className: "font-medium", children: [t.handoffResetFailed, "."] }), " ", control.error] }), control.canRetry && (_jsx("button", { type: "button", onClick: control.retry, disabled: control.busy, className: `${btn} border-red-300/50 hover:bg-red-500/20 disabled:opacity-50`, children: t.handoffResetRetry })), _jsx("button", { type: "button", onClick: control.dismiss, className: `${btn} border-transparent text-red-200 hover:bg-red-500/20`, children: t.handoffResetDismiss })] }));
+    return (_jsxs("div", { role: "alert", className: "flex items-start gap-2 shrink-0 px-3 py-1.5 border-b border-red-400/30 bg-red-500/10 text-xs text-red-100", children: [_jsx(AlertTriangle, { size: 13, "aria-hidden": true, className: "mt-0.5 shrink-0 text-red-300" }), _jsxs("span", { className: "min-w-0 flex-1 break-words", children: [control.failedHeading && _jsxs("span", { className: "font-medium", children: [t.handoffResetFailed, ". "] }), control.error] }), control.canRetry && (_jsx("button", { type: "button", onClick: control.retry, disabled: control.busy, className: `${btn} border-red-300/50 hover:bg-red-500/20 disabled:opacity-50`, children: t.handoffResetRetry })), _jsx("button", { type: "button", onClick: control.dismiss, className: `${btn} border-transparent text-red-200 hover:bg-red-500/20`, children: t.handoffResetDismiss })] }));
 };
 /** Confirm dialog of Handoff + Reset: what happens before anything starts */
 export const HandoffResetDialog = ({ control }) => {

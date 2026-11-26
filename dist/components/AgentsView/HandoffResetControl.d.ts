@@ -18,6 +18,8 @@ export interface HandoffResetControl {
     phase: HandoffResetJob['phase'] | 'idle';
     /** Message to show with Retry / Dismiss; null when there is none */
     error: string | null;
+    /** The notice opens with "Handoff + Reset failed." (not for an unknown state) */
+    failedHeading: boolean;
     /** The notice offers Retry (not while the server is unreachable) */
     canRetry: boolean;
     confirming: boolean;
