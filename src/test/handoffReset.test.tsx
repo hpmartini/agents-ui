@@ -586,7 +586,79 @@ describe('Handoff + Reset: failures that were silent', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2100);
     });
-    expect(await within(terminal('s1')).findByRole('alert')).toHaveTextContent(/no longer knows.*type "weiter" yourself/);
+    expect(await within(terminal('s1')).findByRole('alert')).toHaveTextContent(
+      /no longer knows.*type "weiter" yourself/
+    );
+  });
+});
+
+describe('Handoff + Reset: state the server holds', () => {
+  it('a refused start (409) fetches the running job and shows its phase with Cancel', async () => {
+    let started = false;
+    const fetchHandoffReset = vi.fn(async (_id: string) =>
+      started ? job('resetting', { updatedAt: Date.now() + 1000 }) : null
+    );
+    const startHandoffReset = vi.fn(async () => {
+      started = true;
+      throw new Error('A Handoff + Reset is already running for this pane');
+    });
+    render(handoff({ fetchHandoffReset, startHandoffReset }));
+    fireEvent.click(await within(terminal('s1')).findByRole('button', BUTTON));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', BUTTON));
+    expect(
+      await within(terminal('s1')).findByRole('button', { name: 'Resetting…' })
+    ).toBeInTheDocument();
+    expect(
+      within(terminal('s1')).getByRole('button', { name: 'Cancel Handoff + Reset' })
+    ).toBeInTheDocument();
+    expect(within(terminal('s1')).queryByRole('alert')).toBeNull();
+  });
+
+  it('an unreachable server or a failed cancel does not say "failed"; a refused start does', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let down = false;
+    const fetchHandoffReset = vi.fn(async (_id: string) => {
+      if (down) throw new Error('offline');
+      return job('writing');
+    });
+    render(handoff({ fetchHandoffReset }));
+    await within(terminal('s1')).findByRole('button', { name: 'Writing handoff…' });
+    down = true;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6200);
+    });
+    const alert = await within(terminal('s1')).findByRole('alert');
+    expect(alert).toHaveTextContent(/does not answer/);
+    expect(alert).not.toHaveTextContent(/failed/i);
+    cleanup();
+    vi.useRealTimers();
+    render(
+      handoff({
+        fetchHandoffReset: vi.fn(async () => job('writing')),
+        cancelHandoffReset: vi.fn(async () => {
+          throw new Error('Pane is gone');
+        }),
+      })
+    );
+    fireEvent.click(
+      await within(terminal('s1')).findByRole('button', { name: 'Cancel Handoff + Reset' })
+    );
+    const cancelAlert = await within(terminal('s1')).findByRole('alert');
+    expect(cancelAlert).toHaveTextContent('Pane is gone');
+    expect(cancelAlert).not.toHaveTextContent(/failed/i);
+    cleanup();
+    render(
+      handoff({
+        startHandoffReset: vi.fn(async () => {
+          throw new Error('Handoff + Reset is not supported for codex');
+        }),
+      })
+    );
+    fireEvent.click(await within(terminal('s1')).findByRole('button', BUTTON));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', BUTTON));
+    expect(await within(terminal('s1')).findByRole('alert')).toHaveTextContent(
+      /Handoff \+ Reset failed\./
+    );
   });
 });
 
