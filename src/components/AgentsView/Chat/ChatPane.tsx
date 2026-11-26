@@ -41,6 +41,7 @@ import { useLabels } from '../../../labels';
 import type { ChatHistoryPage } from '../../../transport';
 import { PaneMenu } from '../PaneMenu';
 import {
+  canHandoffReset,
   HandoffResetButton,
   HandoffResetDialog,
   HandoffResetNotice,
@@ -283,6 +284,8 @@ interface ChatPaneProps {
   /** Transcript the view reads; null until the server lists the pane's session */
   sessionId: string | null;
   active: boolean;
+  /** The pane's tab is on screen; a hidden UI view fetches nothing */
+  visible?: boolean;
   focused: boolean;
   submitKey: ChatSubmitKey;
   /** Thinking and tool calls inline in the transcript (else only in the work panel) */
@@ -339,6 +342,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   agent,
   sessionId,
   active,
+  visible = true,
   focused,
   submitKey,
   showSteps,
@@ -376,7 +380,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const harnessName = harnessLabel(harness);
   // Threads of an orchestrator chat: a slice of this session, routed by tag (utils/chatThreads)
   const threads = useChatThreads(agent?.id, active);
-  const handoff = useHandoffReset(pane.id, pane.name, contextTokens, handoffResetTokens);
+  const handoff = useHandoffReset(
+    pane.id,
+    pane.name,
+    contextTokens,
+    handoffResetTokens,
+    visible,
+    canHandoffReset(pane)
+  );
 
   // The server view outlives this component (split remounts, view switches): with nobody
   // watching it stops itself after the orphan timeout, so a remount never races a stop

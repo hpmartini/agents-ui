@@ -31,6 +31,7 @@ import { useLabels } from '../../labels';
 import { DEFAULT_AGENT_VIEW_SETTINGS, type AgentSession } from '../../types';
 import { PaneMenu } from './PaneMenu';
 import {
+  canHandoffReset,
   HandoffResetButton,
   HandoffResetDialog,
   HandoffResetNotice,
@@ -42,6 +43,8 @@ import { shellCwd } from '../../utils/agentWorkspace';
 
 /** Below this pane width the header actions fold into an overflow menu */
 const NARROW_PX = 360;
+/** Below this pane width the Handoff + Reset chip shows its icon only (the narrowest pane is 420 px) */
+const COMPACT_PX = 640;
 const paneBtnFocus = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400';
 
 interface AgentTerminalProps {
@@ -489,13 +492,16 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
     pane.openFile = openFile;
   }
   const [narrow, setNarrow] = useState(false);
+  // below this the header has no room for words next to the actions: the chip keeps its icon only
+  const [compact, setCompact] = useState(false);
   const shell = shellCwd(session.id) !== null;
   const handoff = useHandoffReset(
     session.id,
     session.name,
     contextTokens,
     handoffResetTokens,
-    visible && !shell
+    visible && !shell,
+    canHandoffReset(session)
   );
   const [generation, setGeneration] = useState(0);
   const terminalOptions = host.terminalOptions;
@@ -688,6 +694,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
     let timer: ReturnType<typeof setTimeout> | null = null;
     const fit = () => {
       setNarrow(container.clientWidth < NARROW_PX);
+      setCompact(container.clientWidth < COMPACT_PX);
       if (timer) clearTimeout(timer);
       timer = setTimeout(syncSize, 50);
     };
@@ -857,7 +864,7 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({
             </span>
           )
         )}
-        <HandoffResetButton control={handoff} compact={narrow} />
+        <HandoffResetButton control={handoff} compact={compact} />
         {hostActions}
         {narrow
           ? null

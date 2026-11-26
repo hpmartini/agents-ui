@@ -31,8 +31,13 @@ export const PaneMenu: React.FC<{
   const buttonRef = useRef<HTMLButtonElement>(null);
   // keyboard and pointer open alike: the first entry takes focus, so Arrow and Escape work at once
   useEffect(() => {
-    if (open)
-      rootRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
+    if (!open) return;
+    const root = rootRef.current;
+    // every entry disabled: the menu itself takes focus, so Escape still reaches it
+    (
+      root?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)') ??
+      root?.querySelector<HTMLElement>('[role="menu"]')
+    )?.focus();
   }, [open]);
   useEffect(() => {
     if (!open) return;
@@ -67,6 +72,12 @@ export const PaneMenu: React.FC<{
         onBlur={(e) => {
           if (!rootRef.current?.contains(e.relatedTarget)) setOpen(false);
         }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && open) {
+            e.stopPropagation();
+            setOpen(false);
+          }
+        }}
         aria-haspopup="menu"
         aria-expanded={open}
         className={buttonClassName}
@@ -79,7 +90,9 @@ export const PaneMenu: React.FC<{
         <div
           role="menu"
           aria-label={t.paneActions}
-          className="absolute right-0 top-full mt-1 z-30 min-w-40 py-1 rounded-md border border-gray-700 bg-gray-900 shadow-lg"
+          tabIndex={-1}
+          // above the threads drawer (z-30) and a host view (z-40) of the UI view
+          className="absolute right-0 top-full mt-1 z-50 min-w-40 outline-none py-1 rounded-md border border-gray-700 bg-gray-900 shadow-lg"
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               e.stopPropagation();
@@ -99,7 +112,8 @@ export const PaneMenu: React.FC<{
               disabled={item.disabled}
               title={item.title}
               onClick={() => {
-                close(false);
+                // focus goes back to ⋯ first: a dialog that item opens returns it there on close
+                close(true);
                 item.run();
               }}
               className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs text-gray-200 hover:bg-gray-800 disabled:opacity-40 disabled:hover:bg-transparent ${itemFocus}`}

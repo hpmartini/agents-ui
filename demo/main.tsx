@@ -87,7 +87,36 @@ const chat: NonNullable<AgentsTransport['chat']> = {
   },
   fetchChatHistory: async () => ({ events: [], before: 0, more: false }),
 };
-const demoTransport: AgentsTransport = { ...transport, chat };
+// ?threads=1: the UI views are orchestrator chats with one thread (threads panel, menu over its drawer)
+const threads: NonNullable<AgentsTransport['threads']> = {
+  fetchThreads: async () => ({
+    orchestrator: 'demo',
+    threads: [
+      {
+        id: 't1',
+        name: { project: 'Shop', task: 'Checkout' },
+        tag: '[Thread: Shop · Checkout]',
+        createdAt: now,
+        readAt: now,
+        agents: [],
+        closed: false,
+        binding: null,
+      },
+    ],
+    tasks: [],
+  }),
+  createThread: async () => {
+    throw new Error('demo: no threads');
+  },
+  updateThread: async () => {
+    throw new Error('demo: no threads');
+  },
+};
+const demoTransport: AgentsTransport = {
+  ...transport,
+  chat,
+  ...(new URLSearchParams(location.search).get('threads') ? { threads } : {}),
+};
 
 // ?fail=503 opens the demo straight in the error state (screenshots)
 const initialFail = Number(new URLSearchParams(location.search).get('fail')) || null;

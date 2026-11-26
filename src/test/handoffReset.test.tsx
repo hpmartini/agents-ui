@@ -55,7 +55,8 @@ const session = (id: string, over: Partial<AgentSession> = {}): AgentSession => 
 });
 
 // s1: terminal, 182k tokens; s2: UI view, 182k; s3: terminal, 90k
-const SESSIONS = [session('s1'), session('s2'), session('s3')];
+// s3 runs codex: the server cannot reset it
+const SESSIONS = [session('s1'), session('s2'), session('s3', { ptyCommand: 'codex' })];
 let threshold = 150_000;
 
 vi.mock('../hooks/useAgentSessions', () => ({
@@ -301,20 +302,22 @@ describe('Handoff + Reset confirm and job', () => {
     await waitFor(() => expect(cancelOf(messaging)).toHaveBeenCalledWith('s1'));
   });
 
-  it('shows done on the button even below the threshold, then goes away', async () => {
-    const messaging = handoff({ fetchHandoffReset: vi.fn(async () => job('done')) });
+  it('shows done below the threshold for 6 s counted on this clock, then never again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // the server's clock is an hour behind ours: "Done" must still show, and still go away
+    const skewed = job('done', { updatedAt: Date.now() - 3_600_000 });
+    const messaging = handoff({ fetchHandoffReset: vi.fn(async () => skewed) });
     threshold = 500_000;
     render(messaging);
     expect(await within(terminal('s1')).findByRole('button', { name: 'Done' })).toBeInTheDocument();
-    // an old finished job is not news
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6200);
+    });
+    expect(screen.queryByRole('button', { name: 'Done' })).toBeNull();
+    // seen once: a reload does not bring it back
     cleanup();
-    render(
-      handoff({
-        fetchHandoffReset: vi.fn(async () => job('done', { updatedAt: Date.now() - 60_000 })),
-      })
-    );
+    render(messaging);
     await settle();
-    await act(async () => {});
     expect(screen.queryByRole('button', { name: 'Done' })).toBeNull();
   });
 
@@ -453,6 +456,220 @@ describe('handoffResetTokens setting', () => {
     fireEvent.blur(input);
     expect(onUpdate).not.toHaveBeenCalled();
     expect(input).toHaveValue(150_000);
+  });
+});
+
+describe('Handoff + Reset: one job at a time', () => {
+  const slowStart = () => {
+    let release: (j: HandoffResetJob) => void = () => {};
+    const startHandoffReset = vi.fn(
+      () => new Promise<HandoffResetJob>((resolve) => (release = resolve))
+    );
+    return { startHandoffReset, release: (j: HandoffResetJob) => release(j) };
+  };
+
+  it('a second confirm while the start is in flight starts nothing, the button shows it', async () => {
+    const { startHandoffReset, release } = slowStart();
+    render(handoff({ startHandoffReset }));
+    const button = await within(terminal('s1')).findByRole('button', BUTTON);
+    fireEvent.click(button);
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', BUTTON));
+    // starting: disabled with the first phase, no second dialog can start another
+    const busy = await within(terminal('s1')).findByRole('button', { name: 'Writing handoff…' });
+    expect(busy).toBeDisabled();
+    openMenu(terminal('s1'));
+    expect(within(terminal('s1')).getByRole('menuitem', BUTTON)).toBeDisabled();
+    expect(startHandoffReset).toHaveBeenCalledTimes(1);
+    await act(async () => release(job('writing')));
+    expect(startHandoffReset).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a double click on Retry starts once, and a refusal clears when the job runs', async () => {
+    const { startHandoffReset, release } = slowStart();
+    const failed = job('error', { error: 'Timeout' });
+    render(handoff({ startHandoffReset, fetchHandoffReset: vi.fn(async () => failed) }));
+    const retry = await within(terminal('s1')).findByRole('button', { name: 'Retry' });
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+    expect(startHandoffReset).toHaveBeenCalledTimes(1);
+    expect(within(terminal('s1')).getByRole('button', { name: 'Retry' })).toBeDisabled();
+    await act(async () => release(job('writing', { updatedAt: Date.now() + 1000 })));
+    expect(
+      await within(terminal('s1')).findByRole('button', { name: 'Writing handoff…' })
+    ).toBeInTheDocument();
+    expect(within(terminal('s1')).queryByRole('alert')).toBeNull();
+  });
+
+  it('a refused start does not outlive the job that runs afterwards', async () => {
+    let calls = 0;
+    const startHandoffReset = vi.fn(async () => {
+      if (++calls === 1) throw new Error('A Handoff + Reset is already running for this pane');
+      return job('writing');
+    });
+    render(handoff({ startHandoffReset }));
+    fireEvent.click(await within(terminal('s1')).findByRole('button', BUTTON));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', BUTTON));
+    const alert = await within(terminal('s1')).findByRole('alert');
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    await within(terminal('s1')).findByRole('button', { name: 'Writing handoff…' });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(within(terminal('s1')).getByRole('button', { name: /Writing handoff/ })).toHaveAttribute(
+      'title',
+      expect.not.stringContaining('failed')
+    );
+  });
+
+  it('an answer to an older fetch does not replace the job a start returned', async () => {
+    let resolveMount: (j: HandoffResetJob | null) => void = () => {};
+    const fetchHandoffReset = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveMount = resolve)))
+      .mockImplementation(async () => job('writing'));
+    render(handoff({ fetchHandoffReset, startHandoffReset: vi.fn(async () => job('writing')) }));
+    fireEvent.click(await within(terminal('s1')).findByRole('button', BUTTON));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', BUTTON));
+    await within(terminal('s1')).findByRole('button', { name: 'Writing handoff…' });
+    await act(async () => resolveMount(job('error', { error: 'old', updatedAt: 1 })));
+    expect(
+      within(terminal('s1')).getByRole('button', { name: 'Writing handoff…' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('Handoff + Reset: failures that were silent', () => {
+  it('says so when polls keep failing, without Retry, and recovers', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let down = false;
+    const fetchHandoffReset = vi.fn(async (_id: string) => {
+      if (down) throw new Error('offline');
+      return job('writing');
+    });
+    render(handoff({ fetchHandoffReset }));
+    await within(terminal('s1')).findByRole('button', { name: 'Writing handoff…' });
+    down = true;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6200);
+    });
+    const alert = await within(terminal('s1')).findByRole('alert');
+    expect(alert).toHaveTextContent(/does not answer/);
+    expect(within(alert).queryByRole('button', { name: 'Retry' })).toBeNull();
+    down = false;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    expect(within(terminal('s1')).queryByRole('alert')).toBeNull();
+  });
+
+  it('shows a failed cancel', async () => {
+    const messaging = handoff({
+      fetchHandoffReset: vi.fn(async () => job('writing')),
+      cancelHandoffReset: vi.fn(async () => {
+        throw new Error('Pane is gone');
+      }),
+    });
+    render(messaging);
+    fireEvent.click(
+      await within(terminal('s1')).findByRole('button', { name: 'Cancel Handoff + Reset' })
+    );
+    expect(await within(terminal('s1')).findByRole('alert')).toHaveTextContent('Pane is gone');
+  });
+
+  it('says the job is lost when the server forgets a running one', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let forgotten = false;
+    const fetchHandoffReset = vi.fn(async (_id: string) => (forgotten ? null : job('resetting')));
+    render(handoff({ fetchHandoffReset }));
+    await within(terminal('s1')).findByRole('button', { name: 'Resetting…' });
+    forgotten = true;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    expect(await within(terminal('s1')).findByRole('alert')).toHaveTextContent(/no longer knows/);
+  });
+});
+
+describe('Handoff + Reset: header and menu', () => {
+  it('the chip is icon-only in a pane under 640 px, its name and title stay', async () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(500);
+    render();
+    await settle();
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    const chipButton = within(terminal('s1')).getByRole('button', BUTTON);
+    expect(chipButton).toHaveTextContent('');
+    expect(chipButton).toHaveAttribute('title', expect.stringContaining('182k'));
+    // the menu and Close stay in the header
+    expect(
+      within(terminal('s1')).getByRole('button', { name: 'Pane actions' })
+    ).toBeInTheDocument();
+    expect(
+      within(terminal('s1')).getByRole('button', { name: 'Close agent-s1' })
+    ).toBeInTheDocument();
+    width.mockRestore();
+  });
+
+  it('Escape on the menu button closes the menu when every entry is disabled', async () => {
+    render(handoff({ fetchHandoffReset: vi.fn(async () => job('writing')) }));
+    await within(terminal('s1')).findByRole('button', { name: 'Writing handoff…' });
+    openMenu(terminal('s1'));
+    expect(within(terminal('s1')).getByRole('menu')).toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(within(terminal('s1')).queryByRole('menu')).toBeNull();
+  });
+
+  it('the menu sits above the threads drawer and a host view; Cancel returns focus to ⋯', async () => {
+    render();
+    await settle();
+    openMenu(terminal('s1'));
+    expect(within(terminal('s1')).getByRole('menu').className).toContain('z-50');
+    fireEvent.click(within(terminal('s1')).getByRole('menuitem', BUTTON));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' })
+    );
+    await waitFor(() =>
+      expect(within(terminal('s1')).getByRole('button', { name: 'Pane actions' })).toHaveFocus()
+    );
+  });
+
+  it('a harness the server cannot reset (codex) has neither button nor menu entry', async () => {
+    render();
+    await settle();
+    fireEvent.click(screen.getAllByRole('tab', { name: /agent-s3/ })[0]);
+    await waitFor(() => expect(terminal('s3')).toBeInTheDocument());
+    expect(within(terminal('s3')).queryByRole('button', { name: 'Pane actions' })).toBeNull();
+  });
+
+  it('a UI view that is not on screen fetches nothing', async () => {
+    const fetchHandoffReset = vi.fn(async () => null);
+    const base = orkumoTransport();
+    const transport: AgentsTransport = {
+      ...base,
+      messaging: { ...base.messaging!, ...handoff({ fetchHandoffReset }) },
+    };
+    const { ChatPane } = await import('../components/AgentsView/Chat/ChatPane');
+    const props = {
+      pane: SESSIONS[0],
+      agent: SESSIONS[0],
+      sessionId: null,
+      active: false,
+      focused: false,
+      submitKey: 'mod+enter' as const,
+      showSteps: false,
+      onToggleSteps: vi.fn(),
+      onFocus: vi.fn(),
+      onClose: vi.fn(),
+      onShowTerminal: vi.fn(),
+    };
+    const hidden = renderWithAgents(<ChatPane {...props} visible={false} />, { transport });
+    await act(async () => {});
+    expect(fetchHandoffReset).not.toHaveBeenCalled();
+    hidden.unmount();
+    renderWithAgents(<ChatPane {...props} visible />, { transport });
+    await act(async () => {});
+    expect(fetchHandoffReset).toHaveBeenCalledWith('s1');
   });
 });
 

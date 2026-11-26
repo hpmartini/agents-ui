@@ -559,6 +559,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               agent={row ?? session}
               sessionId={viewSessionId}
               active={active}
+              visible={visible}
               focused={focused}
               submitKey={chatSubmitKey}
               showSteps={chatShowSteps}

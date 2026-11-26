@@ -52,6 +52,9 @@ export interface TerminalLabels {
   handoffResetPhases: { writing: string; resetting: string; continuing: string; done: string };
   handoffResetFailed: string;
   handoffResetStartFailed: string;
+  handoffResetCancelFailed: string;
+  handoffResetLost: string;
+  handoffResetUnreachable: string;
   handoffResetRetry: string;
   handoffResetDismiss: string;
   handoffResetCancel: string;
@@ -382,6 +385,11 @@ export const terminalEn: TerminalLabels = {
   },
   handoffResetFailed: 'Handoff + Reset failed',
   handoffResetStartFailed: 'Handoff + Reset could not start',
+  handoffResetCancelFailed: 'Handoff + Reset could not be cancelled',
+  handoffResetLost:
+    'The server no longer knows this Handoff + Reset (restarted?). Check the pane before trying again.',
+  handoffResetUnreachable:
+    'The server does not answer, so the state of the Handoff + Reset is unknown.',
   handoffResetRetry: 'Retry',
   handoffResetDismiss: 'Dismiss',
   handoffResetCancel: 'Cancel Handoff + Reset',
@@ -729,6 +737,11 @@ export const terminalDe: TerminalLabels = {
   },
   handoffResetFailed: 'Handoff + Reset fehlgeschlagen',
   handoffResetStartFailed: 'Handoff + Reset konnte nicht starten',
+  handoffResetCancelFailed: 'Handoff + Reset ließ sich nicht abbrechen',
+  handoffResetLost:
+    'Der Server kennt dieses Handoff + Reset nicht mehr (neu gestartet?). Bereich prüfen, bevor es erneut startet.',
+  handoffResetUnreachable:
+    'Der Server antwortet nicht, der Stand des Handoff + Reset ist unbekannt.',
   handoffResetRetry: 'Erneut versuchen',
   handoffResetDismiss: 'Schließen',
   handoffResetCancel: 'Handoff + Reset abbrechen',

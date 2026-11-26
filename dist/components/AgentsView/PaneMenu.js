@@ -15,8 +15,12 @@ export const PaneMenu = ({ items, buttonClassName, onButtonMouseDown, iconSize =
     const buttonRef = useRef(null);
     // keyboard and pointer open alike: the first entry takes focus, so Arrow and Escape work at once
     useEffect(() => {
-        if (open)
-            rootRef.current?.querySelector('[role="menuitem"]:not(:disabled)')?.focus();
+        if (!open)
+            return;
+        const root = rootRef.current;
+        // every entry disabled: the menu itself takes focus, so Escape still reaches it
+        (root?.querySelector('[role="menuitem"]:not(:disabled)') ??
+            root?.querySelector('[role="menu"]'))?.focus();
     }, [open]);
     useEffect(() => {
         if (!open)
@@ -46,7 +50,14 @@ export const PaneMenu = ({ items, buttonClassName, onButtonMouseDown, iconSize =
     return (_jsxs("div", { ref: rootRef, className: "relative shrink-0", children: [_jsx("button", { ref: buttonRef, type: "button", onClick: () => setOpen((o) => !o), onMouseDown: onButtonMouseDown, onBlur: (e) => {
                     if (!rootRef.current?.contains(e.relatedTarget))
                         setOpen(false);
-                }, "aria-haspopup": "menu", "aria-expanded": open, className: buttonClassName, title: t.paneActions, "aria-label": t.paneActions, children: _jsx(MoreHorizontal, { size: iconSize }) }), open && (_jsx("div", { role: "menu", "aria-label": t.paneActions, className: "absolute right-0 top-full mt-1 z-30 min-w-40 py-1 rounded-md border border-gray-700 bg-gray-900 shadow-lg", onKeyDown: (e) => {
+                }, onKeyDown: (e) => {
+                    if (e.key === 'Escape' && open) {
+                        e.stopPropagation();
+                        setOpen(false);
+                    }
+                }, "aria-haspopup": "menu", "aria-expanded": open, className: buttonClassName, title: t.paneActions, "aria-label": t.paneActions, children: _jsx(MoreHorizontal, { size: iconSize }) }), open && (_jsx("div", { role: "menu", "aria-label": t.paneActions, tabIndex: -1, 
+                // above the threads drawer (z-30) and a host view (z-40) of the UI view
+                className: "absolute right-0 top-full mt-1 z-50 min-w-40 outline-none py-1 rounded-md border border-gray-700 bg-gray-900 shadow-lg", onKeyDown: (e) => {
                     if (e.key === 'Escape') {
                         e.stopPropagation();
                         close(true);
@@ -59,7 +70,8 @@ export const PaneMenu = ({ items, buttonClassName, onButtonMouseDown, iconSize =
                     if (!rootRef.current?.contains(e.relatedTarget))
                         setOpen(false);
                 }, children: items.map((item) => (_jsxs("button", { type: "button", role: "menuitem", disabled: item.disabled, title: item.title, onClick: () => {
-                        close(false);
+                        // focus goes back to ⋯ first: a dialog that item opens returns it there on close
+                        close(true);
                         item.run();
                     }, className: `w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs text-gray-200 hover:bg-gray-800 disabled:opacity-40 disabled:hover:bg-transparent ${itemFocus}`, children: [item.icon, " ", item.label] }, item.label))) }))] }));
 };

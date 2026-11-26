@@ -49,6 +49,9 @@ export interface TerminalLabels {
     };
     handoffResetFailed: string;
     handoffResetStartFailed: string;
+    handoffResetCancelFailed: string;
+    handoffResetLost: string;
+    handoffResetUnreachable: string;
     handoffResetRetry: string;
     handoffResetDismiss: string;
     handoffResetCancel: string;

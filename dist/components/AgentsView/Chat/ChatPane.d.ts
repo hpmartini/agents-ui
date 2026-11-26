@@ -21,6 +21,8 @@ interface ChatPaneProps {
     /** Transcript the view reads; null until the server lists the pane's session */
     sessionId: string | null;
     active: boolean;
+    /** The pane's tab is on screen; a hidden UI view fetches nothing */
+    visible?: boolean;
     focused: boolean;
     submitKey: ChatSubmitKey;
     /** Thinking and tool calls inline in the transcript (else only in the work panel) */

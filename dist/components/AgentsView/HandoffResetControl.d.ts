@@ -1,5 +1,6 @@
 import React from 'react';
 import type { HandoffResetJob } from '../../transport';
+import type { AgentSession } from '../../types';
 import type { PaneMenuItem } from './PaneMenu';
 export interface HandoffResetControl {
     /** The transport can run the action: the pane menu offers it */
@@ -8,6 +9,8 @@ export interface HandoffResetControl {
     showButton: boolean;
     /** A job is running: the button shows its phase and cancels instead of starting */
     active: boolean;
+    /** A job is running or being started: nothing can start another */
+    busy: boolean;
     /** The job's phase text for the button, null while idle */
     phaseLabel: string | null;
     /** Context size title (idle), phase or error text */
@@ -15,6 +18,8 @@ export interface HandoffResetControl {
     phase: HandoffResetJob['phase'] | 'idle';
     /** Message to show with Retry / Dismiss; null when there is none */
     error: string | null;
+    /** The notice offers Retry (not while the server is unreachable) */
+    canRetry: boolean;
     confirming: boolean;
     ask: () => void;
     confirm: () => void;
@@ -25,12 +30,15 @@ export interface HandoffResetControl {
     menuItem: PaneMenuItem;
     paneName: string;
 }
+/** The harnesses the server can reset (claude, omp, pi); a cloud session has no local pane to reset */
+export declare const canHandoffReset: (session: AgentSession) => boolean;
 /**
  * State of one pane's Handoff + Reset: the last job (fetched once, then every 2 s while it is
  * active), the start / retry / cancel calls and whether the button shows. `enabled` false (the
- * pane is not the one on screen) fetches nothing and shows no button.
+ * pane is not the one on screen) fetches nothing and shows no button; `eligible` false (a harness
+ * the server cannot reset) offers nothing at all.
  */
-export declare function useHandoffReset(paneId: string, paneName: string, tokens: number | null | undefined, threshold: number, enabled?: boolean): HandoffResetControl;
+export declare function useHandoffReset(paneId: string, paneName: string, tokens: number | null | undefined, threshold: number, enabled?: boolean, eligible?: boolean): HandoffResetControl;
 /**
  * Header button of Handoff + Reset: asks first when idle, shows the phase with a spinner while a
  * job runs (cancel beside it), and turns red after a failure. `compact` keeps the icon only, for

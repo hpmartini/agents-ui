@@ -7,7 +7,7 @@ import { attachableFiles, promptWithAttachments } from '../../../utils/composer'
 import { useTransport } from '../../../host';
 import { useLabels } from '../../../labels';
 import { PaneMenu } from '../PaneMenu';
-import { HandoffResetButton, HandoffResetDialog, HandoffResetNotice, useHandoffReset, } from '../HandoffResetControl';
+import { canHandoffReset, HandoffResetButton, HandoffResetDialog, HandoffResetNotice, useHandoffReset, } from '../HandoffResetControl';
 import { ImageAttachments, imageDropHandlers } from '../../ImageAttachments';
 import { ChatFileContext } from './ChatMarkdown';
 import { ChatArtifactsButton, ChatArtifactsModal, artifactRefreshKey, useChatArtifacts, } from './ChatArtifacts';
@@ -190,7 +190,7 @@ const NewMessages = ({ onClick }) => {
  * UI view of an agent pane (#189): renders the agent's transcript and types into the pane's
  * terminal. The terminal process is the agent; this view never starts or stops a process.
  */
-export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, showSteps, onToggleSteps, onFocus, onClose, onMaximize, onShowTerminal, headerProps, hostActions, contextTokens, handoffResetTokens = DEFAULT_AGENT_VIEW_SETTINGS.handoffResetTokens, paneView = null, renderStatus, meta, }) => {
+export const ChatPane = ({ pane, agent, sessionId, active, visible = true, focused, submitKey, showSteps, onToggleSteps, onFocus, onClose, onMaximize, onShowTerminal, headerProps, hostActions, contextTokens, handoffResetTokens = DEFAULT_AGENT_VIEW_SETTINGS.handoffResetTokens, paneView = null, renderStatus, meta, }) => {
     const [state, dispatch] = useReducer(reducer, initialChatState);
     const { chat, uploads } = useTransport();
     const t = useLabels().terminal;
@@ -212,7 +212,7 @@ export const ChatPane = ({ pane, agent, sessionId, active, focused, submitKey, s
     const harnessName = harnessLabel(harness);
     // Threads of an orchestrator chat: a slice of this session, routed by tag (utils/chatThreads)
     const threads = useChatThreads(agent?.id, active);
-    const handoff = useHandoffReset(pane.id, pane.name, contextTokens, handoffResetTokens);
+    const handoff = useHandoffReset(pane.id, pane.name, contextTokens, handoffResetTokens, visible, canHandoffReset(pane));
     // The server view outlives this component (split remounts, view switches): with nobody
     // watching it stops itself after the orphan timeout, so a remount never races a stop
     useEffect(() => {
