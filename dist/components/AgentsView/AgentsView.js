@@ -237,7 +237,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
     const paneStandIns = useMemo(() => {
         const known = new Set(cloudSessions.map((s) => s.id));
         return sessions.flatMap((s) => {
-            if (s.kind !== 'interactive' || !s.paneId || known.has(s.paneId))
+            if ((s.kind !== 'interactive' && s.kind !== 'app') || !s.paneId || known.has(s.paneId))
                 return [];
             targets.pinTarget(s.paneId, targets.targetOf(s.id));
             return [
@@ -245,6 +245,9 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                     ...s,
                     id: s.paneId,
                     paneId: null,
+                    // an app session in a pane stands in as the pane's terminal
+                    kind: 'interactive',
+                    app: undefined,
                     // only used if the agent ended meanwhile: the pane then resumes its session
                     ptyArgs: s.ptyArgs ?? (s.sessionId ? ['--resume', s.sessionId] : []),
                 },
@@ -717,7 +720,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         const pending = awaiting.current;
         if (pending) {
             const row = sessions.find((s) => s.id === pending);
-            if (row && !row.app && pending !== activeSessionId)
+            if (row && (!row.app || row.paneId) && pending !== activeSessionId)
                 return;
             // not listed (or a claude.ai session): it never becomes active, stop waiting for it
             awaiting.current = null;
@@ -848,7 +851,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         if (!target)
             return;
         appliedSelection.current = selectedId;
-        if (target.app)
+        if (target.app && !target.paneId)
             openInSystemBrowser(target.app.url);
         else if (selectedId !== activeSessionId)
             attachIn(selectedId, preferredView(target));
@@ -1710,8 +1713,11 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
         // the server ends that process, then the pane that ran it here (its id is `paneId`) closes
         const omp = isOmpStoreSession(session);
         // An agent running in a pane of ours, maybe detached (pane closed): Stop ends that pane's PTY
-        const heldPane = !omp && session.kind === 'interactive'
-            ? session.paneId || (sessionHarness(session) !== 'claude' ? session.id : null)
+        const heldPane = !omp && (session.kind === 'interactive' || session.kind === 'app')
+            ? session.paneId ||
+                (session.kind === 'interactive' && sessionHarness(session) !== 'claude'
+                    ? session.id
+                    : null)
             : null;
         const appUrl = session.app?.url;
         const stop = () => {
@@ -1849,7 +1855,7 @@ export const AgentsView = ({ active = true, apps = NO_APPS, onExit, nav, onOpenV
                         label: isOrchestrator(session, settings.orchestrators)
                             ? t.unmarkOrchestrator
                             : t.markOrchestrator,
-                        disabled: session.kind === 'app',
+                        disabled: session.kind === 'app' && !session.paneId,
                         onSelect: () => void toggleOrchestrator(session),
                     },
                 ]

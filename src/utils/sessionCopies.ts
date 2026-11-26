@@ -95,7 +95,9 @@ export function openPlan(
   /** The transport's instances (#220); local only without */
   targets?: AgentTargets
 ): OpenPlan {
-  if (session.kind === 'app') return { type: 'app', url: session.app?.url ?? null };
+  // An app session in a pane of ours (remote control started here) is a pane like any other
+  if (session.kind === 'app' && !session.paneId)
+    return { type: 'app', url: session.app?.url ?? null };
   // The server matched the session to a pane of ours whose PTY still runs it
   if (session.paneId)
     return openIds.has(session.paneId)
