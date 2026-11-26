@@ -100,12 +100,15 @@ describe('question card in the UI view', () => {
     await screen.findByRole('button', { name: 'Maximize threads' });
     await act(() => new Promise((r) => setTimeout(r, 50)));
     expect(screen.queryByText(/The agent is asking/)).toBeNull();
+    // waiting on its own tasks without a dialog on screen is no question
+    expect(screen.queryByText('needs input')).toBeNull();
     expect(screen.queryByRole('button', { name: /Code-Aufgaben/ })).toBeNull();
   });
 
   it('a real permission dialog and a real AskUserQuestion still show the card', async () => {
     const view = renderPane(fixture('claude-permission-bash'));
     expect(await screen.findByText('Do you want to proceed?')).toBeTruthy();
+    expect(screen.getByText('needs input')).toBeTruthy();
     view.unmount();
     renderPane(fixture('claude-question-single'));
     expect(await screen.findByText('Wohin deployen?')).toBeTruthy();
