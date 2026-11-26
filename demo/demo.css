@@ -94,4 +94,7 @@ body {
   --agents-cursor: #2563eb;
   --agents-sel: #c9d8f5;
   --agents-blue-text: #1d4ed8;
+  --agents-red-text: #b91c1c;
+  --agents-amber-text: #92400e;
+  --agents-emerald-text: #047857;
 }

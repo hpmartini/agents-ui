@@ -21,7 +21,7 @@ import {
   SquareTerminal,
   X,
 } from 'lucide-react';
-import type { AgentSession } from '../../../types';
+import { DEFAULT_AGENT_VIEW_SETTINGS, type AgentSession } from '../../../types';
 import {
   groupAnswers,
   initialChatState,
@@ -39,6 +39,13 @@ import { attachableFiles, promptWithAttachments } from '../../../utils/composer'
 import { useTransport } from '../../../host';
 import { useLabels } from '../../../labels';
 import type { ChatHistoryPage } from '../../../transport';
+import { PaneMenu } from '../PaneMenu';
+import {
+  HandoffResetButton,
+  HandoffResetDialog,
+  HandoffResetNotice,
+  useHandoffReset,
+} from '../HandoffResetControl';
 import { ImageAttachments, imageDropHandlers } from '../../ImageAttachments';
 import { ChatFileContext } from './ChatMarkdown';
 import {
@@ -290,6 +297,10 @@ interface ChatPaneProps {
   headerProps?: React.HTMLAttributes<HTMLDivElement>;
   /** Host buttons before the pane's own actions (`host.renderPaneActions`) */
   hostActions?: React.ReactNode;
+  /** Tokens in the agent's context (`AgentContext.contextTokens`); Handoff + Reset shows above the threshold */
+  contextTokens?: number | null;
+  /** Context size above which the header offers Handoff + Reset */
+  handoffResetTokens?: number;
   /** Host view over the chat body (`host.renderPaneView`) */
   paneView?: React.ReactNode;
   /**
@@ -338,6 +349,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   onShowTerminal,
   headerProps,
   hostActions,
+  contextTokens,
+  handoffResetTokens = DEFAULT_AGENT_VIEW_SETTINGS.handoffResetTokens,
   paneView = null,
   renderStatus,
   meta,
@@ -363,6 +376,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const harnessName = harnessLabel(harness);
   // Threads of an orchestrator chat: a slice of this session, routed by tag (utils/chatThreads)
   const threads = useChatThreads(agent?.id, active);
+  const handoff = useHandoffReset(pane.id, pane.name, contextTokens, handoffResetTokens);
 
   // The server view outlives this component (split remounts, view switches): with nobody
   // watching it stops itself after the orphan timeout, so a remount never races a stop
@@ -985,6 +999,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           </div>
         )}
         <span className="flex-1" />
+        <HandoffResetButton control={handoff} compact={narrowPane} onMouseDown={keepFocus} />
         {hostActions}
         <button
           type="button"
@@ -1047,6 +1062,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         >
           <SquareTerminal size={14} />
         </button>
+        {handoff.supported && (
+          <PaneMenu
+            items={[handoff.menuItem]}
+            buttonClassName={iconBtn}
+            onButtonMouseDown={keepFocus}
+            iconSize={13}
+          />
+        )}
         {onMaximize && (
           <button
             type="button"
@@ -1070,6 +1093,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           <X size={14} />
         </button>
       </div>
+      <HandoffResetNotice control={handoff} />
+      <HandoffResetDialog control={handoff} />
 
       <div ref={rowRef} className="relative flex-1 min-h-0 flex">
         {/* hidden, not unmounted: draft, scroll position and the live stream stay */}

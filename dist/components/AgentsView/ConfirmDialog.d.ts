@@ -7,6 +7,8 @@ export declare const ConfirmDialog: React.FC<{
     title: string;
     body: string;
     confirm: string;
+    /** Colour of the confirm button: red for something that cannot be undone (default), blue otherwise */
+    tone?: 'danger' | 'primary';
     onConfirm: () => void;
     onCancel: () => void;
 }>;

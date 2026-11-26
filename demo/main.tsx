@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { AgentsProvider, type AgentsHost, type ToastOptions } from '../src/host';
 import type { Locale } from '../src/labels';
 import { AgentsView } from '../src/components/AgentsView/AgentsView';
+import type { AgentsTransport } from '../src/transport';
 import { createMockTransport } from '../src/transports/mock';
 import type { AgentSession } from '../src/types';
 import '../src/styles.css';
@@ -18,7 +19,7 @@ const session = (
   detail: string
 ): AgentSession => ({
   id,
-  sessionId: null,
+  sessionId: `uuid-${id}`,
   kind: 'background',
   cwd,
   startedAt: now,
@@ -45,8 +46,48 @@ const transport = createMockTransport(
     session('invoices', 'Rechnungen Oktober', '~/MAPLE/finanzen', 'idle', 'Waiting for input'),
     session('wiki', 'Wiki cleanup', '~/MAPLE/wiki', 'completed', 'Merged 6 pages'),
   ],
-  { latencyMs: 300 }
+  {
+    latencyMs: 300,
+    // Handoff + Reset: inbox, offer and invoices are above the default 150k threshold, wiki is below.
+    // ?handoff=error ends the job in an error while resetting, ?handoffStep=<ms> sets the phase length
+    contextTokens: { inbox: 182_000, offer: 96_000, invoices: 171_000, wiki: 40_000 },
+    handoffStepMs: Number(new URLSearchParams(location.search).get('handoffStep')) || 2500,
+    handoffError:
+      new URLSearchParams(location.search).get('handoff') === 'error'
+        ? 'The new session did not take the handoff (marker still pending: ~/.claude/handoffs/.pending/-Users-hape-MAPLE)'
+        : undefined,
+  }
 );
+
+// The UI view of a pane: one answer in the log, no live stream (the mock has no transcripts)
+const chat: NonNullable<AgentsTransport['chat']> = {
+  openTranscriptView: async (paneId, body) => ({
+    id: `chat-${paneId}`,
+    harness: body.harness,
+    cwd: body.cwd,
+    name: body.name ?? paneId,
+    sessionId: body.sessionId,
+    model: 'claude-opus-5-5',
+    running: true,
+    startedAt: now,
+  }),
+  subscribeToChat: (_id, handlers) => {
+    const timer = setTimeout(() => {
+      handlers.onOpen();
+      handlers.onEvent({
+        type: 'assistant',
+        message: {
+          id: 'msg_demo',
+          content: [{ type: 'text', text: 'Sorted 14 mails: 9 archived, 5 need an answer.' }],
+        },
+      });
+      handlers.onEvent({ type: 'result', subtype: 'success', duration_ms: 1 });
+    }, 0);
+    return () => clearTimeout(timer);
+  },
+  fetchChatHistory: async () => ({ events: [], before: 0, more: false }),
+};
+const demoTransport: AgentsTransport = { ...transport, chat };
 
 // ?fail=503 opens the demo straight in the error state (screenshots)
 const initialFail = Number(new URLSearchParams(location.search).get('fail')) || null;
@@ -108,7 +149,7 @@ function Demo() {
         </label>
       </header>
       <main className="demo-main agents-ui">
-        <AgentsProvider transport={transport} host={host} locale={locale}>
+        <AgentsProvider transport={demoTransport} host={host} locale={locale}>
           {view === 'choice' ? (
             <ChoiceShowcase />
           ) : view === 'pulls' ? (

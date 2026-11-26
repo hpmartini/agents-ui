@@ -1,10 +1,28 @@
-import type { AgentsHandlers, AgentsTransport, PtyAttachRequest, PtySocket } from '../transport';
+import type {
+  AgentsHandlers,
+  AgentsTransport,
+  HandoffResetJob,
+  HandoffResetPhase,
+  PtyAttachRequest,
+  PtySocket,
+} from '../transport';
 import { createLocalSettings } from '../settings';
-import type { AgentLogEntry, AgentSession, AgentsResponse } from '../types';
+import type { AgentContext, AgentLogEntry, AgentSession, AgentsResponse } from '../types';
 
 export interface MockTransportOptions {
   /** Delay (ms) of the first list and of every answer; 0 answers at once (tests) */
   latencyMs?: number;
+  /** Context tokens per session id, as `contexts` reports them (Handoff + Reset shows above the threshold) */
+  contextTokens?: Record<string, number>;
+  /**
+   * Handoff + Reset: how long each phase (writing, resetting, continuing) lasts before the next.
+   * 0 (default): a started job stays in `writing`, nothing is timed.
+   */
+  handoffStepMs?: number;
+  /** Handoff + Reset ends in this error while resetting instead of finishing (demo: the error state) */
+  handoffError?: string;
+  /** Context tokens a pane has after a finished Handoff + Reset (default 12000) */
+  handoffResetTokens?: number;
 }
 
 export interface MockTransport extends AgentsTransport {
@@ -126,7 +144,13 @@ class MockPtySocket {
  */
 export function createMockTransport(
   initial: AgentSession[] = [],
-  { latencyMs = 0 }: MockTransportOptions = {}
+  {
+    latencyMs = 0,
+    contextTokens: initialTokens = {},
+    handoffStepMs = 0,
+    handoffError,
+    handoffResetTokens = 12_000,
+  }: MockTransportOptions = {}
 ): MockTransport {
   let sessions = [...initial];
   const subscribers = new Set<AgentsHandlers>();
@@ -157,6 +181,37 @@ export function createMockTransport(
   const update = (id: string, patch: Partial<AgentSession>) => {
     sessions = sessions.map((s) => (s.id === id ? { ...s, ...patch } : s));
     push();
+  };
+  const contextTokens = { ...initialTokens };
+  const handoffs = new Map<string, HandoffResetJob>();
+  const handoffTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const setHandoff = (paneId: string, patch: Partial<HandoffResetJob>) => {
+    const job = { ...handoffs.get(paneId)!, ...patch, updatedAt: Date.now() };
+    handoffs.set(paneId, job);
+    return job;
+  };
+  // writing -> resetting -> continuing -> done, one step every `handoffStepMs`; the pane works
+  // while it resets, and its context is small afterwards (the refetch drops the button)
+  const advanceHandoff = (paneId: string, next: HandoffResetPhase) => {
+    if (handoffs.get(paneId)?.phase === 'error') return;
+    if (next === 'error') {
+      setHandoff(paneId, { phase: 'error', error: handoffError });
+      update(paneId, { displayState: 'idle' });
+      return;
+    }
+    setHandoff(paneId, { phase: next });
+    if (next === 'resetting') update(paneId, { displayState: 'working' });
+    if (next === 'done') {
+      contextTokens[paneId] = handoffResetTokens;
+      update(paneId, { displayState: 'idle' });
+      return;
+    }
+    const after = { writing: 'resetting', resetting: 'continuing', continuing: 'done' } as const;
+    const following = next === 'resetting' && handoffError ? 'error' : after[next];
+    handoffTimers.set(
+      paneId,
+      setTimeout(() => advanceHandoff(paneId, following), handoffStepMs)
+    );
   };
   const record = (id: string, line: string) => {
     const list = transcripts.get(id) ?? [];
@@ -242,6 +297,73 @@ export function createMockTransport(
         set.add(socket);
         // The terminal only uses readyState, send, close and the on* handlers (see PtySocket)
         return socket as unknown as PtySocket;
+      },
+    },
+    messaging: {
+      async replyToAgent(id, text) {
+        record(id, text);
+        return later({ delivered: true, mode: 'auto' });
+      },
+      async sendToPane(paneId, text) {
+        record(paneId, text);
+        return later({ delivered: true });
+      },
+      async stopPane(paneId) {
+        const stopped = sessions.some((s) => s.id === paneId);
+        if (stopped) update(paneId, { state: 'stopped', displayState: 'stopped', status: null });
+        return later({ stopped: stopped ? 1 : 0 });
+      },
+      async startHandoffReset(paneId) {
+        const failed = rejectIfFailing();
+        if (failed) return failed;
+        const running = handoffs.get(paneId)?.phase;
+        if (running === 'writing' || running === 'resetting' || running === 'continuing')
+          throw new Error('A Handoff + Reset is already running for this pane');
+        const now = Date.now();
+        handoffs.set(paneId, {
+          paneId,
+          harness: 'claude',
+          cwd: sessions.find((s) => s.id === paneId)?.cwd ?? '',
+          phase: 'writing',
+          startedAt: now,
+          updatedAt: now,
+        });
+        clearTimeout(handoffTimers.get(paneId));
+        if (handoffStepMs > 0)
+          handoffTimers.set(
+            paneId,
+            setTimeout(() => advanceHandoff(paneId, 'resetting'), handoffStepMs)
+          );
+        return later({ ...handoffs.get(paneId)! });
+      },
+      async fetchHandoffReset(paneId) {
+        const job = handoffs.get(paneId);
+        return later(job ? { ...job } : null);
+      },
+      async cancelHandoffReset(paneId) {
+        if (!handoffs.has(paneId)) throw new Error('No Handoff + Reset to cancel');
+        clearTimeout(handoffTimers.get(paneId));
+        return later({ ...setHandoff(paneId, { phase: 'error', error: 'Cancelled' }) });
+      },
+    },
+    contexts: {
+      async fetchAgentContexts() {
+        return later(
+          Object.fromEntries(
+            sessions.map((s): [string, AgentContext] => [
+              s.id,
+              {
+                repo: null,
+                model: null,
+                issues: null,
+                pulls: null,
+                servers: [],
+                subagents: { running: 0, total: 0, names: [] },
+                contextTokens: contextTokens[s.id] ?? null,
+              },
+            ])
+          )
+        );
       },
     },
     logs: {

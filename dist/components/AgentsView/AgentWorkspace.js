@@ -111,7 +111,7 @@ const SplitOverlay = ({ onDropZone }) => {
  * creating a tab. Drag a tab or pane header onto a pane edge to split; drag a pane
  * header onto the empty tab strip to give it its own tab again.
  */
-export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane, onClosePane, onCloseTab, onMoveTab, onSplit, onDetach, onSetLayout, onPeek, onOpenLink: onOpenLinkProp, focusZone, renderPaneMeta, renderPaneActions, renderPaneView, chatSubmitKey = 'mod+enter', chatShowSteps = false, onToggleChatSteps, views = {}, onSetView, renderCustomPane, emptyState, paneNoun, hidden = false, }) => {
+export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane, onClosePane, onCloseTab, onMoveTab, onSplit, onDetach, onSetLayout, onPeek, onOpenLink: onOpenLinkProp, focusZone, renderPaneMeta, renderPaneActions, renderPaneView, contexts, handoffResetTokens, chatSubmitKey = 'mod+enter', chatShowSteps = false, onToggleChatSteps, views = {}, onSetView, renderCustomPane, emptyState, paneNoun, hidden = false, }) => {
     const [drag, setDrag] = useState(null);
     const [dropTarget, setDropTarget] = useState(null);
     const [endHot, setEndHot] = useState(false);
@@ -267,6 +267,7 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
         const url = browserUrl(session.id);
         // A harness pane started here (#195): the server row that claimed it knows its state and session
         const row = sessions.find((s) => s.paneId === session.id);
+        const contextTokens = contexts?.[(row ?? session).id]?.contextTokens;
         // #220: the transcript lives on the pane's instance; the transport routes the view there by
         // pane id, so a picker on another instance changes nothing here
         const viewSessionId = transcriptId(session) ?? (row ? transcriptId(row) : null);
@@ -296,10 +297,10 @@ export const AgentWorkspace = ({ sessions, workspace, onActivateTab, onFocusPane
         });
         return (_jsxs("div", { className: "relative h-full min-h-0", children: [custom ? (custom) : url !== null ? (_jsx(BrowserPane, { url: url, active: active, onFocus: () => onFocusPane(session.id), onClose: () => onClosePane(session.id), onMaximize: multi ? () => onDetach(session.id) : undefined, headerProps: dragHeader })) : (
                 // The terminal stays mounted under the UI view: its PTY is the agent
-                _jsx("div", { className: `h-full ${chatView ? 'invisible' : ''}`, "aria-hidden": chatView, children: _jsx(AgentTerminal, { session: session, visible: visible && !chatView, active: active && !chatView, focused: focused && !chatView, onFocus: () => onFocusPane(session.id), onClose: () => onClosePane(session.id), onPeek: onPeek && (() => onPeek(session.id)), onMaximize: multi ? () => onDetach(session.id) : undefined, solo: !multi, meta: renderPaneMeta?.(session), hostActions: hostActions, paneView: chatView ? null : paneView, onOpenLink: onOpenLink && ((link) => onOpenLink(session.id, link)), onShowChat: viewable && onSetView ? () => onSetView(session.id, 'chat') : undefined, headerProps: dragHeader && {
+                _jsx("div", { className: `h-full ${chatView ? 'invisible' : ''}`, "aria-hidden": chatView, children: _jsx(AgentTerminal, { session: session, visible: visible && !chatView, active: active && !chatView, focused: focused && !chatView, onFocus: () => onFocusPane(session.id), onClose: () => onClosePane(session.id), onPeek: onPeek && (() => onPeek(session.id)), onMaximize: multi ? () => onDetach(session.id) : undefined, solo: !multi, meta: renderPaneMeta?.(session), hostActions: hostActions, contextTokens: contextTokens, handoffResetTokens: handoffResetTokens, paneView: chatView ? null : paneView, onOpenLink: onOpenLink && ((link) => onOpenLink(session.id, link)), onShowChat: viewable && onSetView ? () => onSetView(session.id, 'chat') : undefined, headerProps: dragHeader && {
                             ...dragHeader,
                             title: t.dragPaneTitle,
-                        } }) })), chatView && !custom && (_jsx("div", { className: "absolute inset-0", children: _jsx(ChatPane, { pane: session, agent: row ?? session, sessionId: viewSessionId, active: active, focused: focused, submitKey: chatSubmitKey, showSteps: chatShowSteps, onToggleSteps: () => onToggleChatSteps?.(), onFocus: () => onFocusPane(session.id), onClose: () => onClosePane(session.id), onMaximize: multi ? () => onDetach(session.id) : undefined, onShowTerminal: () => onSetView?.(session.id, 'terminal'), hostActions: hostActions, paneView: paneView, renderStatus: renderPaneView &&
+                        } }) })), chatView && !custom && (_jsx("div", { className: "absolute inset-0", children: _jsx(ChatPane, { pane: session, agent: row ?? session, sessionId: viewSessionId, active: active, focused: focused, submitKey: chatSubmitKey, showSteps: chatShowSteps, onToggleSteps: () => onToggleChatSteps?.(), onFocus: () => onFocusPane(session.id), onClose: () => onClosePane(session.id), onMaximize: multi ? () => onDetach(session.id) : undefined, contextTokens: contextTokens, handoffResetTokens: handoffResetTokens, onShowTerminal: () => onSetView?.(session.id, 'terminal'), hostActions: hostActions, paneView: paneView, renderStatus: renderPaneView &&
                             ((statusTask, onClose) => renderPaneView(session, { statusTask, onClose })), headerProps: dragHeader }) })), drag && drag.sessionId !== session.id && visible && (_jsx(SplitOverlay, { onDropZone: (zone) => (onSplit(drag.sessionId, session.id, zone), finishDrag()) }))] }));
     };
     /** One level of the split tree; `width` is the share of the body this node gets (estimate) */

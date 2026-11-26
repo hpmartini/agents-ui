@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { usePopover } from './PullRequestsPanel';
 import { registerPaneBrowser } from '../../utils/links';
-import type { AgentSession } from '../../types';
+import type { AgentContext, AgentSession } from '../../types';
 import {
   stateGlyph,
   transcriptId,
@@ -68,6 +68,10 @@ interface AgentWorkspaceProps {
   renderPaneMeta?: (session: AgentSession) => React.ReactNode;
   /** Host buttons in a pane's header (`host.renderPaneActions`) */
   renderPaneActions?: (session: AgentSession) => React.ReactNode;
+  /** Context per listed session id: its `contextTokens` gate Handoff + Reset in the pane headers */
+  contexts?: Record<string, AgentContext>;
+  /** Context size above which a pane offers Handoff + Reset (`AgentViewSettings.handoffResetTokens`) */
+  handoffResetTokens?: number;
   /**
    * Host view in place of a pane's body (`host.renderPaneView`); null: the pane as usual. With
    * `status`: one report task's details for the maximised threads panel of a UI view
@@ -284,6 +288,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   renderPaneMeta,
   renderPaneActions,
   renderPaneView,
+  contexts,
+  handoffResetTokens,
   chatSubmitKey = 'mod+enter',
   chatShowSteps = false,
   onToggleChatSteps,
@@ -475,6 +481,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     const url = browserUrl(session.id);
     // A harness pane started here (#195): the server row that claimed it knows its state and session
     const row = sessions.find((s) => s.paneId === session.id);
+    const contextTokens = contexts?.[(row ?? session).id]?.contextTokens;
     // #220: the transcript lives on the pane's instance; the transport routes the view there by
     // pane id, so a picker on another instance changes nothing here
     const viewSessionId = transcriptId(session) ?? (row ? transcriptId(row) : null);
@@ -531,6 +538,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               solo={!multi}
               meta={renderPaneMeta?.(session)}
               hostActions={hostActions}
+              contextTokens={contextTokens}
+              handoffResetTokens={handoffResetTokens}
               paneView={chatView ? null : paneView}
               onOpenLink={onOpenLink && ((link) => onOpenLink(session.id, link))}
               onShowChat={viewable && onSetView ? () => onSetView(session.id, 'chat') : undefined}
@@ -557,6 +566,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               onFocus={() => onFocusPane(session.id)}
               onClose={() => onClosePane(session.id)}
               onMaximize={multi ? () => onDetach(session.id) : undefined}
+              contextTokens={contextTokens}
+              handoffResetTokens={handoffResetTokens}
               onShowTerminal={() => onSetView?.(session.id, 'terminal')}
               hostActions={hostActions}
               paneView={paneView}

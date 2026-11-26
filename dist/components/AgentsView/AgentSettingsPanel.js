@@ -7,6 +7,9 @@ import { Choice } from '../Choice';
 import { GROUP_MODES } from './ProjectsRail';
 import { DEFAULT_AGENT_CARD_FIELDS } from '../../types';
 import { CARD_ELEMENTS, CARD_SLOTS, HARNESSES } from '../../utils/agentSessions';
+/** Handoff + Reset threshold bounds (tokens); the server's schema holds the same ones */
+const HANDOFF_TOKENS_MIN = 1000;
+const HANDOFF_TOKENS_MAX = 10_000_000;
 const PERMISSION_MODES = [
     '',
     'default',
@@ -56,6 +59,18 @@ export const AgentSettingsPanel = ({ open, onClose, settings, onUpdate, userSett
             setBusy(null);
         }
     };
+    // Handoff + Reset threshold: a number box that saves on blur; a non-number reverts to the stored value
+    const saveHandoffTokens = (input) => {
+        const value = Number(input.value);
+        if (input.value.trim() === '' || !Number.isFinite(value)) {
+            input.value = String(settings.handoffResetTokens);
+            return;
+        }
+        const tokens = Math.min(HANDOFF_TOKENS_MAX, Math.max(HANDOFF_TOKENS_MIN, Math.round(value)));
+        input.value = String(tokens);
+        if (tokens !== settings.handoffResetTokens)
+            onUpdate({ handoffResetTokens: tokens });
+    };
     const field = 'w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-100 outline-none focus:border-blue-500';
     const label = 'block text-xs text-gray-400 mb-1';
     // Form size; a menu trigger fills its column like the inputs next to it
@@ -66,7 +81,7 @@ export const AgentSettingsPanel = ({ open, onClose, settings, onUpdate, userSett
                                                             value: repo.path,
                                                             label: `${repo.name} — ${repo.path}`,
                                                         })),
-                                                    ] })] }), _jsxs("div", { children: [_jsx("label", { className: label, htmlFor: "agent-task-cwd", children: t.settingsTaskCwd }), _jsx("input", { id: "agent-task-cwd", className: field, placeholder: t.settingsTaskCwdPlaceholder, defaultValue: settings.taskCwd || '', onBlur: (e) => onUpdate({ taskCwd: e.target.value.trim() || null }) })] }), _jsxs("div", { children: [_jsx("span", { className: label, children: t.settingsGroupBy }), _jsx(Choice, { ...md, label: t.settingsGroupBy, value: settings.grouping, onChange: (grouping) => onUpdate({ grouping }), options: GROUP_MODES.map((mode) => ({
+                                                    ] })] }), _jsxs("div", { children: [_jsx("label", { className: label, htmlFor: "agent-task-cwd", children: t.settingsTaskCwd }), _jsx("input", { id: "agent-task-cwd", className: field, placeholder: t.settingsTaskCwdPlaceholder, defaultValue: settings.taskCwd || '', onBlur: (e) => onUpdate({ taskCwd: e.target.value.trim() || null }) })] }), _jsxs("div", { children: [_jsx("label", { className: label, htmlFor: "agent-handoff-tokens", children: t.settingsHandoffTokens }), _jsx("input", { id: "agent-handoff-tokens", type: "number", inputMode: "numeric", min: HANDOFF_TOKENS_MIN, max: HANDOFF_TOKENS_MAX, step: 1000, className: `${field} tabular-nums`, "aria-describedby": "agent-handoff-tokens-hint", defaultValue: settings.handoffResetTokens, onBlur: (e) => saveHandoffTokens(e.currentTarget), onKeyDown: (e) => e.key === 'Enter' && e.currentTarget.blur() }, settings.handoffResetTokens), _jsx("p", { id: "agent-handoff-tokens-hint", className: "mt-1 text-[11px] text-gray-500", children: t.settingsHandoffTokensHint })] }), _jsxs("div", { children: [_jsx("span", { className: label, children: t.settingsGroupBy }), _jsx(Choice, { ...md, label: t.settingsGroupBy, value: settings.grouping, onChange: (grouping) => onUpdate({ grouping }), options: GROUP_MODES.map((mode) => ({
                                                         value: mode,
                                                         label: labels.shell.groupModes[mode],
                                                     })) })] }), _jsxs("div", { children: [_jsx("span", { className: label, children: t.settingsCardDensity }), _jsx(Choice, { ...md, id: "agent-card-density", label: t.settingsCardDensity, value: settings.cardDensity, onChange: (cardDensity) => onUpdate({ cardDensity }), options: [

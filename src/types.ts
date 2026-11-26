@@ -114,6 +114,8 @@ export interface AgentContext {
   model: string | null;
   /** Prompt-cache stats from the session transcript; null when there is no local transcript */
   cache?: AgentCacheInfo | null;
+  /** Tokens in the model context of the session's latest turn (any harness); null/absent: unknown */
+  contextTokens?: number | null;
   /** null when gh is unavailable/unauthenticated or not a github repo */
   issues: { open: number; url: string | null } | null;
   pulls: { open: number; url: string | null; items: AgentPullRequest[] } | null;
@@ -272,6 +274,8 @@ export interface AgentViewSettings {
   orchestrators: string[];
   /** Orchestrator session key -> role id (`<workspace>/roles/<id>.md`) */
   orchestratorRoles: Record<string, string>;
+  /** Context size (tokens) above which a pane offers "Handoff + Reset"; at least 1000 */
+  handoffResetTokens: number;
   dispatch: AgentDispatchDefaults;
   version: number;
 }
@@ -398,6 +402,7 @@ export const DEFAULT_AGENT_VIEW_SETTINGS: AgentViewSettings = {
   mainAgent: { name: 'main-orchestrator', keepAlive: true },
   orchestrators: [],
   orchestratorRoles: {},
+  handoffResetTokens: 150_000,
   dispatch: DEFAULT_AGENT_DISPATCH_DEFAULTS,
   version: 1,
 };

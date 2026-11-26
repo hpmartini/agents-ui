@@ -121,7 +121,7 @@ interface AgentsTransport {
   pty: { open(request: PtyRequest): WebSocket };    // agent attach, harness start, shell
   manage?: { renameAgent; pinAgent; reorderAgents; removeAgent; respawnAgent; fetchAgentsRawJson };
   daemon?: { respawnAllAgents; stopAgentDaemon };
-  messaging?: { replyToAgent; sendToPane; stopPane };
+  messaging?: { replyToAgent; sendToPane; stopPane; startHandoffReset?; fetchHandoffReset?; cancelHandoffReset? };
   contexts?: { fetchAgentContexts };
   discovery?: { fetchAgentRepos; fetchSubagents; fetchAgentCommands; fetchHarnesses; fetchHarnessModels };
   history?: { fetchPastSessions };

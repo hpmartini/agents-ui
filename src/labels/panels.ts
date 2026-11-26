@@ -12,6 +12,8 @@ export interface PanelsLabels {
   settingsAllSessions: string;
   settingsTaskCwd: string;
   settingsTaskCwdPlaceholder: string;
+  settingsHandoffTokens: string;
+  settingsHandoffTokensHint: string;
   settingsGroupBy: string;
   settingsCardDensity: string;
   settingsDensityComfortable: string;
@@ -230,6 +232,9 @@ export const panelsEn: PanelsLabels = {
   settingsAllSessions: 'All sessions',
   settingsTaskCwd: 'New tasks start in',
   settingsTaskCwdPlaceholder: 'Selected project or last pick, e.g. ~/MAPLE',
+  settingsHandoffTokens: 'Offer Handoff + Reset above (tokens)',
+  settingsHandoffTokensHint:
+    'Panes show the button once their context is larger than this; at least 1000.',
   settingsGroupBy: 'Group by',
   settingsCardDensity: 'Card density',
   settingsDensityComfortable: 'Comfortable (metrics on their own line)',
@@ -523,6 +528,9 @@ export const panelsDe: PanelsLabels = {
   settingsAllSessions: 'Alle Sessions',
   settingsTaskCwd: 'Neue Aufgaben starten in',
   settingsTaskCwdPlaceholder: 'Gewähltes Projekt oder letzte Wahl, z. B. ~/MAPLE',
+  settingsHandoffTokens: 'Handoff + Reset anbieten ab (Tokens)',
+  settingsHandoffTokensHint:
+    'Bereiche zeigen den Button, sobald ihr Kontext größer ist; mindestens 1000.',
   settingsGroupBy: 'Gruppieren nach',
   settingsCardDensity: 'Kartendichte',
   settingsDensityComfortable: 'Großzügig (Kennzahlen in eigener Zeile)',

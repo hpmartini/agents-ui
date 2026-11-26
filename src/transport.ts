@@ -213,6 +213,29 @@ export interface OpenFileOptions {
   col?: number;
 }
 
+export type HandoffResetPhase = 'writing' | 'resetting' | 'continuing' | 'done' | 'error';
+
+/** One Handoff + Reset of a pane (server job, in memory, one per pane) */
+export interface HandoffResetJob {
+  paneId: string;
+  harness: string;
+  cwd: string;
+  phase: HandoffResetPhase;
+  /** ms epoch */
+  startedAt: number;
+  updatedAt: number;
+  oldSessionId?: string | null;
+  newSessionId?: string | null;
+  /** Path of the handoff file the agent wrote */
+  handoffFile?: string | null;
+  /** Human-readable, set when phase is 'error' */
+  error?: string | null;
+  /** Server bookkeeping of the handoff marker; the UI shows none of it */
+  resetId?: string | null;
+  markerKey?: string | null;
+  keyMode?: 'pane' | 'cwd';
+}
+
 export interface AgentsTransport {
   /** Session list, start, stop */
   agents: {
@@ -265,6 +288,16 @@ export interface AgentsTransport {
     ) => Promise<{ delivered: boolean; queued?: boolean; mode: string; output?: string }>;
     sendToPane: (paneId: string, text: string) => Promise<{ delivered: boolean }>;
     stopPane: (paneId: string) => Promise<{ stopped: number }>;
+    /**
+     * Handoff + Reset: the agent writes a handoff, the pane is reset (/clear, /new) and continues.
+     * Rejects with a readable message (unsupported harness, a job already running). All three
+     * absent: the pane offers no such action.
+     */
+    startHandoffReset?: (paneId: string) => Promise<HandoffResetJob>;
+    /** The pane's last job (kept a while after it ended); null when there is none */
+    fetchHandoffReset?: (paneId: string) => Promise<HandoffResetJob | null>;
+    /** Cancels an active job (it ends in phase 'error', error 'Cancelled') */
+    cancelHandoffReset?: (paneId: string) => Promise<HandoffResetJob>;
   };
   /** Repo, PRs, issues, servers, model and cache per session: PR panel, PR page, repo chips */
   contexts?: {

@@ -3253,6 +3253,8 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
                         onFocusPane={live ? workspaceActions.focusPane : noop}
                         onClosePane={live ? closePane : noop}
                         onCloseTab={live ? workspaceActions.closeTab : noop}
+                        contexts={contexts}
+                        handoffResetTokens={settings.handoffResetTokens}
                         chatSubmitKey={settings.chatSubmitKey}
                         chatShowSteps={settings.chatShowSteps}
                         onToggleChatSteps={() =>
