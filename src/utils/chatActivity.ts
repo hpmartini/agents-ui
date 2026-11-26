@@ -3,6 +3,7 @@
  * TaskUpdate / TodoWrite), background shells, sub-agents and the steps of the running turn.
  */
 import type { ChatBlock, ChatMessage } from './chatEvents';
+import type { AgentSession } from '../types';
 
 type ToolBlock = Extract<ChatBlock, { type: 'tool' }>;
 
@@ -121,13 +122,40 @@ export function chatSubagents(messages: ChatMessage[], ended: string[] = []): Ch
     }));
 }
 
-/** Thinking + tool blocks since the last user message: the work of the current turn */
+/**
+ * Thinking + tool blocks of the current turn. A turn may start without a user message in view
+ * (hand-back, task notification, `orkumo send`), so it starts after the last user message, result
+ * or final answer (an assistant message without tools ends its turn; the last one may still stream).
+ */
 export function turnSteps(messages: ChatMessage[]): ChatBlock[] {
   let from = 0;
   messages.forEach((m, i) => {
-    if (m.kind === 'user') from = i + 1;
+    const answered =
+      m.kind === 'assistant' &&
+      i < messages.length - 1 &&
+      !m.blocks.some((b) => b?.type === 'tool');
+    if (m.kind === 'user' || m.kind === 'result' || answered) from = i + 1;
   });
   return messages
     .slice(from)
     .flatMap((m) => (m.kind === 'assistant' ? m.blocks.filter((b) => b && b.type !== 'text') : []));
+}
+
+/**
+ * Busy and questions come from the agent's state: a prompt is on its screen, not in its transcript.
+ * `busy` only while a turn runs (`working`). `waiting` (own background tasks after the turn) is no
+ * question by itself, but its screen may still hold a dialog (`mayAsk`); `asking` is a question
+ * the state reports (`needs-input` with `status: waiting`).
+ */
+export function chatAgentState(agent: AgentSession | null | undefined): {
+  busy: boolean;
+  asking: boolean;
+  mayAsk: boolean;
+} {
+  const asking = agent?.displayState === 'needs-input' && agent?.status === 'waiting';
+  return {
+    busy: agent?.displayState === 'working',
+    asking,
+    mayAsk: asking || agent?.displayState === 'waiting',
+  };
 }

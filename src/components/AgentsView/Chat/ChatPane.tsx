@@ -88,6 +88,7 @@ import { QuestionCard } from './QuestionCard';
 import { ModelEffortPicker } from '../ModelEffortPicker';
 import { switchCommands } from '../../../utils/modelMatrix';
 import { splitImages } from '../../../utils/chatComposer';
+import { chatAgentState } from '../../../utils/chatActivity';
 import { extractNumberedChoices, screenPrompt } from '../../../utils/agentInput';
 import { dialogKeys, parseAgentDialog, type DialogAnswer } from '../../../utils/agentDialog';
 import { harnessLabel, sessionHarness } from '../../../utils/agentSessions';
@@ -533,12 +534,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const artifacts = useChatArtifacts(chatId, artifactKey);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
 
-  // Busy and questions come from the agent's state: a prompt is on its screen, not in its transcript.
-  // The server derives `displayState` for every kind; a prompt to answer here needs `status: waiting`.
-  const prompting =
-    agent?.displayState === 'waiting' ||
-    (agent?.displayState === 'needs-input' && agent?.status === 'waiting');
-  const busy = agent?.displayState === 'working';
+  const { busy, asking, mayAsk } = chatAgentState(agent);
   // Back to idle: an echoed prompt still unlogged was withdrawn in the TUI (a few s for the poll)
   useEffect(() => {
     if (busy) return;
@@ -549,13 +545,15 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     return () => window.clearTimeout(t);
   }, [busy]);
   // The agent's state only says it may wait; the box needs a dialog on its screen
-  const panePrompt = usePanePrompt(pane.id, prompting);
+  const panePrompt = usePanePrompt(pane.id, mayAsk);
   const screen = panePrompt?.screen ?? null;
   const suggestion = usePaneSuggestion(
     pane.id,
-    harness === 'claude' && connected && !busy && !prompting
+    harness === 'claude' && connected && !busy && !mayAsk
   );
   const prompt = screen ? screenPrompt(screen) : null;
+  // needs input: the state says so, or a session waiting on its tasks shows a prompt
+  const prompting = asking || prompt !== null;
   // A dialog the parser knows becomes a card; any other prompt stays the screen excerpt below
   const dialog = useMemo(
     () => (prompt ? parseAgentDialog(screen ?? '', panePrompt?.tab) : null),

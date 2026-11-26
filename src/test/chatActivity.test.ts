@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { initialChatState, reduceChat, type ChatState } from '../utils/chatEvents';
-import { chatPlan, chatShells, chatSubagents, turnSteps } from '../utils/chatActivity';
+import {
+  chatAgentState,
+  chatPlan,
+  chatShells,
+  chatSubagents,
+  turnSteps,
+} from '../utils/chatActivity';
+import type { AgentSession } from '../types';
 
 const tool = (id: string, name: string, input: Record<string, unknown>) => ({
   type: 'assistant',
@@ -77,6 +84,61 @@ describe('shells, sub-agents, steps', () => {
       tool('y', 'Edit', {}),
     ]);
     expect(turnSteps(s.messages).map((b) => (b.type === 'tool' ? b.id : ''))).toEqual(['y']);
+  });
+  // A hand-back, task notification or `orkumo send` starts a turn without a user message in view
+  it('turn steps restart at every turn start, whoever started it', () => {
+    const answer = (id: string) => ({
+      type: 'assistant',
+      message: { id, content: [{ type: 'text', text: 'done' }] },
+    });
+    const ids = (events: unknown[]) =>
+      turnSteps(fold(events).messages).map((b) => (b.type === 'tool' ? b.id : ''));
+    // a short turn (no turn_duration, so no result) ended with its answer
+    expect(ids([tool('x', 'Read', {}), answer('a1'), tool('y', 'Edit', {})])).toEqual(['y']);
+    // a longer one with its result
+    expect(
+      ids([tool('x', 'Read', {}), answer('a1'), { type: 'result' }, tool('y', 'Edit', {})])
+    ).toEqual(['y']);
+    // the running turn's own text between tools keeps its steps
+    expect(
+      ids([
+        { type: 'devorbit_user', text: 'go' },
+        {
+          type: 'assistant',
+          message: {
+            id: 'm1',
+            content: [
+              { type: 'text', text: 'reading' },
+              { type: 'tool_use', id: 'x', name: 'Read', input: {} },
+            ],
+          },
+        },
+        tool('y', 'Edit', {}),
+      ])
+    ).toEqual(['x', 'y']);
+    // a turn that just ended shows no steps of its own
+    expect(ids([tool('x', 'Read', {}), answer('a1'), { type: 'result' }])).toEqual([]);
+  });
+});
+
+describe('chatAgentState', () => {
+  const agent = (displayState: string, status: string | null = null) =>
+    ({ displayState, status }) as unknown as AgentSession;
+  const none = { busy: false, asking: false, mayAsk: false };
+  it('a session without a running turn does not show working', () => {
+    // waiting on its own background shells / subagents after its turn ended: no spinner, no
+    // question; only a dialog found on its screen makes it one
+    expect(chatAgentState(agent('waiting', 'busy'))).toEqual({ ...none, mayAsk: true });
+    expect(chatAgentState(agent('idle', 'busy'))).toEqual(none);
+    expect(chatAgentState(agent('needs-input'))).toEqual(none);
+    expect(chatAgentState(undefined)).toEqual(none);
+    expect(chatAgentState(agent('working', 'busy'))).toEqual({ ...none, busy: true });
+    // a dialog the state reports
+    expect(chatAgentState(agent('needs-input', 'waiting'))).toEqual({
+      ...none,
+      asking: true,
+      mayAsk: true,
+    });
   });
 });
 
