@@ -40,7 +40,29 @@ export interface ChatThread {
         at: number;
         command: string;
     }[];
+    /** Renamed by the user in the UI: never named automatically again */
+    renamed?: boolean;
 }
+/** The orchestrator's tidy-up layer over the transcript (`orkumo thread move/merge`) */
+export interface ChatThreadOverrides {
+    /** Entry key (`entryKey`) → thread id, or 'main' */
+    entries: Record<string, string>;
+    /** Merged source thread id → target thread id; sources are hidden */
+    merged: Record<string, string>;
+}
+/** Routing key of an item: its transcript key without the history page prefixes `h<before>:` */
+export declare const entryKey: (item: {
+    key: string;
+}) => string;
+/** Final thread of `id` along the merge chain; an unknown target (or a cycle) keeps `id` */
+export declare function threadTarget(id: string, threads: ChatThread[], overrides?: ChatThreadOverrides): string;
+/** Threads the panel lists: merged sources are gone */
+export declare const visibleThreads: (threads: ChatThread[], overrides?: ChatThreadOverrides) => ChatThread[];
+/** Shown name: "Project · Task", Markdown stripped, a doubled part once */
+export declare function threadTitle(name: {
+    project: string;
+    task: string;
+}): string;
 /** Where a thread starts in the main chat: "N replies in thread …" */
 export interface ChatThreadMarker {
     kind: 'thread';
@@ -60,8 +82,14 @@ export declare const threadTag: (name: {
 export declare function threadCommand(body: string, commands: {
     name: string;
 }[]): string | null;
-/** Message text without its thread tag line */
-export declare function stripTag(text: string, tag: string): string;
+/**
+ * Message text without the tags of `tags` (every thread of the session, merged and closed ones
+ * too: after a merge or a move a message keeps its source's tag, shown in another thread or the
+ * main chat): a leading one, and lines that are only one (one answer to prompts of several
+ * threads opens each part with one). Other text that looks like a tag stays, and nothing inside
+ * a fenced code block goes (an unclosed fence, e.g. while streaming, runs to the end)
+ */
+export declare function stripTag(text: string, tags: ReadonlySet<string>): string;
 export declare const hhmm: (ms: number) => string;
 /** First lines of a quoted text, cut with an ellipsis */
 export declare function quoteExcerpt(text: string): string;
@@ -79,6 +107,14 @@ export declare const itemTime: (item: ChatItem) => number | undefined;
 /** Thread of one chat item, null when it stays in the main chat */
 export declare function threadOf(item: ChatItem, threads: ChatThread[]): string | null;
 /**
+ * Commands threads sent while the agent works: Claude Code logs their enqueue without the text, so
+ * each empty queue entry stands for one of the newest marks no logged prompt has claimed yet; the
+ * rest are main-chat commands, shown as `command` so nothing typed disappears
+ */
+export declare function queuedCommands(items: ChatItem[], threads: ChatThread[], placeholders: number, 
+/** What a placeholder no mark claims shows in the main chat: a main `/command` waiting */
+command: string): string[];
+/**
  * Splits the chat: thread items go to their thread, the main chat keeps the rest plus one marker
  * per thread (after the answer it was opened on, else where its first message was). An answer of
  * tool steps only follows the item before it; a command sent from a thread goes there by its mark
@@ -87,7 +123,9 @@ export declare function routeThreads(items: ChatItem[], threads: ChatThread[],
 /** The items are the whole history (no older page left to load) */
 complete?: boolean, 
 /** ms of the newest prompt before the loaded items (host's `devorbit_page`), if known */
-olderTs?: number): {
+olderTs?: number, 
+/** The orchestrator's tidy-up layer: decides before every other rule */
+overrides?: ChatThreadOverrides): {
     main: (ChatItem | ChatThreadMarker)[];
     byThread: Map<string, ChatItem[]>;
 };

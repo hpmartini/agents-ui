@@ -97,6 +97,15 @@ describe('Claude question tabs: back to an answered question, multi select movin
     expect(dialogKeys(d!, { type: 'pick', row: 0 })).toBe('1');
   });
 
+  it('review with the cursor on its last option', () => {
+    const d = parseAgentDialog(
+      screen('claude-question-review')
+        .replace('❯ 1. Submit answers', '  1. Submit answers')
+        .replace('  2. Cancel', '❯ 2. Cancel')
+    );
+    expect(d).toMatchObject({ kind: 'review', cursor: 1 });
+  });
+
   it('to a tab: from the first row, ← or → by the distance; ←/→ one step', () => {
     const d = parseAgentDialog(screen('claude-question-tabs-back'), 'Groesse')!;
     expect(d.tab).toBe(2);
@@ -225,6 +234,14 @@ describe('parseAgentDialog: no dialog', () => {
     expect(
       parseAgentDialog('⏺ Next steps:\n  1. Build\n  2. Test\n✻ Cooked for 3s\n❯ \n──────')
     ).toBeNull();
+  });
+
+  it('the input line is no cursor: prompt suggestion under an answer with options (bug D)', () => {
+    const rule = '─'.repeat(60);
+    expect(
+      parseAgentDialog(`⏺ Two ways:\n  1. Build\n  2. Test\n${rule}\n❯ 3. Ship it today\n${rule}`)
+    ).toBeNull();
+    expect(parseAgentDialog(screen('claude-idle-suggestion'))).toBeNull();
   });
 
   it('an omp screen without an ask box', () => {

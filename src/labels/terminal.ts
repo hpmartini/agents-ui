@@ -160,6 +160,8 @@ export interface TerminalLabels {
   attachedImage: string;
   imageRef: (path: string) => string;
   queuedNote: string;
+  /** A main-chat `/command` queued while busy (the CLI logs it without its text) */
+  queuedCommand: string;
   resultDone: string;
   resultInterrupted: string;
   resultError: (subtype: string) => string;
@@ -201,6 +203,9 @@ export interface TerminalLabels {
   noThreadsHint: string;
   pickThread: string;
   closeThread: string;
+  renameThread: string;
+  threadActions: string;
+  threadNameField: string;
   closedThreads: (count: number) => string;
   reopenThread: string;
   replyInThread: string;
@@ -219,9 +224,12 @@ export interface TerminalLabels {
   backToThread: string;
   firstThreadMessage: (tag: string) => string;
   boundTo: (repo: string | null) => string;
-  notBound: string;
+  undoTidy: string;
+  undoTidyTitle: string;
   resizeThreads: string;
   threadLog: (name: string) => string;
+  /** Button over a log scrolled up while new content came in */
+  newMessages: string;
   loadingThreadHistory: string;
 
   // ChatPane
@@ -480,6 +488,7 @@ export const terminalEn: TerminalLabels = {
   attachedImage: 'Attached image',
   imageRef: (path) => `[Image: ${path}]`,
   queuedNote: 'sent · waits for the current turn',
+  queuedCommand: 'Command',
   resultDone: 'Done',
   resultInterrupted: 'Interrupted',
   resultError: (subtype) => `Error (${subtype})`,
@@ -505,7 +514,7 @@ export const terminalEn: TerminalLabels = {
   newThread: 'New thread',
   bindToTask: 'Bind to a task from the status report',
   threadWithoutTask: 'Thread without a task',
-  threadWithoutTaskHint: 'Named after its first message',
+  threadWithoutTaskHint: 'The orchestrator names it after its project',
   noReportTasks: 'No status report yet',
   threadReplies: (count) => `${count} ${count === 1 ? 'reply' : 'replies'}`,
   inThread: 'in thread',
@@ -522,6 +531,9 @@ export const terminalEn: TerminalLabels = {
     'Open a thread from an answer, from Instruct on a status card, or bind a new one to a task.',
   pickThread: 'Pick a thread to read it here.',
   closeThread: 'Close thread',
+  renameThread: 'Rename',
+  threadActions: 'Thread actions',
+  threadNameField: 'Thread name (Enter saves, Esc cancels)',
   closedThreads: (count) => `Closed (${count})`,
   reopenThread: 'Reopen',
   replyInThread: 'Reply in thread',
@@ -540,9 +552,11 @@ export const terminalEn: TerminalLabels = {
   firstThreadMessage: (tag) =>
     `Write the first message. It goes to the orchestrator tagged ${tag}.`,
   boundTo: (repo) => `Bound to status task${repo ? ` · ${repo}` : ''}`,
-  notBound: 'Not bound to a status task',
+  undoTidy: 'Undo tidy-up',
+  undoTidyTitle: 'Restore the threads as they were before the last tidy-up',
   resizeThreads: 'Resize threads panel',
   threadLog: (name) => `Thread ${name}`,
+  newMessages: 'New messages',
   loadingThreadHistory: 'Loading earlier messages of this thread…',
 
   // ChatPane
@@ -810,6 +824,7 @@ export const terminalDe: TerminalLabels = {
   attachedImage: 'Angehängtes Bild',
   imageRef: (path) => `[Bild: ${path}]`,
   queuedNote: 'gesendet · wartet auf den laufenden Turn',
+  queuedCommand: 'Befehl',
   resultDone: 'Fertig',
   resultInterrupted: 'Unterbrochen',
   resultError: (subtype) => `Fehler (${subtype})`,
@@ -835,7 +850,7 @@ export const terminalDe: TerminalLabels = {
   newThread: 'Neuer Thread',
   bindToTask: 'An eine Aufgabe aus dem Status-Bericht binden',
   threadWithoutTask: 'Thread ohne Aufgabe',
-  threadWithoutTaskHint: 'Benannt nach der ersten Nachricht',
+  threadWithoutTaskHint: 'Der Orchestrator benennt ihn nach seinem Projekt',
   noReportTasks: 'Noch kein Status-Bericht',
   threadReplies: (count) => `${count} ${count === 1 ? 'Antwort' : 'Antworten'}`,
   inThread: 'im Thread',
@@ -852,6 +867,9 @@ export const terminalDe: TerminalLabels = {
     'Thread an einer Antwort öffnen, über Instruct auf einer Status-Karte oder neu an eine Aufgabe binden.',
   pickThread: 'Thread wählen, um ihn hier zu lesen.',
   closeThread: 'Thread schließen',
+  renameThread: 'Umbenennen',
+  threadActions: 'Thread-Aktionen',
+  threadNameField: 'Thread-Name (Enter speichert, Esc bricht ab)',
   closedThreads: (count) => `Geschlossen (${count})`,
   reopenThread: 'Wieder öffnen',
   replyInThread: 'Im Thread antworten',
@@ -877,9 +895,11 @@ export const terminalDe: TerminalLabels = {
   firstThreadMessage: (tag) =>
     `Erste Nachricht schreiben. Sie geht mit der Kennung ${tag} an den Orchestrator.`,
   boundTo: (repo) => `An Status-Aufgabe gebunden${repo ? ` · ${repo}` : ''}`,
-  notBound: 'Nicht an eine Status-Aufgabe gebunden',
+  undoTidy: 'Aufräumen rückgängig',
+  undoTidyTitle: 'Threads wiederherstellen wie vor dem letzten Aufräumen',
   resizeThreads: 'Breite des Thread-Panels ändern',
   threadLog: (name) => `Thread ${name}`,
+  newMessages: 'Neue Nachrichten',
   loadingThreadHistory: 'Frühere Nachrichten dieses Threads werden geladen…',
 
   // ChatPane

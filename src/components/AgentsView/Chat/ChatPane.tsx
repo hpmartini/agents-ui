@@ -52,7 +52,7 @@ import {
   ChatIdContext,
   ChatItemView,
   ChatRepliesContext,
-  UserMessage,
+  ChatTagsContext,
   type ChatQuote,
   type ChatReplies,
 } from './ChatMessages';
@@ -64,21 +64,24 @@ import {
   ThreadsPanel,
   type StatusTask,
   isThreadsMaxKey,
-  firstWords,
   useChatThreads,
 } from './ChatThreads';
 import {
   answerText,
-  hhmm,
+  entryKey,
+  threadTarget,
+  visibleThreads,
   itemTime,
   parseQuote,
   quoteHeader,
   stripTag,
+  queuedCommands,
   routeThreads,
   threadCommand,
   unreadCount,
 } from '../../../utils/chatThreads';
 import { clampWidth, ResizeHandle, useStoredWidth } from '../../../ResizeHandle';
+import { useFollowLog } from '../../../hooks/useFollowLog';
 import { ChatActivity } from './ChatActivity';
 import { ChatStatusLine } from './ChatStatusLine';
 import { QuestionCard } from './QuestionCard';
@@ -298,6 +301,24 @@ interface ChatPaneProps {
   meta?: React.ReactNode;
 }
 
+/** Over the bottom of a log scrolled up while new content came in: back to the end, following again */
+const NewMessages: React.FC<{ onClick: () => void }> = ({ onClick }) => {
+  const t = useLabels().terminal;
+  return (
+    // zero height: the log above keeps its size, so the reader's place does not move
+    <div className="relative h-0 shrink-0">
+      <button
+        type="button"
+        onClick={onClick}
+        className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-blue-400/40 bg-blue-600 px-3 py-1 text-xs font-medium text-white shadow-lg hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-blue-300"
+      >
+        <span aria-hidden>↓ </span>
+        {t.newMessages}
+      </button>
+    </div>
+  );
+};
+
 /**
  * UI view of an agent pane (#189): renders the agent's transcript and types into the pane's
  * terminal. The terminal process is the agent; this view never starts or stops a process.
@@ -335,14 +356,13 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [openError, setOpenError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const stickToBottom = useRef(true);
-  const lastScrollTop = useRef(0);
+  const mainLog = useFollowLog(listRef, contentRef);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const connected = usePaneConnected(pane.id);
   const harness = sessionHarness(pane);
   const harnessName = harnessLabel(harness);
   // Threads of an orchestrator chat: a slice of this session, routed by tag (utils/chatThreads)
-  const threads = useChatThreads(agent?.id);
+  const threads = useChatThreads(agent?.id, active);
 
   // The server view outlives this component (split remounts, view switches): with nobody
   // watching it stops itself after the orphan timeout, so a remount never races a stop
@@ -361,32 +381,36 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat, pane.id, pane.cwd, harness, sessionId, generation]);
 
+  // the session the log last opened on: a reopen of the same one replays its history
+  const openedFor = useRef<string | null>(null);
+  // the stream is down (server restarting): the view's id may be gone, its status waits
+  const [streamDown, setStreamDown] = useState(false);
   useEffect(() => {
     if (!chatId || !chat) return;
     return chat.subscribeToChat(chatId, {
+      onClose: () => setStreamDown(true),
       onOpen: () => {
-        stickToBottom.current = true;
+        setStreamDown(false);
+        // a reconnect keeps a scrolled-up place (main and thread log); another session starts at its end
+        if (openedFor.current === sessionId) {
+          mainLog.replay();
+          threadLog.replay();
+        } else {
+          mainLog.toEnd();
+          threadLog.toEnd();
+        }
+        openedFor.current = sessionId ?? null;
         dispatch({ type: 'reset' });
       },
       onEvent: (event) => dispatch({ type: 'event', event }),
       onGone: () => setGeneration((g) => g + 1),
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toEnd/replay only read refs; sessionId changes chatId
   }, [chat, chatId]);
 
-  // Follow the stream unless the user scrolled up to read. Message heights settle late
-  // (content-visibility, markdown, images), so every size change re-pins to the bottom.
-  const pinBottom = useCallback(() => {
-    const el = listRef.current;
-    if (el && stickToBottom.current) {
-      el.scrollTop = el.scrollHeight;
-      lastScrollTop.current = el.scrollTop;
-    }
-  }, []);
   // Older turns load page by page near the top; the view keeps its place while they go in front
   const [loadingOlder, setLoadingOlder] = useState(false);
   const loadingRef = useRef(false);
-  // The message at the top of the view and its offset: put back there once the page is in
-  const restoreScroll = useRef<{ key: string; offset: number } | null>(null);
   const loadOlder = useCallback(() => {
     const older = state.older;
     const el = listRef.current;
@@ -395,70 +419,36 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     setLoadingOlder(true);
     chat
       .fetchChatHistory(chatId, older.before)
-      .then((page) => {
-        const top = el.getBoundingClientRect().top;
-        const first = [...el.querySelectorAll<HTMLElement>('[data-chat-key]')].find(
-          (m) => m.getBoundingClientRect().bottom > top
-        );
-        if (first?.dataset.chatKey)
-          restoreScroll.current = {
-            key: first.dataset.chatKey,
-            offset: first.getBoundingClientRect().top - top,
-          };
-        dispatch({ type: 'older', page });
-      })
+      // the log keeps the reader's first message in place while the page goes in front
+      .then((page) => dispatch({ type: 'older', page }))
       .catch((e: Error) => setError(e.message))
       .finally(() => {
         loadingRef.current = false;
         setLoadingOlder(false);
       });
   }, [chat, chatId, state.older]);
-  useLayoutEffect(() => {
-    const el = listRef.current;
-    const saved = restoreScroll.current;
-    if (!el || !saved) return;
-    restoreScroll.current = null;
-    const anchor = el.querySelector<HTMLElement>(
-      `[data-chat-key="${globalThis.CSS.escape(saved.key)}"]`
-    );
-    if (!anchor) return;
-    // by the element, not the height: estimated heights (content-visibility) settle later
-    el.scrollTop +=
-      anchor.getBoundingClientRect().top - el.getBoundingClientRect().top - saved.offset;
-    lastScrollTop.current = el.scrollTop;
-  }, [state.messages]);
   // A short tail that does not fill the view cannot be scrolled: load on until it does
   useEffect(() => {
     const el = listRef.current;
     if (el && el.scrollHeight <= el.clientHeight + LOAD_OLDER_PX) loadOlder();
   }, [state.older, loadOlder]);
-  useLayoutEffect(pinBottom, [state.messages, showSteps, pinBottom]);
+  useLayoutEffect(mainLog.keep, [state.messages, showSteps, mainLog.keep]);
+  // Back on a hidden tab: at its end the log shows the newest, scrolled up it stays where it was
   useEffect(() => {
-    const content = contentRef.current;
-    const list = listRef.current;
-    if (!content || !list) return;
-    const observer = new ResizeObserver(pinBottom);
-    observer.observe(content);
-    // The list shrinks too when the status line or work panel below it appears late
-    observer.observe(list);
-    return () => observer.disconnect();
-  }, [pinBottom]);
-  // Back on a hidden tab: jump to the newest messages
-  useEffect(() => {
-    if (active) {
-      stickToBottom.current = true;
-      pinBottom();
-    }
-  }, [active, pinBottom]);
+    if (active) mainLog.keep();
+  }, [active, mainLog.keep]);
 
+  // every thread's tag (merged and closed ones too): only these are hidden in message text
+  const tags = useMemo(() => new Set(threads.threads.map((x) => x.tag)), [threads.threads]);
   const history = useMemo(
     () =>
       state.messages
         .filter((m): m is Extract<typeof m, { kind: 'user' }> => m.kind === 'user')
         .filter((m) => !agentMessage(m.text))
-        .map((m) => splitImages(m.text).text)
+        // a message moved here from a thread: recalled without its tag (it would route back)
+        .map((m) => splitImages(stripTag(m.text, tags)).text)
         .filter(Boolean),
-    [state.messages]
+    [state.messages, tags]
   );
   const turns = useMemo(
     () => state.messages.filter((m) => m.kind === 'result').length,
@@ -476,15 +466,42 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     return null;
   }, [state.messages]);
   const threadList = threads.enabled ? threads.threads : NO_THREADS;
+  const pending = useMemo(
+    () => [
+      ...pendingPrompts(state),
+      ...queuedCommands(
+        items,
+        threadList,
+        state.queued.filter((q) => !q.trim()).length,
+        t.queuedCommand
+      ),
+    ],
+    [state, items, threadList, t.queuedCommand]
+  );
   const routed = useMemo(
     () =>
+      // queued prompts route like logged ones: a thread's goes to its thread (tag or command mark)
       routeThreads(
-        items.filter((item) => item !== recap),
+        [
+          ...items.filter((item) => item !== recap),
+          ...pending.map((text, i) => ({
+            kind: 'user' as const,
+            key: `q${i}`,
+            text,
+            queued: true,
+          })),
+        ],
         threadList,
         !state.older?.more,
-        state.older?.olderTs
+        state.older?.olderTs,
+        threads.overrides
       ),
-    [items, recap, threadList, state.older]
+    [items, recap, pending, threadList, state.older, threads.overrides]
+  );
+  // merged threads of a tidy-up are gone from the list; their items went to the target
+  const listed = useMemo(
+    () => visibleThreads(threadList, threads.overrides),
+    [threadList, threads.overrides]
   );
   const shown = useMemo(
     () =>
@@ -494,14 +511,13 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     [routed, promptsOnly]
   );
   const [quote, setQuote] = useState<ChatQuote | null>(null);
-  const pending = useMemo(() => pendingPrompts(state), [state]);
   const starts = useMemo(() => initialPrompts(state.messages), [state.messages]);
   const [startsOpen, setStartsOpen] = useState(false);
   // Jump to a prompt; letting go of the bottom keeps late layout from pulling the list back down
   const jumpTo = (key: string) => {
     const target = listRef.current?.querySelector<HTMLElement>(`[data-chat-key="${key}"]`);
     if (!target) return;
-    stickToBottom.current = false;
+    mainLog.release();
     target.scrollIntoView({ block: 'start' });
     // content-visibility renders the skipped messages above late: settle, then aim again
     requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
@@ -611,7 +627,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         setText('');
         setImages([]);
         setQuote(null);
-        stickToBottom.current = true;
+        mainLog.toEnd();
       }
     } finally {
       setSending(false);
@@ -659,8 +675,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [threadQuote, setThreadQuote] = useState<ChatQuote | null>(null);
   const showThreads = threads.enabled && threadsOpen;
-  // A question of the agent needs the main chat: it shows again until answered
-  const threadsFull = showThreads && threadsMaxed && !dialog && prompt === null;
+  // A question of the agent stays in the main chat: maximising never waits for its answer
+  const threadsFull = showThreads && threadsMaxed;
   // H-6: a report task's details in the maximised panel; the header-toggled host view shows
   // there too, until a thread or an entry is picked (the host keeps its toggle)
   const [statusTask, setStatusTask] = useState<StatusTask | null>(null);
@@ -745,13 +761,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     if (id) showThreadsPanel(true);
     if (statusView) closeStatus();
   };
-  const openThread = threads.threads.find((x) => x.id === openThreadId) ?? null;
+  const openId =
+    openThreadId && openThreadId !== DRAFT_THREAD
+      ? threadTarget(openThreadId, threadList, threads.overrides)
+      : openThreadId;
+  const openThread = threads.threads.find((x) => x.id === openId) ?? null;
   const openFromAnswer = async (answer: ChatAnswer) => {
-    const ts = answer.parts[0]?.ts ?? Date.now();
     try {
+      // the host names it after the agent, status task or project the answer mentions
       const made = await threads.create({
-        name: { project: `Answer ${hhmm(ts)}`, task: firstWords(answerText(answer)) || 'Thread' },
-        parentKey: answer.key,
+        parentKey: entryKey(answer),
+        answerText: answerText(answer),
       });
       openThreadIn(made.id);
     } catch (e) {
@@ -761,11 +781,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const sendInThread = async (body: string, files: File[]) => {
     let thread = openThread;
     if (!thread) {
-      // a thread without a task is named after its first message
+      // neutral until the orchestrator names it after its project (`orkumo thread rename`)
       try {
-        thread = await threads.create({
-          name: { project: `Thread ${hhmm(Date.now())}`, task: firstWords(body) || 'Thread' },
-        });
+        thread = await threads.create({ name: { project: 'Thread', task: 'Thread' } });
       } catch (e) {
         setError(e instanceof Error ? e.message : t.threadsFailed);
         return false;
@@ -793,7 +811,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     else setThreadQuote(null);
     return sent;
   };
-  const unreadTotal = threadList.reduce(
+  const unreadTotal = listed.reduce(
     (n, x) => n + (x.closed ? 0 : unreadCount(routed.byThread.get(x.id) ?? NO_ITEMS, x.readAt)),
     0
   );
@@ -803,11 +821,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       threadItems
         .filter((i): i is Extract<ChatItem, { kind: 'user' }> => i.kind === 'user')
         .map((i) => {
-          const text = openThread ? stripTag(i.text, openThread.tag) : i.text;
+          const text = stripTag(i.text, tags);
           return splitImages(parseQuote(text)?.body ?? text).text;
         })
         .filter(Boolean),
-    [threadItems, openThread]
+    [threadItems, tags]
   );
   // The running turn: its answer (or the working card) shows where its last item went
   const lastItem = items.at(-1);
@@ -830,11 +848,16 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       if ((m.kind === 'user' || m.kind === 'assistant') && m.ts) return m.ts;
     return undefined;
   }, [state.messages]);
+  // a thread merged into the open one may start earlier
+  const openStart = openThread
+    ? Math.min(
+        ...threadList
+          .filter((x) => threadTarget(x.id, threadList, threads.overrides) === openThread.id)
+          .map((x) => x.createdAt)
+      )
+    : 0;
   const needsOlder =
-    !!openThread &&
-    !!state.older?.more &&
-    earliest !== undefined &&
-    earliest > openThread.createdAt;
+    !!openThread && !!state.older?.more && earliest !== undefined && earliest > openStart;
   useEffect(() => {
     if (needsOlder) loadOlder();
   }, [needsOlder, loadOlder]);
@@ -844,31 +867,16 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [threads.enabled, threads.create]
   );
-  const threadReplies = useMemo<ChatReplies>(
-    () => ({ reply: setThreadQuote, tag: openThread?.tag ?? null }),
-    [openThread?.tag]
-  );
+  const threadReplies = useMemo<ChatReplies>(() => ({ reply: setThreadQuote }), []);
   const threadListRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const el = threadListRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-    // showThreads: a reopened panel mounts a new log, which starts at the top
-  }, [threadItems, openThreadId, showThreads]);
-  // a log at its newest message stays there when the pane or the thread input resizes it
-  useEffect(() => {
-    const el = threadListRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    // judged with the height before this resize: scroll events fired by the shrink itself
-    // would otherwise read as the user scrolling away from the end
-    let height = el.clientHeight;
-    const observer = new ResizeObserver(() => {
-      const atEnd = el.scrollHeight - el.scrollTop - height < 8;
-      height = el.clientHeight;
-      if (atEnd) el.scrollTop = el.scrollHeight;
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [openThreadId, showThreads, threadsFull]);
+  const threadContentRef = useRef<HTMLDivElement>(null);
+  // another thread, a reopened panel or back from the Status view (a new log element) starts at its end
+  const threadLog = useFollowLog(
+    threadListRef,
+    threadContentRef,
+    `${openId}:${showThreads}:${!statusView}`
+  );
+  useLayoutEffect(threadLog.keep, [threadItems, showSteps, threadLog.keep]);
   useEffect(() => {
     if (quote) inputRef.current?.focus();
   }, [quote]);
@@ -886,6 +894,15 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         ? t.statusWorking
         : t.statusReady;
 
+  const paneDrop =
+    uploads &&
+    imageDropHandlers(
+      (files) => setImages((prev) => [...prev, ...files]),
+      (list) => attachableFiles(list, uploads.attachmentExtensions)
+    );
+  const inThreads = (e: React.SyntheticEvent) =>
+    e.target instanceof Node && !!asideRef.current?.contains(e.target);
+
   const view = (
     <div
       className={`flex flex-col h-full min-h-0 bg-gray-950 border rounded-lg overflow-hidden ${
@@ -900,11 +917,13 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       data-agent-pane={pane.id}
       data-chat-pane
       data-pane-active={active}
-      {...(uploads &&
-        imageDropHandlers(
-          (files) => setImages((prev) => [...prev, ...files]),
-          (list) => attachableFiles(list, uploads.attachmentExtensions)
-        ))}
+      {...(paneDrop && {
+        onDragOver: paneDrop.onDragOver,
+        // the threads panel has its own composer: its pastes and drops never reach the main one
+        onPaste: (e: React.ClipboardEvent) => !inThreads(e) && paneDrop.onPaste(e),
+        // a file let go elsewhere on the panel is dropped, not opened by the window
+        onDrop: (e: React.DragEvent) => (inThreads(e) ? e.preventDefault() : paneDrop.onDrop(e)),
+      })}
     >
       <div
         {...headerProps}
@@ -1104,15 +1123,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             ref={listRef}
             role="log"
             aria-label={t.chatLog(pane.name)}
-            className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-2"
+            className="flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] px-3 sm:px-4 py-2"
+            onWheel={mainLog.onWheel}
             onScroll={(e) => {
-              const el = e.currentTarget;
-              const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-              // Only a scroll up by the user lets go; layout shifts never do
-              if (nearBottom) stickToBottom.current = true;
-              else if (el.scrollTop < lastScrollTop.current - 2) stickToBottom.current = false;
-              lastScrollTop.current = el.scrollTop;
-              if (el.scrollTop < LOAD_OLDER_PX) loadOlder();
+              mainLog.onScroll();
+              if (e.currentTarget.scrollTop < LOAD_OLDER_PX) loadOlder();
             }}
           >
             <div ref={contentRef}>
@@ -1170,9 +1185,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                     );
                   })}
                 </ChatRepliesContext.Provider>
-                {pending.map((p, i) => (
-                  <UserMessage key={`q${i}`} text={p} queued />
-                ))}
                 {workingCard && !promptsOnly && !lastThread && (
                   <ChatItemView
                     item={null}
@@ -1185,6 +1197,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               </ChatFileContext.Provider>
             </div>
           </div>
+          {mainLog.unseen && <NewMessages onClick={mainLog.toEnd} />}
 
           <div className="shrink-0 border-t border-gray-800 p-2">
             {recap && (
@@ -1299,54 +1312,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 files={uploads.attachmentExtensions}
               />
             )}
-            {chatId && (
-              <div className="flex items-end gap-3">
-                <div className="flex-1 min-w-0">
-                  <ChatStatusLine
-                    chatId={chatId}
-                    turns={turns}
-                    visible={active}
-                    picker={
-                      (harness === 'claude' || harness === 'omp') && (
-                        <ModelEffortPicker
-                          harness={harness}
-                          model=""
-                          effort=""
-                          keepLabel={t.keepCurrent}
-                          currentModel={state.model}
-                          currentEffort={state.effort}
-                          placement="up"
-                          disabled={busy || !connected}
-                          onPick={switchModel}
-                          title={
-                            busy
-                              ? t.switchModelBusy
-                              : t.switchModel(
-                                  harness === 'omp' ? '/switch, /effort' : '/model, /effort'
-                                )
-                          }
-                        />
-                      )
-                    }
-                  />
-                </div>
-                <div className="mt-2">
-                  <ChatArtifactsButton
-                    artifacts={artifacts}
-                    onOpen={() => setArtifactsOpen(true)}
-                  />
-                </div>
-              </div>
-            )}
-            {chatId && artifactsOpen && (
-              <ChatArtifactsModal
-                chatId={chatId}
-                cwd={pane.cwd}
-                title={pane.name}
-                artifacts={artifacts}
-                onClose={() => setArtifactsOpen(false)}
-              />
-            )}
           </div>
         </div>
         {showThreads && threadsOverlay && !threadsFull && (
@@ -1392,10 +1357,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             >
               <ThreadsPanel
                 status={threads.status}
-                threads={threadList}
+                threads={listed}
                 tasks={threads.tasks}
                 byThread={routed.byThread}
-                openId={openThreadId}
+                openId={openId}
                 onOpen={openThreadIn}
                 onRetry={() => threads.reload()}
                 onNewTask={(task) =>
@@ -1408,9 +1373,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 onClose={(id, closed) =>
                   threads.update(id, { closed }).catch((e: Error) => setError(e.message))
                 }
+                onRename={(id, name) =>
+                  threads.update(id, { name }).catch((e: Error) => setError(e.message))
+                }
                 maximized={threadsFull}
                 onMaximize={maximizeThreads}
                 onHide={() => showThreadsPanel(false)}
+                canUndo={threads.canUndo}
+                onUndo={
+                  threads.undoTidy &&
+                  (() => threads.undoTidy?.().catch((e: Error) => setError(e.message)))
+                }
                 onShowStatus={
                   statusAvailable
                     ? (task) => {
@@ -1423,67 +1396,73 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 statusView={statusView}
                 onCloseStatus={closeStatus}
                 renderThread={(thread) => {
-                  const parent = thread?.parentKey
-                    ? items.find((i) => i.key === thread.parentKey)
+                  const parentKey = thread?.parentKey && entryKey({ key: thread.parentKey });
+                  const parent = parentKey
+                    ? items.find((i) => entryKey(i) === parentKey)
                     : undefined;
                   return (
                     <>
                       <div
                         ref={threadListRef}
-                        className="min-h-20 flex-1 overflow-y-auto px-3 py-1"
+                        className="min-h-20 flex-1 overflow-y-auto [overflow-anchor:none] px-3 py-1"
+                        onScroll={threadLog.onScroll}
+                        onWheel={threadLog.onWheel}
                       >
-                        {needsOlder && (
-                          <div role="status" className="py-2 text-center text-xs text-gray-500">
-                            {t.loadingThreadHistory}
-                          </div>
-                        )}
-                        {parent && (
-                          <div className="opacity-70" data-thread-parent>
-                            <ChatItemView
-                              item={parent}
-                              showSteps={false}
-                              harness={harnessName}
-                              model={state.model}
-                            />
-                          </div>
-                        )}
-                        <ChatFileContext.Provider value={pane.cwd}>
-                          <ChatRepliesContext.Provider value={threadReplies}>
-                            {threadItems.map((item) => (
+                        <div ref={threadContentRef}>
+                          {needsOlder && (
+                            <div role="status" className="py-2 text-center text-xs text-gray-500">
+                              {t.loadingThreadHistory}
+                            </div>
+                          )}
+                          {parent && (
+                            <div className="opacity-70" data-thread-parent>
                               <ChatItemView
-                                key={item.key}
-                                item={item}
-                                showSteps={showSteps}
-                                live={isLive(item)}
+                                item={parent}
+                                showSteps={false}
                                 harness={harnessName}
                                 model={state.model}
                               />
-                            ))}
-                            {workingCard && thread && lastThread === thread.id && (
-                              <ChatItemView
-                                item={null}
-                                showSteps={showSteps}
-                                live
-                                harness={harnessName}
-                                model={state.model}
-                              />
-                            )}
-                          </ChatRepliesContext.Provider>
-                        </ChatFileContext.Provider>
-                        {thread && threadItems.length === 0 && !parent && (
-                          <p className="py-3 text-xs text-gray-500">
-                            {t.firstThreadMessage(thread.tag)}
-                          </p>
-                        )}
-                        {!thread && (
-                          <p className="py-3 text-xs text-gray-500">{t.threadWithoutTaskHint}</p>
-                        )}
+                            </div>
+                          )}
+                          <ChatFileContext.Provider value={pane.cwd}>
+                            <ChatRepliesContext.Provider value={threadReplies}>
+                              {threadItems.map((item) => (
+                                <ChatItemView
+                                  key={item.key}
+                                  item={item}
+                                  showSteps={showSteps}
+                                  live={isLive(item)}
+                                  harness={harnessName}
+                                  model={state.model}
+                                />
+                              ))}
+                              {workingCard && thread && lastThread === thread.id && (
+                                <ChatItemView
+                                  item={null}
+                                  showSteps={showSteps}
+                                  live
+                                  harness={harnessName}
+                                  model={state.model}
+                                />
+                              )}
+                            </ChatRepliesContext.Provider>
+                          </ChatFileContext.Provider>
+                          {thread && threadItems.length === 0 && !parent && (
+                            <p className="py-3 text-xs text-gray-500">
+                              {t.firstThreadMessage(thread.tag)}
+                            </p>
+                          )}
+                          {!thread && (
+                            <p className="py-3 text-xs text-gray-500">{t.threadWithoutTaskHint}</p>
+                          )}
+                        </div>
                       </div>
-                      <div className="shrink-0 px-2 pb-1 text-[11px] text-gray-500">
-                        <span className="truncate">
-                          {thread?.binding ? t.boundTo(thread.repo ?? null) : t.notBound}
-                        </span>
-                      </div>
+                      {threadLog.unseen && <NewMessages onClick={threadLog.toEnd} />}
+                      {thread?.binding && (
+                        <div className="shrink-0 px-2 pb-1 text-[11px] text-gray-500">
+                          <span className="truncate">{t.boundTo(thread.repo ?? null)}</span>
+                        </div>
+                      )}
                       {threadsFull && error && (
                         <div role="alert" className="px-2 pb-1 text-xs text-red-300">
                           {error}
@@ -1499,8 +1478,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                         onClearQuote={() => setThreadQuote(null)}
                         onSend={sendInThread}
                         disabled={!connected}
-                        focusKey={`${openThreadId}:${threadsFull}`}
-                        draftKey={openThreadId}
+                        focusKey={`${openId}:${threadsFull}`}
+                        draftKey={openId}
                       />
                     </>
                   );
@@ -1510,8 +1489,60 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           </div>
         )}
       </div>
+      {chatId && (
+        <div
+          data-chat-footer
+          // under the main chat and the threads panel; empty until the status loads
+          className="hidden shrink-0 items-end gap-3 border-t border-gray-800 px-2 pb-2 has-[button]:flex has-[[data-chat-status]]:flex"
+        >
+          <div className="flex-1 min-w-0">
+            <ChatStatusLine
+              chatId={chatId}
+              turns={turns}
+              visible={active}
+              paused={streamDown}
+              picker={
+                (harness === 'claude' || harness === 'omp') && (
+                  <ModelEffortPicker
+                    harness={harness}
+                    model=""
+                    effort=""
+                    keepLabel={t.keepCurrent}
+                    currentModel={state.model}
+                    currentEffort={state.effort}
+                    placement="up"
+                    disabled={busy || !connected}
+                    onPick={switchModel}
+                    title={
+                      busy
+                        ? t.switchModelBusy
+                        : t.switchModel(harness === 'omp' ? '/switch, /effort' : '/model, /effort')
+                    }
+                  />
+                )
+              }
+            />
+          </div>
+          <div className="mt-2">
+            <ChatArtifactsButton artifacts={artifacts} onOpen={() => setArtifactsOpen(true)} />
+          </div>
+        </div>
+      )}
+      {chatId && artifactsOpen && (
+        <ChatArtifactsModal
+          chatId={chatId}
+          cwd={pane.cwd}
+          title={pane.name}
+          artifacts={artifacts}
+          onClose={() => setArtifactsOpen(false)}
+        />
+      )}
     </div>
   );
   // tool results load their images from this chat
-  return <ChatIdContext.Provider value={chatId}>{view}</ChatIdContext.Provider>;
+  return (
+    <ChatIdContext.Provider value={chatId}>
+      <ChatTagsContext.Provider value={tags}>{view}</ChatTagsContext.Provider>
+    </ChatIdContext.Provider>
+  );
 };

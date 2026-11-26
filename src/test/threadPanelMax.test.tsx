@@ -1,7 +1,7 @@
 // Thread composer = the main composer (send key, height, `@` files); maximised threads panel
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithAgents, testTransport } from './agents';
 import { threadTag, type ChatThread } from '../utils/chatThreads';
 import {
@@ -140,6 +140,7 @@ const panel = (props: Partial<React.ComponentProps<typeof ThreadsPanel>> = {}) =
       onNewTask={vi.fn()}
       onNewFree={vi.fn()}
       onClose={vi.fn()}
+      onRename={vi.fn()}
       renderThread={() => <textarea aria-label="thread input" />}
       maximized={false}
       onMaximize={onMaximize}
@@ -169,6 +170,7 @@ describe('maximised threads panel', () => {
         onNewTask={vi.fn()}
         onNewFree={vi.fn()}
         onClose={vi.fn()}
+        onRename={vi.fn()}
         renderThread={() => null}
         maximized
         onMaximize={onMaximize}
@@ -196,24 +198,30 @@ describe('maximised threads panel', () => {
     expect(header.textContent).toContain('1 new');
   });
 
-  it('sidebar: only when maximised, toggles the list to the left and is remembered', () => {
+  it('sidebar: only when maximised, on by default; switching it off is remembered', () => {
+    const layout = () =>
+      document.querySelector('[data-threads-layout]')?.getAttribute('data-threads-layout');
     const { unmount } = panel();
     expect(screen.queryByRole('button', { name: 'Thread list on the left' })).toBeNull();
+    expect(layout()).toBe('top');
     unmount();
     const second = panel({ maximized: true });
     const side = screen.getByRole('button', { name: 'Thread list on the left' });
-    expect(side.getAttribute('aria-pressed')).toBe('false');
-    act(() => side.click());
     expect(side.getAttribute('aria-pressed')).toBe('true');
-    expect(
-      document.querySelector('[data-threads-layout]')?.getAttribute('data-threads-layout')
-    ).toBe('sidebar');
-    expect(localStorage.getItem(THREADS_SIDEBAR_KEY)).toBe('1');
+    expect(layout()).toBe('sidebar');
+    act(() => side.click());
+    expect(side.getAttribute('aria-pressed')).toBe('false');
+    expect(layout()).toBe('top');
+    expect(localStorage.getItem(THREADS_SIDEBAR_KEY)).toBe('0');
     second.unmount();
-    panel({ maximized: true });
+    const third = panel({ maximized: true });
     expect(
       screen.getByRole('button', { name: 'Thread list on the left' }).getAttribute('aria-pressed')
-    ).toBe('true');
+    ).toBe('false');
+    act(() => screen.getByRole('button', { name: 'Thread list on the left' }).click());
+    third.unmount();
+    panel({ maximized: true });
+    expect(layout()).toBe('sidebar');
   });
 
   it('the header hides the panel; the thread header goes back to the list, named apart', () => {
@@ -223,6 +231,90 @@ describe('maximised threads panel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to the list (thread stays open)' }));
     expect(onOpen).toHaveBeenCalledWith(null);
     expect(screen.getByRole('button', { name: 'Close thread' })).toBeTruthy();
+  });
+});
+
+describe('rename a thread', () => {
+  const field = () => screen.getByRole('textbox', { name: /^Thread name/ }) as HTMLInputElement;
+  const listTitle = (id: string) =>
+    document.querySelector(`[data-thread-row="${id}"]`)!.querySelector('span > span')!;
+
+  it('double-click on a list title: Enter saves the new name, the row does not toggle', () => {
+    const onRename = vi.fn();
+    const { onOpen } = panel({ onRename });
+    const row = document.querySelector<HTMLElement>('[data-thread-row="t2"]')!;
+    fireEvent.click(row, { detail: 1 });
+    fireEvent.click(row, { detail: 2 });
+    expect(onOpen.mock.calls).toEqual([['t2'], ['t2']]);
+    fireEvent.doubleClick(listTitle('t2'));
+    expect(field().value).toBe('Shop · Task t2');
+    fireEvent.change(field(), { target: { value: 'Payment page' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    expect(onRename).toHaveBeenCalledTimes(1);
+    expect(onRename).toHaveBeenCalledWith('t2', { project: 'Shop', task: 'Payment page' });
+    expect(screen.queryByRole('textbox', { name: /^Thread name/ })).toBeNull();
+  });
+
+  // closing it on the first click of a double-click moved the rows, so the second click (and the
+  // rename) hit a neighbour in a scrolled list; the thread header closes it (collapse, Close)
+  it("a click on the open thread's row keeps it open; double-click renames it", () => {
+    const { onOpen } = panel();
+    const row = document.querySelector<HTMLElement>('[data-thread-row="t1"]')!;
+    fireEvent.click(row, { detail: 1 });
+    fireEvent.click(row, { detail: 2 });
+    fireEvent.doubleClick(listTitle('t1'));
+    expect(onOpen).not.toHaveBeenCalledWith(null);
+    expect(field().value).toBe('Shop · Task t1');
+  });
+
+  it('"Project · Task" sets both parts; leaving the field saves', () => {
+    const onRename = vi.fn();
+    panel({ onRename });
+    fireEvent.doubleClick(listTitle('t1'));
+    fireEvent.change(field(), { target: { value: '  Infra  ·  Deploy ' } });
+    fireEvent.blur(field());
+    expect(onRename).toHaveBeenCalledWith('t1', { project: 'Infra', task: 'Deploy' });
+  });
+
+  it('Esc cancels with the old name back and keeps the maximised panel; empty or same name saves nothing', () => {
+    const onRename = vi.fn();
+    const { onMaximize } = panel({ onRename, maximized: true });
+    fireEvent.doubleClick(listTitle('t1'));
+    fireEvent.change(field(), { target: { value: 'Something else' } });
+    fireEvent.keyDown(field(), { key: 'Escape' });
+    expect(onMaximize).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox', { name: /^Thread name/ })).toBeNull();
+    expect(listTitle('t1').textContent).toBe('Shop · Task t1');
+    fireEvent.doubleClick(listTitle('t1'));
+    fireEvent.change(field(), { target: { value: '   ' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    fireEvent.doubleClick(listTitle('t1'));
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    expect(onRename).not.toHaveBeenCalled();
+  });
+
+  it('"Rename" in the menu of the open thread header and of a list row', () => {
+    const onRename = vi.fn();
+    panel({ onRename });
+    const menus = screen.getAllByRole('button', { name: 'Thread actions' });
+    // two list rows and the open thread's header
+    expect(menus).toHaveLength(3);
+    fireEvent.click(menus[2]);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    expect(field().value).toBe('Shop · Task t1');
+    fireEvent.change(field(), { target: { value: 'Shop · Renamed' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    expect(onRename).toHaveBeenLastCalledWith('t1', { project: 'Shop', task: 'Renamed' });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Thread actions' })[1]);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    expect(field().value).toBe('Shop · Task t2');
+  });
+
+  it('double-click on the open thread header title opens the field there', () => {
+    panel();
+    const header = screen.getByRole('region', { name: /Shop · Task t1/ });
+    fireEvent.doubleClick(within(header).getByText('Shop · Task t1'));
+    expect(header.contains(field())).toBe(true);
   });
 });
 
@@ -243,6 +335,21 @@ describe('thread draft', () => {
     );
   const input = () =>
     screen.getByRole('textbox', { name: 'Reply in thread' }) as HTMLTextAreaElement;
+
+  // a double-click on the open thread's row closes it (first click) and reopens it with the name
+  // field: the composer mounting with it must leave the focus in that field
+  it('mounting takes no focus from a field being typed in', () => {
+    renderWithAgents(<input aria-label="Thread name" autoFocus />);
+    const field = screen.getByRole('textbox', { name: 'Thread name' });
+    expect(document.activeElement).toBe(field);
+    mount('t1');
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('opening a thread puts the cursor in its composer', () => {
+    mount('t1');
+    expect(document.activeElement).toBe(input());
+  });
 
   it('survives hiding the panel (composer unmounted) and stays with its thread', () => {
     const first = mount('t1');

@@ -12,6 +12,20 @@ import { pollWhileVisible } from '../../../utils/visiblePoll';
 const POLL_MS = 15_000;
 
 /**
+ * Columns of the status line by its width (0: not measured yet). Below 640 px the empty cells
+ * that align the wide grid go: branch/model and the usage then share one row, so the footer
+ * (pane-wide, under the threads panel too) leaves a short split pane room for the composers
+ */
+export function statusLayout(width: number): { cols: string; placeholders: boolean } {
+  if (width && width < 340) return { cols: 'grid-cols-1', placeholders: false };
+  if (width && width < 640) return { cols: 'grid-cols-[auto_minmax(0,1fr)]', placeholders: false };
+  return {
+    cols: 'grid-cols-2 sm:grid-cols-[auto_minmax(9rem,1fr)_minmax(6rem,0.6fr)_minmax(9rem,1fr)]',
+    placeholders: true,
+  };
+}
+
+/**
  * TUI-like status line: branch with untracked (?) / changed (±) counts, prompt cache and
  * context, 5h / 7d plan limits. Refreshes while visible and after each finished turn.
  */
@@ -19,9 +33,11 @@ export const ChatStatusLine: React.FC<{
   chatId: string;
   turns: number;
   visible: boolean;
+  /** The chat's stream is down: its id may be gone with the server, nothing is asked */
+  paused?: boolean;
   /** Model × effort picker of the session, shown under the branch */
   picker?: React.ReactNode;
-}> = ({ chatId, turns, visible, picker }) => {
+}> = ({ chatId, turns, visible, paused = false, picker }) => {
   const [status, setStatus] = useState<ChatStatus | null>(null);
   // the pane, not the viewport, decides the columns: a narrow split pane stacks them
   const [width, setWidth] = useState(0);
@@ -38,7 +54,7 @@ export const ChatStatusLine: React.FC<{
 
   useEffect(() => {
     const fetchStatus = chat?.fetchChatStatus;
-    if (!fetchStatus) return;
+    if (!fetchStatus || paused) return;
     let cancelled = false;
     const load = () =>
       fetchStatus(chatId)
@@ -58,23 +74,20 @@ export const ChatStatusLine: React.FC<{
       cancelled = true;
       stop();
     };
-  }, [chat, chatId, turns, visible]);
+  }, [chat, chatId, turns, visible, paused]);
 
   if (!status) return null;
   const { git, cache, context, limits } = status;
   const cold = cache && cacheCountdown(cache, Date.now()).expired;
   const fill = context ? Math.min(100, (context.tokens / context.window) * 100) : 0;
+  const layout = statusLayout(width);
+  const empty = layout.placeholders ? <span /> : null;
 
   return (
     <div
       ref={boxRef}
-      className={`mt-2 grid ${
-        width && width < 400
-          ? 'grid-cols-1'
-          : width && width < 640
-            ? 'grid-cols-[auto_minmax(0,1fr)]'
-            : 'grid-cols-2 sm:grid-cols-[auto_minmax(9rem,1fr)_minmax(6rem,0.6fr)_minmax(9rem,1fr)]'
-      } items-end gap-x-4 gap-y-2 text-xs text-gray-300`}
+      data-chat-status
+      className={`mt-2 grid ${layout.cols} items-end gap-x-4 gap-y-2 text-xs text-gray-300`}
     >
       <div className="flex flex-col items-start gap-1.5 self-center min-w-0">
         {git?.branch && (
@@ -125,14 +138,14 @@ export const ChatStatusLine: React.FC<{
           )}
         </div>
       ) : (
-        <span />
+        empty
       )}
       {limits ? (
         <>
           {limits.fiveHour ? (
             <LimitBar label={t.limitFiveHours} window={limits.fiveHour} unknownText="–" />
           ) : (
-            <span />
+            empty
           )}
           <LimitBar
             label={t.limitWeek}

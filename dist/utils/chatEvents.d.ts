@@ -31,6 +31,7 @@ export type ChatMessage =
     text: string;
     ts?: number;
     initial?: boolean;
+    queued?: boolean;
 } | {
     kind: 'assistant';
     key: string;
@@ -146,6 +147,7 @@ export declare const initialPrompts: (messages: ChatMessage[]) => {
     text: string;
     ts?: number;
     initial?: boolean;
+    queued?: boolean;
 }[];
 /** A user turn another agent sent with `orkumo send`: its sender (null = unknown) and text */
 export declare function agentMessage(text: string): {

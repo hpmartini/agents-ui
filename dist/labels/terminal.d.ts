@@ -143,6 +143,8 @@ export interface TerminalLabels {
     attachedImage: string;
     imageRef: (path: string) => string;
     queuedNote: string;
+    /** A main-chat `/command` queued while busy (the CLI logs it without its text) */
+    queuedCommand: string;
     resultDone: string;
     resultInterrupted: string;
     resultError: (subtype: string) => string;
@@ -182,6 +184,9 @@ export interface TerminalLabels {
     noThreadsHint: string;
     pickThread: string;
     closeThread: string;
+    renameThread: string;
+    threadActions: string;
+    threadNameField: string;
     closedThreads: (count: number) => string;
     reopenThread: string;
     replyInThread: string;
@@ -200,9 +205,12 @@ export interface TerminalLabels {
     backToThread: string;
     firstThreadMessage: (tag: string) => string;
     boundTo: (repo: string | null) => string;
-    notBound: string;
+    undoTidy: string;
+    undoTidyTitle: string;
     resizeThreads: string;
     threadLog: (name: string) => string;
+    /** Button over a log scrolled up while new content came in */
+    newMessages: string;
     loadingThreadHistory: string;
     notConnected: string;
     questionChanged: string;

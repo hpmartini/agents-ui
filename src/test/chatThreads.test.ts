@@ -4,13 +4,17 @@ import {
   initialChatState,
   prependHistory,
   reduceChat,
+  type ChatItem,
   type ChatMessage,
 } from '../utils/chatEvents';
 import {
   quoteHeader,
   parseQuote,
+  entryKey,
   routeThreads,
   threadCommand,
+  threadTitle,
+  visibleThreads,
   threadTag,
   unreadCount,
   type ChatThread,
@@ -110,7 +114,7 @@ describe('routing into threads', () => {
 
   it('a thread opened on an answer shows its marker right after that answer', () => {
     const parent = answer('Plan for today', min(1));
-    const t = thread('t3', 'Answer 09:01', 'Plan for today', { parentKey: parent.key });
+    const t = thread('t3', 'Shop', 'Plan for today', { parentKey: parent.key });
     const r = route([parent, user('else', min(2)), user(`${t.tag}\nwhy?`, min(3))], [t]);
     expect(r.main.map((i) => i.kind)).toEqual(['answer', 'thread', 'user']);
   });
@@ -122,6 +126,26 @@ const steps = (ts?: number): ChatMessage => ({
   streaming: false,
   blocks: [{ type: 'tool', id: `x${n}`, name: 'Bash', input: {} }],
   ...(ts ? { ts } : {}),
+});
+
+describe('a renamed thread keeps its messages (routing by tag, agents and turn, never the name)', () => {
+  it('tagged, linked-worker and turn messages still go to it under its new name', () => {
+    const renamed = { ...shop, name: { project: 'Shop', task: 'Payment page' } };
+    const messages = [
+      user('[Thread: Shop · Checkout]\nhow far?', min(1)),
+      answer('Form is done.', min(2)),
+      worker('omp-aaaa0000-0000-0000-0000-000000000001', 'tests green', min(3)),
+      answer('[Thread: Shop · Checkout]\nMerging.', min(4)),
+      user('[Thread: Shop · Checkout]\nnew message with the old tag', min(5)),
+    ];
+    const before = route(messages);
+    const after = route(messages, [renamed, weather]);
+    expect(after.byThread.get('t1')).toHaveLength(5);
+    expect(after.byThread.get('t1')?.map((i) => i.key)).toEqual(
+      before.byThread.get('t1')?.map((i) => i.key)
+    );
+    expect(after.main.filter((i) => i.kind !== 'thread')).toHaveLength(0);
+  });
 });
 
 describe('an answer of tool steps only continues the turn it belongs to', () => {
@@ -338,6 +362,23 @@ describe('a command sent from a thread (no tag: the CLI runs a command only as t
     expect(r.main.map((i) => i.kind)).toEqual(['user', 'answer', 'thread']);
   });
 
+  it('a tidy-up move beats a command mark; a merge carries the marked turn to its target', () => {
+    const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
+    // a second same command from the main chat after it: the moved one used the mark up
+    const items = [...commandTurn(min(1) + 500), ...commandTurn(min(5))];
+    const moved = routeThreads(items, [marked, weather], true, undefined, {
+      entries: { [entryKey(items[0])]: 'main' },
+      merged: {},
+    });
+    expect(moved.byThread.size).toBe(0);
+    const merged = routeThreads(items, [marked, weather], true, undefined, {
+      entries: {},
+      merged: { t1: 't2' },
+    });
+    expect(merged.byThread.get('t2')).toHaveLength(2);
+    expect(merged.main.filter((i) => i.kind === 'user')).toHaveLength(1);
+  });
+
   it('after reload too: the mark is part of the stored thread, routing is the same', () => {
     const marked = { ...shop, commands: [{ at: min(1), command: '/status-report' }] };
     const items = commandTurn(min(1) + 500);
@@ -507,5 +548,125 @@ describe('a replay page that starts at the thread command (devorbit_page olderTs
       olderTs: T0 + 500,
     });
     expect(state.older?.olderTs).toBe(T0 + 500);
+  });
+});
+
+describe('tidy-up overrides (stored by the orchestrator, win over tag and turn)', () => {
+  const docs = thread('t3', 'Docs', 'Guide');
+  const all = [shop, weather, docs];
+  const msgs = () => [
+    user('hello', min(1)),
+    answer('Plan for today', min(2)),
+    user('[Thread: Shop · Checkout]\nhow far?', min(3)),
+    answer('Form is done.', min(4)),
+    user('[Thread: Weather app · Offline cache]\nship it?', min(5)),
+    answer('[Thread: Weather app · Offline cache]\nYes.', min(6)),
+    user('[Thread: Docs · Guide]\nwrite it', min(7)),
+  ];
+  const items = (m: ChatMessage[]) => groupAnswers(m);
+  const keysOf = (r: ReturnType<typeof routeThreads>) => [
+    ...r.main.filter((i) => i.kind !== 'thread').map((i) => i.key),
+    ...[...r.byThread.values()].flat().map((i) => i.key),
+  ];
+  /** every item lands exactly once across main and threads */
+  const once = (r: ReturnType<typeof routeThreads>, list: ChatItem[]) =>
+    expect(keysOf(r).sort()).toEqual(list.map((i) => i.key).sort());
+
+  it('entryKey strips the history page prefixes', () => {
+    expect(entryKey({ key: 'h12:h7:msg_1' })).toBe('msg_1');
+    expect(entryKey({ key: 'msg_1' })).toBe('msg_1');
+  });
+
+  it('moves a main-chat answer into another thread', () => {
+    const list = items(msgs());
+    const plan = list[1];
+    const r = routeThreads(list, all, false, undefined, {
+      entries: { [entryKey(plan)]: 't2' },
+      merged: {},
+    });
+    expect(r.byThread.get('t2')?.[0]).toBe(plan);
+    expect(r.main.some((i) => i === plan)).toBe(false);
+    once(r, list);
+  });
+
+  it('moves a tagged thread prompt to the main chat; its untagged answer follows it', () => {
+    const list = items(msgs());
+    const prompt = list[2];
+    const r = routeThreads(list, all, false, undefined, {
+      entries: { [entryKey(prompt)]: 'main' },
+      merged: {},
+    });
+    expect(r.main).toContain(prompt);
+    expect(r.main).toContain(list[3]);
+    expect(r.byThread.get('t1') ?? []).toHaveLength(0);
+    once(r, list);
+  });
+
+  it('matches entries loaded from an older history page by their raw key', () => {
+    const list = items(msgs()).map((i) => ({ ...i, key: `h40:${i.key}` }) as ChatItem);
+    const r = routeThreads(list, all, false, undefined, {
+      entries: { [entryKey(list[1])]: 't3' },
+      merged: {},
+    });
+    expect(r.byThread.get('t3')).toContain(list[1]);
+    once(r, list);
+  });
+
+  it('a merge chain sends everything to the final thread; sources get no marker and are hidden', () => {
+    const list = items(msgs());
+    const overrides = { entries: { [entryKey(list[0])]: 't1' }, merged: { t1: 't2', t2: 't3' } };
+    const r = routeThreads(list, all, false, undefined, overrides);
+    expect([...r.byThread.keys()]).toEqual(['t3']);
+    // "Plan for today" is the untagged answer of the moved prompt: it follows into t3
+    expect(r.byThread.get('t3')).toHaveLength(list.length);
+    expect(r.main.filter((i) => i.kind === 'thread').map((m) => m.threadId)).toEqual(['t3']);
+    expect(visibleThreads(all, overrides).map((x) => x.id)).toEqual(['t3']);
+    once(r, list);
+  });
+
+  it('ignores an override to an unknown thread and survives a merge cycle', () => {
+    const list = items(msgs());
+    const r = routeThreads(list, all, false, undefined, {
+      entries: { [entryKey(list[0])]: 'gone' },
+      merged: { t1: 't2', t2: 't1' },
+    });
+    expect(r.main).toContain(list[0]);
+    once(r, list);
+  });
+
+  it('a merged thread opened on an answer adds no marker of its own', () => {
+    const parent = answer('Plan', min(1));
+    const opened = thread('t4', 'Shop', 'Plan', { parentKey: parent.key });
+    const list = items([parent, user(`${opened.tag}\nwhy?`, min(2))]);
+    const r = routeThreads(list, [shop, opened], false, undefined, {
+      entries: {},
+      merged: { t4: 't1' },
+    });
+    const markers = r.main.filter((i) => i.kind === 'thread');
+    expect(markers.map((m) => m.threadId)).toEqual(['t1']);
+    expect(r.byThread.get('t1')).toHaveLength(1);
+  });
+
+  it('without overrides nothing changes', () => {
+    const list = items(msgs());
+    expect(routeThreads(list, all)).toEqual(routeThreads(list, all, false, undefined, undefined));
+    once(routeThreads(list, all), list);
+  });
+});
+
+describe('thread title', () => {
+  it('strips Markdown left in stored names and shows a doubled part once', () => {
+    expect(threadTitle({ project: '- **Stand:**', task: '`Briefing` #1' })).toBe(
+      'Stand: · Briefing #1'
+    );
+    expect(threadTitle({ project: '## Shop', task: 'Checkout' })).toBe('Shop · Checkout');
+    expect(threadTitle({ project: 'Thread', task: 'Thread' })).toBe('Thread');
+  });
+});
+
+describe('user entries keep the key the server sends', () => {
+  it('uses `key` of a transcript user message when present', () => {
+    const s = reduceChat(initialChatState, { type: 'devorbit_user', text: 'hi', key: 'uuid-1' });
+    expect(s.messages[0].key).toBe('uuid-1');
   });
 });

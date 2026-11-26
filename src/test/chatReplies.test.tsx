@@ -1,13 +1,14 @@
 // Reply quotes on answers, the threads panel and its resize handle
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { renderWithAgents } from './agents';
 import { groupAnswers, type ChatAnswer, type ChatMessage } from '../utils/chatEvents';
 import { quoteHeader, threadTag, type ChatThread } from '../utils/chatThreads';
 import {
   ChatItemView,
   ChatRepliesContext,
+  ChatTagsContext,
   type ChatReplies,
 } from '../components/AgentsView/Chat/ChatMessages';
 import { ThreadsPanel } from '../components/AgentsView/Chat/ChatThreads';
@@ -76,26 +77,27 @@ describe('reply on an answer', () => {
     expect(screen.getByText('Go ahead')).toBeTruthy();
   });
 
-  it('inside a thread the tag line is hidden', () => {
+  it('the tag line of an answer is hidden (any thread of the session, main chat too)', () => {
     const tag = threadTag({ project: 'Shop', task: 'Checkout' });
     renderWithAgents(
-      <ChatRepliesContext.Provider value={{ reply: vi.fn(), tag }}>
-        <ChatItemView
-          item={answerOf(`${tag}\nForm is done.`)}
-          showSteps={false}
-          harness="omp"
-          model={null}
-        />
-      </ChatRepliesContext.Provider>
+      <ChatTagsContext.Provider value={new Set([tag])}>
+        <ChatRepliesContext.Provider value={{ reply: vi.fn() }}>
+          <ChatItemView
+            item={answerOf(`${tag}\nForm is done.`)}
+            showSteps={false}
+            harness="omp"
+            model={null}
+          />
+        </ChatRepliesContext.Provider>
+      </ChatTagsContext.Provider>
     );
     expect(screen.queryByText(tag, { exact: false })).toBeNull();
     expect(screen.getByText('Form is done.')).toBeTruthy();
   });
 
   it('a command sent from a thread shows there as a chip with its text', () => {
-    const tag = threadTag({ project: 'Shop', task: 'Checkout' });
     renderWithAgents(
-      <ChatRepliesContext.Provider value={{ reply: vi.fn(), tag }}>
+      <ChatRepliesContext.Provider value={{ reply: vi.fn() }}>
         <ChatItemView
           item={{ kind: 'user', key: 'u1', ts: at, text: '/status-report only open tasks' }}
           showSteps={false}
@@ -135,6 +137,7 @@ const panel = (props: Partial<React.ComponentProps<typeof ThreadsPanel>> = {}) =
       onNewTask={vi.fn()}
       onNewFree={vi.fn()}
       onClose={vi.fn()}
+      onRename={vi.fn()}
       renderThread={() => null}
       maximized={false}
       onMaximize={vi.fn()}
@@ -179,7 +182,23 @@ describe('threads panel', () => {
     expect(screen.getByText('Closed (1)')).toBeTruthy();
   });
 
-  it('a bound thread whose report task has no repo is not shown as unbound', () => {
+  it('F10: a closed thread renames like an open one (double-click or its menu)', () => {
+    const onRename = vi.fn();
+    panel({ threads: [thread('t1'), thread('t2', { closed: true })], onRename });
+    fireEvent.click(screen.getByText('Closed (1)'));
+    fireEvent.doubleClick(screen.getByText('Shop · Task t2'));
+    const field = screen.getByRole('textbox', { name: /^Thread name/ });
+    fireEvent.change(field, { target: { value: 'Shop · Archived' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(onRename).toHaveBeenCalledWith('t2', { project: 'Shop', task: 'Archived' });
+    // the menu as well
+    const closedRow = screen.getByText('Shop · Task t2').closest('li')!;
+    fireEvent.click(within(closedRow).getByRole('button', { name: 'Thread actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Rename/ }));
+    expect(screen.getByRole('textbox', { name: /^Thread name/ })).toBeTruthy();
+  });
+
+  it('no "Not bound" line: an unbound thread shows its repo or nothing', () => {
     panel({
       threads: [
         thread('t1', { repo: null, binding: { project: 'shop', task: 't1' } }),
@@ -187,7 +206,17 @@ describe('threads panel', () => {
       ],
     });
     expect(screen.getByRole('button', { name: /Task t1/ }).textContent).not.toContain('Not bound');
-    expect(screen.getByRole('button', { name: /Task t2/ }).textContent).toContain('Not bound');
+    expect(screen.getByRole('button', { name: /Task t2/ }).textContent).not.toContain('Not bound');
+  });
+
+  it('Undo tidy-up shows only when the host can undo, and calls it', () => {
+    const onUndo = vi.fn();
+    const { unmount } = panel({ canUndo: true });
+    expect(screen.queryByRole('button', { name: 'Undo tidy-up' })).toBeNull();
+    unmount();
+    panel({ canUndo: true, onUndo });
+    fireEvent.click(screen.getByRole('button', { name: 'Undo tidy-up' }));
+    expect(onUndo).toHaveBeenCalled();
   });
 
   it('new thread: bind to a report task or start without one', () => {

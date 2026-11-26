@@ -7,7 +7,7 @@
  * transport is those functions, grouped. Errors are thrown as `Error`, with the HTTP status as
  * `status` where there is one (`TransportError`).
  */
-import type { ChatThread } from './utils/chatThreads';
+import type { ChatThread, ChatThreadOverrides } from './utils/chatThreads';
 import type { AgentContext, AgentDispatchRequest, AgentDispatchResult, AgentHarness, AgentLogs, AgentNotification, AgentOrphanServer, AgentPastSession, AgentRemoveResult, AgentRepo, AgentServerStats, AgentSession, AgentSlashCommand, AgentSubagent, AgentViewSettings, AgentsResponse, AgentCacheInfo } from './types';
 import type { HarnessModel } from './utils/modelMatrix';
 import type { StoredAttachment } from './utils/composer';
@@ -97,6 +97,11 @@ export interface ChatHandlers {
     onOpen: () => void;
     onEvent: (event: unknown) => void;
     onGone: () => void;
+    /**
+     * The stream dropped (e.g. the server restarts): until the next `onOpen` the view may be gone,
+     * so nothing polls its id. Optional: a host without it never pauses
+     */
+    onClose?: () => void;
 }
 /** A page of older transcript events; `before` is the cursor of the next older page */
 export interface ChatHistoryPage {
@@ -154,6 +159,10 @@ export interface ChatThreadList {
     orchestrator: string | null;
     threads: ChatThread[];
     tasks: ChatThreadTask[];
+    /** The orchestrator's tidy-up layer; absent = none */
+    overrides?: ChatThreadOverrides;
+    /** An undoable tidy-up action exists */
+    canUndo?: boolean;
 }
 /** A role file `<workspace>/roles/<id>.md`; briefing assigns it to a running orchestrator */
 export interface OrchestratorRole {
@@ -368,6 +377,11 @@ export interface AgentsTransport {
                 project: string;
                 task: string;
             };
+        }
+        /** Opened on an answer: the host names it (agent, status task, project in `answerText`) */
+         | {
+            parentKey: string;
+            answerText: string;
         } | {
             name: {
                 project: string;
@@ -378,14 +392,21 @@ export interface AgentsTransport {
         updateThread: (session: string, id: string, 
         /**
          * `command` (`/name`): marks that command sent from the thread (host time);
-         * `cancelCommand` drops the latest mark
+         * `cancelCommand` drops the latest mark; `name`: display name only, the
+         * thread keeps its id and tag (routing)
          */
         patch: {
             closed?: boolean;
             readAt?: number;
             command?: string;
             cancelCommand?: boolean;
+            name?: {
+                project: string;
+                task: string;
+            };
         }) => Promise<ChatThread>;
+        /** Reverts the last tidy-up action; without it the panel has no "Undo tidy-up" */
+        undoTidy?: (session: string) => Promise<ChatThreadList>;
     };
     /** Opening a clicked file path on the agents' machine; resolves with what the server did */
     files?: {

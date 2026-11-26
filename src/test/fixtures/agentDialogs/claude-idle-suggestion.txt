@@ -1,0 +1,20 @@
+⏺ Drei Wege, wie es weitergeht:
+  1. Code-Aufgaben über die Standardroute, Recherche über den Agenten-Weg.
+  2. Erst die billigen Zahlungen für Vorschlag 2 und 4 laufen lassen, ~3,2 Mio. Tokens, dann entscheiden.
+  3. Nichts davon, erst den laufenden Pilot entscheiden. Dafür ist noch offen: klein, voll oder keiner.
+  Die Analyse habe ich selbst gelesen, die Zeitstempel im Transkript nicht nachgeprüft.
+  Die Token-Schätzungen sind zum Teil Hypothesen, das ist in der Datei markiert.
+✻ Worked for 10m 3s · done 16:02
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 1. Code-Aufgaben ab jetzt über die Standardroute, Recherche bleibt beim Agenten-Weg. Schreib das in rules.md.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   devbox   Opus 5.5 󰹺medium   default   main !?                       820.44  453h40m   99% · 96% ·  59m
+   █░░░░░░░░░ 13%  5H ░░░░░░░░░░ 0%  7D ░░░░░░░░░░ 0% (loading..)
+     ~/notes/wiki/crm/info-example.org 
+  ⏵⏵ auto mode on · ← 5 agents · PR #232 · 2 shells · ⧉ 8 · 1 feedback draft            Compact   Commit & Push  🌳 WT
+fertig  🔄 Übergabe  ▶ Briefing  ⚙ Prozesse  ◇ Codex ▾  ◆ Control Panel ▾
+  ● main
+  ○ general-purpose  Prüfe Worktree-Status und Push-Commit
+21m 51s · ↓ 194.0k tokens
+  ○ general-purpose  Korrigiere Laufanzahl in Ergebnisdatei
+39m 59s · ↓ 159.6k tokens

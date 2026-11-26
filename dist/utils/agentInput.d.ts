@@ -96,8 +96,19 @@ export declare function extractNumberedChoices(output: string): {
     label: string;
 }[];
 /**
- * The question on an agent's screen (permission or choice dialog) without the status lines, or
- * null when no dialog waits: an answer that merely ends with open questions is no prompt
+ * Lines [start, end) of the dialog an agent's screen waits on, or null. Claude Code draws its input
+ * line as `❯` right under a rule, with its prompt suggestion (ghost text) and echoed prompts as
+ * `❯ …` as well, so a `❯ 1.` alone is no dialog: it needs a key-hint footer below the last `❯`, or
+ * (the review step has no footer) a cursor on a numbered option with more below; never when the
+ * last `❯` is the input line (under a rule), whose typed text may hold a hint as well.
+ */
+export declare function dialogRange(lines: string[]): {
+    start: number;
+    end: number;
+} | null;
+/**
+ * The dialog on an agent's screen (permission or choice) without the input line and status lines
+ * around it, or null when no dialog waits: an answer that merely ends with open questions is no prompt
  */
 export declare function screenPrompt(screen: string): string | null;
 /** `claude --bg` refuses a folder whose trust prompt was never accepted (needs an interactive run there) */

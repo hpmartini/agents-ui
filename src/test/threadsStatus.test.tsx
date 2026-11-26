@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
 import { renderWithAgents } from './agents';
 import { threadTag, type ChatThread } from '../utils/chatThreads';
-import { ThreadsPanel } from '../components/AgentsView/Chat/ChatThreads';
+import { THREADS_SIDEBAR_KEY, ThreadsPanel } from '../components/AgentsView/Chat/ChatThreads';
 import type { ChatThreadTask } from '../transport';
 
 afterEach(() => localStorage.clear());
@@ -60,6 +60,7 @@ const panel = (props: Partial<React.ComponentProps<typeof ThreadsPanel>> = {}) =
       onNewTask={vi.fn()}
       onNewFree={vi.fn()}
       onClose={vi.fn()}
+      onRename={vi.fn()}
       renderThread={() => <textarea aria-label="thread input" />}
       maximized
       onMaximize={onMaximize}
@@ -178,6 +179,7 @@ describe('status list in the maximised threads panel', () => {
   });
 
   it('a short pane with the sidebar off shows only the details, Back brings the lists', () => {
+    localStorage.setItem(THREADS_SIDEBAR_KEY, '0');
     // jsdom has no layout: the short state comes from the panel's height
     const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300);
     const observers: ResizeObserverCallback[] = [];
@@ -203,6 +205,7 @@ describe('status list in the maximised threads panel', () => {
     } finally {
       height.mockRestore();
       global.ResizeObserver = Original;
+      localStorage.removeItem(THREADS_SIDEBAR_KEY);
     }
   });
 });

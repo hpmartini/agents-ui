@@ -1,0 +1,315 @@
+// AC-14: a prompt typed while the orchestrator works (Claude's queue log) shows where it goes —
+// a thread message or a thread command in its thread, never in the main chat, tag hidden
+import React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, screen, waitFor } from '@testing-library/react';
+import { renderWithAgents, testTransport } from './agents';
+import { ChatPane } from '../components/AgentsView/Chat/ChatPane';
+import { threadTag, type ChatThread } from '../utils/chatThreads';
+import type { ChatHandlers, ChatThreadList } from '../transport';
+import type { AgentSession } from '../types';
+
+afterEach(() => localStorage.clear());
+
+const PANE: AgentSession = {
+  id: 'p1',
+  sessionId: 's1',
+  kind: 'background',
+  cwd: '/repo',
+  startedAt: 1,
+  name: 'orchestrator',
+  state: null,
+  pinned: false,
+  order: null,
+  links: [],
+  displayState: 'working',
+};
+
+const at = new Date(2026, 10, 24, 9, 32).getTime();
+const TAG = threadTag({ project: 'Answer 09:32', task: 'Report is ready' });
+const thread = (extra: Partial<ChatThread> = {}): ChatThread => ({
+  id: 't1',
+  name: { project: 'Answer 09:32', task: 'Report is ready' },
+  tag: TAG,
+  createdAt: at,
+  readAt: at,
+  agents: [],
+  closed: false,
+  binding: null,
+  ...extra,
+});
+
+/** Busy orchestrator: one prompt and its running answer, then `events` */
+async function mount(
+  t: ChatThread | ChatThread[],
+  events: object[],
+  overrides?: ChatThreadList['overrides']
+) {
+  const threads = [t].flat();
+  let push: (e: object) => void = () => {};
+  renderWithAgents(
+    <ChatPane
+      pane={PANE}
+      agent={PANE}
+      sessionId="s1"
+      active
+      focused
+      submitKey="mod+enter"
+      showSteps={false}
+      onToggleSteps={vi.fn()}
+      onFocus={vi.fn()}
+      onClose={vi.fn()}
+      onShowTerminal={vi.fn()}
+    />,
+    {
+      transport: testTransport({
+        threads: {
+          fetchThreads: vi.fn(async () => ({ orchestrator: 'o1', threads, tasks: [], overrides })),
+          createThread: vi.fn(async () => threads[0]),
+          updateThread: vi.fn(async () => threads[0]),
+        },
+        chat: {
+          openTranscriptView: vi.fn(async () => ({
+            id: 'c1',
+            harness: 'claude' as const,
+            cwd: '/repo',
+            name: 'orchestrator',
+            sessionId: 's1',
+            model: null,
+            running: true,
+            startedAt: 1,
+          })),
+          subscribeToChat: vi.fn((_id: string, h: ChatHandlers) => {
+            push = h.onEvent;
+            h.onEvent({
+              type: 'devorbit_commands',
+              commands: [{ name: 'status-report', description: 'Send the full status' }],
+            });
+            h.onEvent({ type: 'devorbit_user', text: 'Long task', ts: at - 60_000 });
+            h.onEvent({
+              type: 'assistant',
+              message: { id: 'msg_1', content: [{ type: 'text', text: 'Working on it' }] },
+            });
+            for (const e of events) h.onEvent(e);
+            return () => {};
+          }),
+          fetchChatHistory: vi.fn(),
+        },
+      }),
+    }
+  );
+  const row = await waitFor(() => {
+    const el = document.querySelector<HTMLElement>('[data-thread-row="t1"]');
+    if (!el) throw new Error('no thread row yet');
+    return el;
+  });
+  act(() => row.click());
+  const aside = screen.getByRole('textbox', { name: 'Reply in thread' }).closest('aside');
+  if (!aside) throw new Error('no thread panel');
+  return { aside, push: (e: object) => act(() => push(e)) };
+}
+
+const queued = () => [...document.querySelectorAll<HTMLElement>('[data-queued]')];
+const inMain = (aside: HTMLElement, text: string) =>
+  [...document.querySelectorAll<HTMLElement>('[data-queued], [data-chat-key]')].some(
+    (el) => !aside.contains(el) && el.textContent?.includes(text)
+  );
+
+describe('queued prompts go where they belong (AC-14)', () => {
+  it('a thread message typed while busy waits in its thread, without the tag', async () => {
+    const { aside, push } = await mount(thread(), [
+      { type: 'devorbit_queue', op: 'enqueue', text: `${TAG}\nAnd what did you learn?` },
+    ]);
+    const [bubble] = queued();
+    expect(bubble).toBeTruthy();
+    expect(aside.contains(bubble)).toBe(true);
+    expect(bubble.textContent).toContain('And what did you learn?');
+    expect(bubble.textContent).toContain('waits for the current turn');
+    expect(document.body.textContent).not.toContain('[Thread:');
+    expect(inMain(aside, 'And what did you learn?')).toBe(false);
+
+    // delivered: the same place in the thread, no longer queued
+    push({ type: 'devorbit_queue', op: 'remove', text: `${TAG}\nAnd what did you learn?` });
+    push({ type: 'devorbit_user', text: `${TAG}\nAnd what did you learn?`, ts: at + 1000 });
+    expect(queued()).toHaveLength(0);
+    expect(aside.textContent).toContain('And what did you learn?');
+    expect(inMain(aside, 'And what did you learn?')).toBe(false);
+    expect(document.body.textContent).not.toContain('[Thread:');
+  });
+
+  it('a thread command typed while busy waits in its thread by its mark', async () => {
+    // Claude Code logs a queued command's enqueue without its text
+    const { aside, push } = await mount(thread({ commands: [{ at, command: '/status-report' }] }), [
+      { type: 'devorbit_queue', op: 'enqueue', text: '' },
+    ]);
+    const [bubble] = queued();
+    expect(bubble).toBeTruthy();
+    expect(aside.contains(bubble)).toBe(true);
+    expect(bubble.textContent).toContain('/status-report');
+    expect(bubble.textContent).toContain('waits for the current turn');
+    expect(inMain(aside, '/status-report')).toBe(false);
+
+    // taken (its remove carries the text), then logged: in the thread by the same mark
+    push({ type: 'devorbit_queue', op: 'remove', text: '/status-report' });
+    push({ type: 'devorbit_user', text: '/status-report', ts: at + 1000 });
+    expect(queued()).toHaveLength(0);
+    expect(aside.querySelector('[data-command]')?.textContent).toBe('/status-report');
+    expect(inMain(aside, '/status-report')).toBe(false);
+  });
+
+  it('F9: a command placeholder without an open thread mark waits in the main chat', async () => {
+    const { aside } = await mount(
+      thread({ commands: [{ at: at - 120_000, command: '/status-report' }] }),
+      [
+        { type: 'devorbit_user', text: '/status-report', ts: at - 90_000 },
+        { type: 'devorbit_queue', op: 'enqueue', text: '' },
+      ]
+    );
+    expect(queued().filter((b) => aside.contains(b))).toHaveLength(0);
+    // a main /command (Claude logs its enqueue without text) never disappears
+    const main = queued().filter((b) => !aside.contains(b));
+    expect(main).toHaveLength(1);
+    expect(main[0].textContent).toContain('Command');
+    expect(main[0].textContent).toContain('waits for the current turn');
+  });
+
+  it('F9: two placeholders, one thread mark: one waits in the thread, one in the main chat', async () => {
+    const { aside } = await mount(thread({ commands: [{ at, command: '/status-report' }] }), [
+      { type: 'devorbit_queue', op: 'enqueue', text: '' },
+      { type: 'devorbit_queue', op: 'enqueue', text: '' },
+    ]);
+    expect(
+      queued()
+        .filter((b) => aside.contains(b))
+        .map((b) => b.textContent)
+    ).toEqual([expect.stringContaining('/status-report')]);
+    expect(queued().filter((b) => !aside.contains(b))).toHaveLength(1);
+  });
+
+  it('F5: after a merge or a move no thread tag shows (pending, queued, delivered, main)', async () => {
+    const TAG_B = threadTag({ project: 'Demo', task: 'B' });
+    const b: ChatThread = {
+      ...thread(),
+      id: 't2',
+      name: { project: 'Demo', task: 'B' },
+      tag: TAG_B,
+    };
+    const { aside } = await mount(
+      [thread(), b],
+      [
+        { type: 'devorbit_user', key: 'u-b1', text: `${TAG_B}\nDelivered in B`, ts: at + 10 },
+        { type: 'devorbit_user', key: 'u-b2', text: `${TAG_B}\nMoved to main`, ts: at + 20 },
+        { type: 'devorbit_queue', op: 'enqueue', text: `${TAG_B}\nQueued in B` },
+      ],
+      { entries: { 'u-b2': 'main' }, merged: { t2: 't1' } }
+    );
+    await waitFor(() => expect(aside.textContent).toContain('Delivered in B'));
+    expect(aside.textContent).toContain('Queued in B');
+    expect(inMain(aside, 'Moved to main')).toBe(true);
+    expect(document.body.textContent).not.toContain('[Thread:');
+  });
+
+  it('F5: a tag that opens a later text of the answer (after tool calls) does not show', async () => {
+    const TAG_B = threadTag({ project: 'Demo', task: 'B' });
+    const b: ChatThread = {
+      ...thread(),
+      id: 't2',
+      name: { project: 'Demo', task: 'B' },
+      tag: TAG_B,
+    };
+    await mount(
+      [thread(), b],
+      [
+        { type: 'devorbit_user', key: 'u-1', text: 'Run two sleeps', ts: at + 10 },
+        {
+          type: 'assistant',
+          message: { id: 'a1', content: [{ type: 'text', text: 'First sleep.' }] },
+        },
+        {
+          type: 'assistant',
+          message: {
+            id: 'a2',
+            content: [{ type: 'tool_use', id: 'x1', name: 'Bash', input: { command: 'sleep 1' } }],
+          },
+        },
+        {
+          type: 'user',
+          message: { content: [{ type: 'tool_result', tool_use_id: 'x1', content: '' }] },
+        },
+        {
+          type: 'assistant',
+          message: { id: 'a3', content: [{ type: 'text', text: `${TAG_B}\nBoth sleeps done.` }] },
+        },
+      ]
+    );
+    await waitFor(() => expect(document.body.textContent).toContain('Both sleeps done.'));
+    // (the empty thread's hint names its own tag on purpose)
+    expect(document.body.textContent).not.toContain(TAG_B);
+  });
+
+  it('F5: one answer to two queued prompts: the tag line between its parts does not show', async () => {
+    const TAG_B = threadTag({ project: 'Demo', task: 'B' });
+    const b: ChatThread = {
+      ...thread(),
+      id: 't2',
+      name: { project: 'Demo', task: 'B' },
+      tag: TAG_B,
+    };
+    await mount(
+      [thread(), b],
+      [
+        { type: 'devorbit_user', key: 'u-1', text: 'Main control', ts: at + 10 },
+        {
+          type: 'assistant',
+          message: {
+            id: 'a1',
+            content: [
+              {
+                type: 'text',
+                text: `Done.\n\nMain control: got it.\n\n${TAG_B}\nThread check: got it.`,
+              },
+            ],
+          },
+        },
+      ]
+    );
+    await waitFor(() => expect(document.body.textContent).toContain('Thread check: got it.'));
+    expect(document.body.textContent).not.toContain(TAG_B);
+  });
+
+  it('N1: a tag-like line of no thread of this session, or inside a code block, stays', async () => {
+    const code = '```\n[Thread: Example · Syntax]\n```';
+    const { aside } = await mount(thread(), [
+      { type: 'devorbit_user', key: 'u-1', text: `How do I write\n${code}`, ts: at + 10 },
+      {
+        type: 'assistant',
+        message: {
+          id: 'a1',
+          content: [
+            { type: 'text', text: `Like this:\n\n${code}\n\n[Thread: Other · Topic]\nDone.` },
+          ],
+        },
+      },
+      // a known tag inside a fence is code too
+      { type: 'devorbit_user', key: 'u-2', text: `Quote:\n\`\`\`\n${TAG}\n\`\`\``, ts: at + 20 },
+    ]);
+    await waitFor(() => expect(document.body.textContent).toContain('Done.'));
+    const main = [...document.querySelectorAll('[data-chat-key]')].filter(
+      (e) => !aside.contains(e)
+    );
+    const text = main.map((e) => e.textContent).join('\n');
+    expect(text.split('[Thread: Example · Syntax]')).toHaveLength(3);
+    expect(text).toContain('[Thread: Other · Topic]');
+    expect(text).toContain(TAG);
+  });
+
+  it('a main-chat message typed while busy stays in the main chat', async () => {
+    const { aside } = await mount(thread(), [
+      { type: 'devorbit_queue', op: 'enqueue', text: 'Main question' },
+      { type: 'devorbit_queue', op: 'enqueue', text: '/status-report' },
+    ]);
+    const bubbles = queued();
+    expect(bubbles).toHaveLength(2);
+    for (const b of bubbles) expect(aside.contains(b)).toBe(false);
+  });
+});

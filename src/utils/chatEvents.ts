@@ -24,7 +24,7 @@ export type ChatMessage =
    * `ts`: when the prompt was sent (ms), if the transcript says. `initial`: first prompt of the
    * session or after a compaction / `/clear`
    */
-  | { kind: 'user'; key: string; text: string; ts?: number; initial?: boolean }
+  | { kind: 'user'; key: string; text: string; ts?: number; initial?: boolean; queued?: boolean }
   | {
       kind: 'assistant';
       key: string;
@@ -456,7 +456,8 @@ export function reduceChat(state: ChatState, event: unknown): ChatState {
           ...state.messages,
           {
             kind: 'user',
-            key: `u${state.messages.length}`,
+            // the transcript's own key when the host sends one: tidy-up overrides route by it
+            key: str(event.key) || `u${state.messages.length}`,
             text: str(event.text),
             ...(typeof event.ts === 'number' ? { ts: event.ts } : {}),
             ...(state.boundary ? { initial: true } : {}),
